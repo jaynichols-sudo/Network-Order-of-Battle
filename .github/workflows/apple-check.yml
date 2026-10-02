@@ -85,7 +85,9 @@ jobs:
             shoot $dev $p-04-companies -startTab companies
             shoot $dev $p-05-unit -startTab companies -demoOpen unit
             shoot $dev $p-06-industries -startTab companies -startCompanies industries
-            shoot $dev $p-07-explore -startTab explore
+            shoot $dev $p-07-explore -startTab explore -exploreMode scope
+            shoot $dev $p-07b-clusters -startTab explore -exploreMode clusters
+            shoot $dev $p-07c-map -startTab explore -exploreMode map
             shoot $dev $p-08-catchup -startTab catchup
             shoot $dev $p-09-filters -startTab people -demoOpen filters
             shoot $dev $p-10-settings -demoOpen settings
