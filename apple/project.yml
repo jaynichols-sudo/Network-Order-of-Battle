@@ -42,6 +42,8 @@ targets:
         ITSAppUsesNonExemptEncryption: false
         LSApplicationCategoryType: public.app-category.business
         LSRequiresIPhoneOS: true
+        NSContactsUsageDescription: Bearings matches your LinkedIn connections to your contacts on this device to work out roughly where they are, so you can see who's nearby when you travel. Nothing is uploaded.
+        NSLocationWhenInUseUsageDescription: Bearings uses your location to show which of your connections are nearby.
         LSSupportsOpeningDocumentsInPlace: false
         UILaunchScreen: {}
         UIApplicationSceneManifest:

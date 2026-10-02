@@ -93,8 +93,10 @@ struct Edit: Decodable, Hashable {
     var note = "", due = "", replied = "", updated = ""
     var tags: [String] = []
     var ind = "", seg = "", branch = "", status = "", grade = "", rank = ""
+    var loc = ""
+    var lat: Double?, lon: Double?
 
-    enum K: String, CodingKey { case star, note, due, replied, updated, tags, ind, seg, branch, status, grade, rank }
+    enum K: String, CodingKey { case star, note, due, replied, updated, tags, ind, seg, branch, status, grade, rank, loc, lat, lon }
     init() {}
     init(from d: Decoder) throws {
         let c = try d.container(keyedBy: K.self)
@@ -110,6 +112,9 @@ struct Edit: Decodable, Hashable {
         status = c.lenient(String.self, .status) ?? ""
         grade = c.lenient(String.self, .grade) ?? ""
         rank = c.lenient(String.self, .rank) ?? ""
+        loc = c.lenient(String.self, .loc) ?? ""
+        lat = c.lenient(Double.self, .lat)
+        lon = c.lenient(Double.self, .lon)
     }
 }
 
@@ -498,4 +503,13 @@ struct Constants: Decodable {
     var segs: [SegInfo]
     struct SegInfo: Decodable, Hashable { var id: String; var short: String; var color: String }
     static let empty = Constants(industries: [], seniority: [], funcs: [], branches: [], statuses: [], grades: [], unclassified: "Unclassified", gov: "Government & Military", since: [], segs: [])
+}
+
+struct ClustersData: Decodable {
+    struct Hub: Decodable, Identifiable { var name: String; var seg: String; var color: String; var other: Bool; var n: Int; var x: Double; var y: Double; var R: Double; var id: String { name } }
+    struct Dot: Decodable { var k: String; var h: Int; var x: Double; var y: Double; var c: String; var y0: Int; var star: Bool; var w: String }
+    var hubs: [Hub]
+    var people: [Dot]
+    var minYear: Int
+    var maxYear: Int
 }

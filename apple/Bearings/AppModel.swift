@@ -1,6 +1,7 @@
 import Foundation
 import SwiftUI
 import Observation
+import CoreLocation
 
 enum AppTab: String, Hashable, CaseIterable {
     case home, people, companies, explore, catchup
@@ -68,6 +69,13 @@ final class AppModel {
     var syncNote = ""
     var errorNote = ""
     var toast: String?
+
+    // places
+    private(set) var places: [String: PersonPlace] = [:]
+    private var foundPlaces: [String: PersonPlace] = [:]
+    private(set) var placesBuilt = ""
+    private(set) var contactsMatched = 0
+    private(set) var locating = false
 
     // navigation
     var tab: AppTab = .home
@@ -179,6 +187,12 @@ final class AppModel {
         } catch {
             errorNote = "Your saved network didn’t load (\(error.localizedDescription)). Close and reopen the app to try again."
         }
+        if case .data(let t) = await store.read("places.json"), let t, let d = t.data(using: .utf8),
+           let f = try? JSONDecoder().decode(PlacesFile.self, from: d) {
+            foundPlaces = f.people
+            placesBuilt = f.built
+            contactsMatched = f.matched ?? 0
+        }
         await refreshAll()
     }
 
@@ -198,8 +212,63 @@ final class AppModel {
         }
         await refreshSummary()
         await runSearch()
+        mergePlaces()
         Notifications.shared.schedule(model: self)
         pushWatch()
+    }
+
+    // MARK: places
+
+    struct PlacesFile: Codable {
+        var v = 1
+        var built: String
+        var matched: Int?
+        var people: [String: PersonPlace]
+    }
+
+    /// Your own settings win, then Contacts and title clues.
+    func mergePlaces() {
+        var out = info.isSample ? Locator.samplePlaces(people) : foundPlaces
+        for p in people {
+            if let e = p.ed, !e.loc.isEmpty, let la = e.lat, let lo = e.lon {
+                out[p.k] = PersonPlace(name: e.loc, lat: la, lon: lo, prec: "city", src: "you")
+            }
+        }
+        places = out
+    }
+
+    /// Works out where people are from Contacts and job titles. Asks for Contacts access first.
+    func locate(askContacts: Bool = true) async {
+        guard !locating, !info.isSample else { return }
+        locating = true
+        defer { locating = false }
+        if askContacts { _ = await Locator.requestContacts() }
+        let clues = (try? await engine.call("placeClues", as: [[String]].self)) ?? []
+        let r = await Locator.build(people: people, clues: clues)
+        foundPlaces = r.places
+        contactsMatched = r.matched
+        placesBuilt = Day.today
+        let file = PlacesFile(built: placesBuilt, matched: r.matched, people: r.places)
+        if let d = try? JSONEncoder().encode(file) { try? await store.write("places.json", String(decoding: d, as: UTF8.self)) }
+        mergePlaces()
+        show("Found a location for \(places.count.formatted()) \(places.count == 1 ? "person" : "people")")
+    }
+
+    func setLocation(_ k: String, query: String) async -> Bool {
+        let q = query.trimmingCharacters(in: .whitespaces)
+        if q.isEmpty {
+            await edit(k, call: "setEdit", [k, ["loc": "", "lat": NSNull(), "lon": NSNull()]])
+            mergePlaces()
+            return true
+        }
+        guard let mark = try? await CLGeocoder().geocodeAddressString(q).first, let loc = mark.location else {
+            show("Couldn’t find “\(q)”. Try a city and state or country.")
+            return false
+        }
+        let name = [mark.locality ?? q, mark.administrativeArea ?? mark.country].compactMap { $0 }.joined(separator: ", ")
+        await edit(k, call: "setEdit", [k, ["loc": name, "lat": loc.coordinate.latitude, "lon": loc.coordinate.longitude]])
+        mergePlaces()
+        return true
     }
 
     private func refreshSummary() async {
@@ -218,6 +287,7 @@ final class AppModel {
             if let i = results.firstIndex(where: { $0.k == k }) { results[i] = copy }
         }
         await refreshSummary()
+        mergePlaces()
         Notifications.shared.schedule(model: self)
         pushWatch()
     }
@@ -358,6 +428,7 @@ final class AppModel {
     func addCandidates(_ q: String) async -> [NameCount] { (try? await engine.call("addTargetCandidates", [q], as: [NameCount].self)) ?? [] }
     func radar() async -> RadarData { (try? await engine.call("radar", [queryArgs], as: RadarData.self)) ?? .empty }
     func ranks() async -> RanksData? { try? await engine.call("ranks", [queryArgs], as: RanksData.self) }
+    func clusters() async -> ClustersData? { try? await engine.call("clusters", [queryArgs, ["max": 40]], as: ClustersData.self) }
     func payoff() async -> Payoff? { try? await engine.call("payoff", as: Payoff.self) }
     func links(_ k: String) async -> PersonLinks? {
         guard let p = try? await engine.call("person", [k], as: Person?.self) else { return nil }
@@ -458,6 +529,7 @@ final class AppModel {
         }
         prefs.set(true, forKey: "onboarded")
         await reload()
+        if Locator.contactsAllowed() || !foundPlaces.isEmpty { await locate(askContacts: false) }
         Haptic.success()
         if plan.wasSample || plan.stats.first {
             tab = .home

@@ -441,6 +441,79 @@ function radar(input){
   return {wedges: wedges.map(({i, ...w}) => w), dots, bands: BANDS};
 }
 
+/* ---------- clusters (constellation) ---------- */
+// People gather around their company or command; groups sit in wedges by industry or segment.
+function clusters(input, opts){
+  const {match} = compile(input);
+  const rows = S.all.filter(r => match(r) && !r.x);
+  const TAU = Math.PI * 2;
+  const segOrder = groupList().map(g => g.id);
+  const groups = new Map();
+  for (const r of rows){ const key = r.cl.agency || r.c || 'No company listed'; if (!groups.has(key)) groups.set(key, []); groups.get(key).push(r); }
+  let list = [...groups.entries()].map(([name, ps]) => ({name, ps})).sort((a, b) => b.ps.length - a.ps.length || a.name.localeCompare(b.name));
+  const MAX = (opts && opts.max) || 40;
+  const keep = list.slice(0, MAX), rest = list.slice(MAX), other = new Map();
+  for (const g of rest) for (const r of g.ps){ const gi = groupList().find(x => x.id === groupOf(r)); const sh = gi ? gi.short : 'Other'; const k = sh === 'Other' ? 'Other orgs' : 'Other ' + sh; if (!other.has(k)) other.set(k, []); other.get(k).push(r); }
+  list = keep.concat([...other.entries()].map(([name, ps]) => ({name, ps, other: true})));
+  for (const h of list){
+    const cnt = {}; for (const r of h.ps){ const g = groupOf(r); cnt[g] = (cnt[g] || 0) + 1; }
+    h.seg = Object.entries(cnt).sort((a, b) => b[1] - a[1])[0][0];
+    h.ps.sort((a, b) => a.cl.lv - b.cl.lv || b.cl.gn - a.cl.gn);
+  }
+  const segs = segOrder.filter(sg => list.some(h => h.seg === sg));
+  const segW = segs.map(sg => Math.sqrt(list.filter(h => h.seg === sg).reduce((a, h) => a + h.ps.length, 0)) + 2);
+  const tw = segW.reduce((a, b) => a + b, 0) || 1;
+  let a = -Math.PI / 2; const segA = {};
+  segs.forEach((sg, i) => { const span = segW[i] / tw * TAU; segA[sg] = {a0: a, span}; a += span; });
+  const counter = {};
+  const hubs = list.map(h => {
+    const j = counter[h.seg] = (counter[h.seg] || 0) + 1, sa = segA[h.seg];
+    const ang = sa.a0 + sa.span * (0.5 + (h01(h.name, 'ang') - 0.5) * 0.8);
+    const dist = 210 + Math.sqrt(j) * 120 + h01(h.name, 'd') * 60;
+    return {name: h.name, seg: h.seg, ps: h.ps, other: !!h.other, ax: Math.cos(ang) * dist, ay: Math.sin(ang) * dist, R: 14 + Math.sqrt(h.ps.length) * 6};
+  });
+  const P = hubs.map(h => ({x: h.ax, y: h.ay, R: h.R}));
+  for (let it = 0; it < 220; it++){
+    for (let i = 0; i < P.length; i++){
+      const pi = P[i]; pi.x += (hubs[i].ax - pi.x) * 0.02; pi.y += (hubs[i].ay - pi.y) * 0.02;
+      for (let k = i + 1; k < P.length; k++){
+        const pk = P[k], dx = pk.x - pi.x, dy = pk.y - pi.y, d = Math.hypot(dx, dy) || 0.01, min = pi.R + pk.R + 46;
+        if (d < min){ const push = (min - d) / 2, ux = dx / d, uy = dy / d; pi.x -= ux * push; pi.y -= uy * push; pk.x += ux * push; pk.y += uy * push; }
+      }
+      const d0 = Math.hypot(pi.x, pi.y) || 0.01, minC = 120 + pi.R;
+      if (d0 < minC){ pi.x *= minC / d0; pi.y *= minC / d0; }
+    }
+  }
+  const people = [];
+  const outHubs = hubs.map((h, i) => {
+    const x = P[i].x, y = P[i].y;
+    let ring = 0, idx = 0, cap = 0;
+    const start = h01(h.name, 'rot') * TAU;
+    for (const r of h.ps){
+      if (idx >= cap){ ring++; idx = 0; cap = Math.max(6, Math.floor(TAU * (h.R + 4 + ring * 9) / 9)); }
+      const ang = start + idx / cap * TAU + ring * 0.37; idx++;
+      const rr = h.R + 4 + ring * 9;
+      people.push({k: r.k, h: i, x: +(x + Math.cos(ang) * rr).toFixed(1), y: +(y + Math.sin(ang) * rr).toFixed(1), c: groupColor(groupOf(r)), y0: +(r.d || '0').slice(0, 4) || 0, star: !!(r.ed && r.ed.star), w: r.wm.band});
+    }
+    return {name: h.name, seg: h.seg, color: groupColor(h.seg), other: h.other, n: h.ps.length, x: +x.toFixed(1), y: +y.toFixed(1), R: +h.R.toFixed(1)};
+  });
+  const years = people.map(p => p.y0).filter(Boolean);
+  return {hubs: outHubs, people, minYear: years.length ? Math.min(...years) : 0, maxYear: years.length ? Math.max(...years) : 0};
+}
+
+/* ---------- places ---------- */
+// Clues in titles and company names, like "Greensboro, NC" or "Raleigh". Weak, so it's the last resort.
+function placeClues(){
+  const out = [];
+  for (const r of S.all){
+    if (r.x) continue;
+    const t = `${r.p || ''} | ${r.c || ''}`;
+    const m = t.match(/\b([A-Z][a-zA-Z.]+(?: [A-Z][a-zA-Z.]+){0,2}),\s*([A-Z]{2})\b/);
+    if (m) out.push([r.k, m[1], m[2]]);
+  }
+  return out;
+}
+
 /* ---------- edits ---------- */
 function setEdit(k, patch){
   const cur = Object.assign({}, S.edits[k] || {}, patch || {});
@@ -571,7 +644,7 @@ function constants(){
     branches: BRANCHES, statuses: STATUSES, tiers: TIERS, certs: CERTS.map(c => c[0]), since: SINCE, signals: SIGNALS_UI, grades: GRADE_OPTS, bands: BAND_LABEL, unclassified: UNCLASSIFIED, gov: GOV_IND};
 }
 
-const api = {load, loadSample, loadFiles, clearNotes, setLens, info, people, person, search, facets, home, payoff, targets, unit, addTargetCandidates, toggleTarget, setTargetNote, orgs,
+const api = {load, loadSample, loadFiles, clearNotes, clusters, placeClues, setLens, info, people, person, search, facets, home, payoff, targets, unit, addTargetCandidates, toggleTarget, setTargetNote, orgs,
   industries, industry, setCompanyIndustry, setCompanyLink, ranks, deck, deckCount, reviewed, radar, setEdit, followUp, markReplied, addNote,
   importTexts, backup, restore, exportCSV, reminders, watch, constants};
 // Every call goes through here: JSON string in, JSON string out, errors as {error}.

@@ -14,6 +14,8 @@ struct ProfileView: View {
     @State private var grade = ""
     @State private var rank = ""
     @State private var loadedFor = ""
+    @State private var placeQuery = ""
+    @State private var editingPlace = false
     @FocusState private var noteFocused: Bool
 
     var body: some View {
@@ -23,6 +25,7 @@ struct ProfileView: View {
                 actions(p)
                 if model.info.hasRel { relationship(p) }
                 followUp(p)
+                location(p)
                 details(p)
                 if let pv = p.pv, !pv.isEmpty {
                     Section("Earlier roles") {
@@ -174,6 +177,36 @@ struct ProfileView: View {
                 }
             }
         }
+    }
+
+    private func location(_ p: Person) -> some View {
+        Section("Location") {
+            if let pl = model.places[p.k], !editingPlace {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(pl.name + (pl.isApproximate ? " (roughly)" : "")).font(Theme.geist(.body, .medium))
+                    Text(pl.sourceLabel).font(Theme.geist(.footnote)).foregroundStyle(.secondary)
+                }
+                Button(pl.src == "you" ? "Change location" : "Not right? Set it") { placeQuery = pl.src == "you" ? pl.name : ""; editingPlace = true }
+                if pl.src == "you" {
+                    Button("Clear location", role: .destructive) { Task { _ = await model.setLocation(p.k, query: "") } }
+                }
+            } else if editingPlace {
+                TextField("City, like Tampa, FL or London", text: $placeQuery)
+                    .submitLabel(.done)
+                    .onSubmit { savePlace(p) }
+                HStack {
+                    Button("Save") { savePlace(p) }.buttonStyle(.borderedProminent)
+                    Button("Cancel") { editingPlace = false }.buttonStyle(.bordered)
+                }
+            } else {
+                Text("Not known yet. LinkedIn doesn’t share locations.").font(Theme.geist(.subheadline)).foregroundStyle(.secondary)
+                Button("Set location") { placeQuery = ""; editingPlace = true }
+            }
+        }
+    }
+
+    private func savePlace(_ p: Person) {
+        Task { if await model.setLocation(p.k, query: placeQuery) { editingPlace = false } }
     }
 
     private func details(_ p: Person) -> some View {

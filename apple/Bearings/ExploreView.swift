@@ -2,22 +2,26 @@ import SwiftUI
 
 struct ExploreView: View {
     @Environment(AppModel.self) private var model
-    @State private var mode = "scope"
+    @AppStorage("exploreMode") private var mode = "scope"
     @State private var radar = RadarData.empty
     @State private var ranks: RanksData?
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                if model.info.lens {
-                    Picker("View", selection: $mode) {
-                        Text("Scope").tag("scope")
-                        Text("Ranks").tag("ranks")
-                    }
-                    .pickerStyle(.segmented)
+                Picker("View", selection: $mode) {
+                    Text("Scope").tag("scope")
+                    Text("Clusters").tag("clusters")
+                    Text("Map").tag("map")
+                    if model.info.lens { Text("Ranks").tag("ranks") }
                 }
+                .pickerStyle(.segmented)
                 if mode == "ranks" && model.info.lens {
                     RanksGrid(data: ranks)
+                } else if mode == "clusters" {
+                    ClustersView()
+                } else if mode == "map" {
+                    PeopleMapView()
                 } else {
                     Text("More senior people sit closer to the middle. Tap a dot to open someone.")
                         .font(Theme.geist(.footnote)).foregroundStyle(.secondary)
@@ -34,7 +38,7 @@ struct ExploreView: View {
         .navigationTitle("Explore")
         .toolbar { MainToolbar() }
         .task(id: "\(model.people.count)-\(model.info.lens)-\(model.info.edits)-\(mode)") {
-            if mode == "ranks" { ranks = await model.ranks() } else { radar = await model.radar() }
+            if mode == "ranks" { ranks = await model.ranks() } else if mode == "scope" { radar = await model.radar() }
         }
     }
 
