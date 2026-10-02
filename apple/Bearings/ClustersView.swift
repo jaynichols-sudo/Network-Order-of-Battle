@@ -16,6 +16,7 @@ struct ClustersView: View {
     @State private var year: Double = 0
     @State private var playing = false
     @State private var fitScale: CGFloat = 1
+    @State private var fitCenter: CGPoint = .zero
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -39,7 +40,7 @@ struct ClustersView: View {
         GeometryReader { g in
             let size = g.size
             let scale = fitScale * zoom * pinch
-            let offset = CGSize(width: pan.width + drag.width, height: pan.height + drag.height)
+            let offset = CGSize(width: pan.width + drag.width - fitCenter.x * scale, height: pan.height + drag.height - fitCenter.y * scale)
             Canvas { ctx, sz in
                 guard let d = data else { return }
                 draw(&ctx, d: d, size: sz, scale: scale, offset: offset)
@@ -69,9 +70,8 @@ struct ClustersView: View {
             let ext = h.R + 9 * ceil(Double(h.n) / 10) + 20
             x0 = min(x0, h.x - ext); x1 = max(x1, h.x + ext); y0 = min(y0, h.y - ext); y1 = max(y1, h.y + ext)
         }
-        // center the world on the origin, so use the larger half-extent each way
-        let w = 2 * max(-x0, x1), hgt = 2 * max(-y0, y1)
-        return min(size.width / CGFloat(w), size.height / CGFloat(hgt)) * 0.95
+        fitCenter = CGPoint(x: (x0 + x1) / 2, y: (y0 + y1) / 2)
+        return min(size.width / CGFloat(x1 - x0), size.height / CGFloat(y1 - y0)) * 0.96
     }
 
     private func screen(_ x: Double, _ y: Double, size: CGSize, scale: CGFloat, offset: CGSize) -> CGPoint {
@@ -114,9 +114,10 @@ struct ClustersView: View {
         ctx.fill(Path(ellipseIn: CGRect(x: center.x - 7, y: center.y - 7, width: 14, height: 14)), with: .color(Theme.amber))
         ctx.stroke(Path(ellipseIn: CGRect(x: center.x - 11, y: center.y - 11, width: 22, height: 22)), with: .color(Theme.amber.opacity(0.5)), lineWidth: 2)
         // labels for groups big enough to read
+        let biggest = Set(d.hubs.indices.sorted { d.hubs[$0].n > d.hubs[$1].n }.prefix(8))
         for (i, h) in d.hubs.enumerated() {
             let r = CGFloat(h.R) * scale
-            guard r > 16 || focus == i || scale > 1.6 else { continue }
+            guard r > 16 || focus == i || scale > 1.6 || biggest.contains(i) else { continue }
             let n = visibleCount(d, hub: i)
             guard n > 0 else { continue }
             let p = screen(h.x, h.y, size: size, scale: scale, offset: offset)
@@ -156,7 +157,7 @@ struct ClustersView: View {
         withAnimation(.smooth(duration: 0.55)) {
             focus = i
             zoom = target / fitScale
-            pan = CGSize(width: -CGFloat(h.x) * target, height: -CGFloat(h.y) * target)
+            pan = CGSize(width: -(CGFloat(h.x) - fitCenter.x) * target, height: -(CGFloat(h.y) - fitCenter.y) * target)
         }
     }
 
