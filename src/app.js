@@ -9,6 +9,8 @@ import {
   SEGS, SEGI, BRANCHES, STATUSES, TIERS, SENIORITY, FUNCS, SINCE, SIGNALS, GRADE_OPTS, CERTS,
   classify, keyOf, stripRow, readFile, mergeImport, sampleNetwork,
 } from './core.js';
+import { parseQuery, matchNL } from './nlq.js';
+import { createWeb } from './web.js';
 
 const CloudStore = registerPlugin('CloudStore');
 const NATIVE = Capacitor.isNativePlatform();
@@ -58,7 +60,7 @@ const fx = {
 };
 
 /* ---------- state ---------- */
-const S = {all: [], edits: {}, review: {}, meta: null, mode: 'sample', rev: null, tab: 'map', sort: 'new', shown: 60, sel: null, deck: 'week', pending: null, syncNote: ''};
+const S = {all: [], edits: {}, review: {}, targets: [], meta: null, mode: 'sample', rev: null, tab: 'sitrep', mapMode: 'scope', unitsMode: 'targets', sort: 'new', shown: 60, sel: null, deck: 'week', pending: null, syncNote: '', nl: null, nlChips: [], cards: []};
 const F = {q: '', seg: new Set, branch: new Set, status: new Set, tier: new Set, sen: new Set, func: new Set, cert: new Set, sig: new Set, agency: '', company: '', since: '', removed: false};
 let VIEW = [];
 
@@ -93,11 +95,22 @@ function sigOk(r, s){
     case 'email': return !!r.e;
     case 'gov': return /\.(gov|mil)$/i.test(r.e || '');
     case 'clr': return r.cl.clr;
+    case 'jcw': return r.movedNow;
+    case 'anniv': return isAnniversary(r.d);
   }
   return true;
 }
+const SIGNALS_UI = [...SIGNALS, ['jcw', 'Moved this refresh'], ['anniv', 'Anniversary this week']];
+function isAnniversary(d){
+  if (!d || d.length < 10) return false;
+  const now = new Date(), y = now.getFullYear();
+  if (+d.slice(0, 4) >= y) return false;
+  const then = new Date(y, +d.slice(5, 7) - 1, +d.slice(8, 10));
+  return Math.abs(then - now) / 864e5 <= 3.5;
+}
 function match(r, skip){
   if (!F.removed && r.x) return false;
+  if (S.nl){ if (!matchNL(S.nl, r)) return false; for (const s of S.nl.sig) if (!sigOk(r, s)) return false; }
   const c = r.cl;
   if (skip !== 'seg' && F.seg.size && !F.seg.has(c.seg)) return false;
   if (skip !== 'branch' && F.branch.size && !F.branch.has(c.branch)) return false;
@@ -123,11 +136,23 @@ function render(){
   if (Sheet.kind === 'filters') renderFilterSheet(true);
 }
 function renderTab(){
-  if (S.tab === 'map') Radar.update();
-  if (S.tab === 'ranks') renderRanks();
-  if (S.tab === 'orgs') renderOrgs();
+  if (S.tab === 'sitrep') renderSitrep();
+  if (S.tab === 'map'){ renderMapCtl(); if (S.mapMode === 'scope') Radar.update(); else { Web.update(VIEW.filter(r => F.removed || !r.x), SEGS.map(s => s.id)); Replay.bounds(); } }
+  if (S.tab === 'units') renderUnits();
   if (S.tab === 'people') renderPeople(true);
   if (S.tab === 'review') Deck.render();
+}
+function renderMapCtl(){
+  $$('#mapCtl button').forEach(b => b.setAttribute('aria-checked', String(b.dataset.map === S.mapMode)));
+  $$('[data-sub]').forEach(el => { el.hidden = el.dataset.sub !== S.mapMode; });
+  $('#mapHint').textContent = S.mapMode === 'scope' ? 'Closer to the center is more senior. Tap a sector to zoom, pinch to zoom further.' : 'Pinch or scroll to zoom, drag to pan. Tap a cluster to open it, long-press a person to peek.';
+}
+function setMapMode(m){
+  S.mapMode = m; fx.select();
+  try { localStorage.setItem('oob.map', m); } catch {}
+  renderMapCtl();
+  Radar.setActive(S.tab === 'map' && m === 'scope'); Web.setActive(S.tab === 'map' && m === 'web');
+  renderTab();
 }
 function setTab(t, {silent} = {}){
   if (!silent && t !== S.tab) fx.select();
@@ -135,8 +160,10 @@ function setTab(t, {silent} = {}){
   $$('.tab').forEach(b => b.setAttribute('aria-selected', String(b.dataset.tab === t)));
   $$('.view').forEach(v => { const on = v.dataset.view === t; if (on && v.hidden){ v.hidden = false; v.classList.remove('enter'); void v.offsetWidth; v.classList.add('enter'); } else if (!on) v.hidden = true; });
   document.body.classList.toggle('tab-review', t === 'review');
+  document.body.classList.toggle('tab-sitrep', t === 'sitrep');
   try { localStorage.setItem('oob.tab', t); } catch {}
-  Radar.setActive(t === 'map');
+  if (t === 'map') renderMapCtl();
+  Radar.setActive(t === 'map' && S.mapMode === 'scope'); Web.setActive(t === 'map' && S.mapMode === 'web');
   renderTab();
 }
 
@@ -198,14 +225,15 @@ function renderStats(){
 }
 function renderActive(){
   const parts = [];
+  for (const c of S.nlChips) parts.push(['nl', c, c]);
   if (F.q) parts.push(['q', '', `“${F.q}”`]);
   for (const g of ['seg', 'branch', 'status', 'tier', 'sen', 'func', 'cert']) for (const v of F[g]) parts.push([g, v, v]);
-  for (const v of F.sig) parts.push(['sig', v, (SIGNALS.find(s => s[0] === v) || [, v])[1]]);
+  for (const v of F.sig) parts.push(['sig', v, (SIGNALS_UI.find(s => s[0] === v) || [, v])[1]]);
   if (F.agency) parts.push(['agency', '', F.agency]);
   if (F.company) parts.push(['company', '', F.company]);
   if (F.since) parts.push(['since', '', SINCE.find(s => s[0] === F.since)[1]]);
   if (F.removed) parts.push(['removed', '', 'Including removed']);
-  $('#active').innerHTML = parts.map(([g, v, l]) => `<button type="button" class="achip" data-rm="${g}" data-v="${esc(v)}" aria-label="Remove filter ${esc(l)}">${esc(l)}${ICON.x}</button>`).join('') + (parts.length > 1 ? '<button type="button" class="achip clear" data-act="clear">Clear all</button>' : '');
+  $('#active').innerHTML = parts.map(([g, v, l]) => `<button type="button" class="achip${g === 'nl' ? ' nl' : ''}" data-rm="${g}" data-v="${esc(v)}" aria-label="Remove filter ${esc(l)}">${g === 'nl' ? '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h3l3-7 4 14 3-7h3"/></svg>' : ''}${esc(l)}${ICON.x}</button>`).join('') + (parts.length > 1 ? '<button type="button" class="achip clear" data-act="clear">Clear all</button>' : '');
   const n = activeCount(); const b = $('#fcount'); b.hidden = !n; b.textContent = n;
 }
 
@@ -304,7 +332,7 @@ const Radar = (() => {
     if (!REDUCED || viewTo || anyMoving(now)) raf = requestAnimationFrame(frame);
   }
   function anyMoving(now){ for (const d of dots.values()) if (now - d.t0 - d.delay < 750) return true; return false; }
-  function kick(){ if (active && !raf) raf = requestAnimationFrame(frame); }
+  function kick(){ const ta = (view.s > 1.05 || (viewTo && viewTo.s > 1.05)) ? 'none' : 'pan-y'; if (cv.style.touchAction !== ta) cv.style.touchAction = ta; if (active && !raf) raf = requestAnimationFrame(frame); }
 
   function draw(now, bootP){
     resize();
@@ -410,10 +438,55 @@ const Radar = (() => {
     tip.style.left = Math.min(x + 16, W - 270) + 'px'; tip.style.top = Math.min(y + 14, H - 90) + 'px';
   });
   cv.addEventListener('pointerleave', () => { tip.hidden = true; });
+  // pinch to zoom, drag to pan once zoomed, wheel on desktop, long-press to peek
+  const ptrs = new Map(); let gest = null, suppress = false, pressT = 0;
+  const loc = e => { const rc = cv.getBoundingClientRect(); return [e.clientX - rc.left, e.clientY - rc.top]; };
+  cv.addEventListener('pointerdown', e => {
+    ptrs.set(e.pointerId, loc(e)); viewTo = null;
+    if (ptrs.size === 1){
+      const [x, y] = loc(e); gest = {type: 'pan', x, y, v: {...view}, moved: false};
+      clearTimeout(pressT);
+      pressT = setTimeout(() => { if (gest && !gest.moved){ const {best} = pick(e); if (best){ suppress = true; Peek.show(best.r.k); } } }, 480);
+    } else if (ptrs.size === 2){
+      clearTimeout(pressT); cv.setPointerCapture(e.pointerId);
+      const [a, b] = [...ptrs.values()];
+      gest = {type: 'pinch', d: Math.hypot(a[0] - b[0], a[1] - b[1]), mid: [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2], v: {...view}};
+    }
+  });
+  cv.addEventListener('pointermove', e => {
+    if (!ptrs.has(e.pointerId) || !gest) return;
+    ptrs.set(e.pointerId, loc(e));
+    if (gest.type === 'pan' && ptrs.size === 1){
+      const [x, y] = loc(e), dx = x - gest.x, dy = y - gest.y;
+      if (Math.hypot(dx, dy) > 7){ gest.moved = true; clearTimeout(pressT); }
+      if (gest.moved && view.s > 1.05){ cv.setPointerCapture(e.pointerId); view.cx = gest.v.cx - dx / (view.s * R); view.cy = gest.v.cy - dy / (view.s * R); suppress = true; kick(); }
+    } else if (gest.type === 'pinch' && ptrs.size === 2){
+      const [a, b] = [...ptrs.values()], d = Math.hypot(a[0] - b[0], a[1] - b[1]), mid = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+      const sNew = Math.max(1, Math.min(6, gest.v.s * d / gest.d));
+      const wx = (gest.mid[0] - W / 2) / (gest.v.s * R) + gest.v.cx, wy = (gest.mid[1] - H / 2) / (gest.v.s * R) + gest.v.cy;
+      view = {s: sNew, cx: sNew <= 1.001 ? 0 : wx - (mid[0] - W / 2) / (sNew * R), cy: sNew <= 1.001 ? 0 : wy - (mid[1] - H / 2) / (sNew * R)};
+      suppress = true; tip.hidden = true; kick();
+    }
+  });
+  const pup = e => {
+    clearTimeout(pressT); ptrs.delete(e.pointerId);
+    if (ptrs.size === 1){ const [p] = [...ptrs.values()]; gest = {type: 'pan', x: p[0], y: p[1], v: {...view}, moved: true}; return; }
+    if (!ptrs.size){ gest = null; if (view.s < 1.03 && zoomSeg){ zoomSeg = null; chip.hidden = true; view = {cx: 0, cy: 0, s: 1}; kick(); } }
+  };
+  cv.addEventListener('pointerup', pup); cv.addEventListener('pointercancel', pup);
+  cv.addEventListener('wheel', e => {
+    e.preventDefault();
+    const [x, y] = loc(e), sNew = Math.max(1, Math.min(6, view.s * Math.exp(-e.deltaY * (e.ctrlKey ? 0.01 : 0.002))));
+    const wx = (x - W / 2) / (view.s * R) + view.cx, wy = (y - H / 2) / (view.s * R) + view.cy;
+    view = {s: sNew, cx: sNew <= 1.001 ? 0 : wx - (x - W / 2) / (sNew * R), cy: sNew <= 1.001 ? 0 : wy - (y - H / 2) / (sNew * R)};
+    viewTo = null; if (sNew <= 1.001 && zoomSeg){ zoomSeg = null; chip.hidden = true; }
+    kick();
+  }, {passive: false});
   cv.addEventListener('click', ev => {
+    if (suppress){ suppress = false; return; }
     const {best, wedge, center} = pick(ev);
     tip.hidden = true;
-    if (W < 640 && !zoomSeg && wedge && !center){ zoomTo(wedge.seg); return; }
+    if (W < 640 && !zoomSeg && view.s < 1.05 && wedge && !center){ zoomTo(wedge.seg); return; }
     if (best){ fx.tap(); openProfile(best.r.k); return; }
     if (center || (zoomSeg && (!wedge || wedge.seg === zoomSeg))){ if (zoomSeg) zoomTo(null); return; }
     if (wedge) zoomTo(wedge.seg);
@@ -427,6 +500,256 @@ const Radar = (() => {
     redraw: kick,
   };
 })();
+
+/* ---------- web (constellation) ---------- */
+const Web = createWeb({
+  canvas: $('#web'), wrap: $('#webWrap'), tip: $('#webTip'), chip: $('#webChip'), yearEl: $('#webYear'),
+  segColor: s => segColor(s), segShort: s => (SEGS[SEGI[s]] || {short: 'Other'}).short,
+  onOpen: k => { fx.tap(); openProfile(k); }, onPeek: r => Peek.show(r.k), onTap: () => fx.tap(),
+  reduced: REDUCED, esc, fmt,
+});
+const Replay = (() => {
+  const range = $('#webYearRange'), label = $('#webYearLabel'), btn = $('#webPlay');
+  let timer = 0, min = 2010, max = new Date().getFullYear();
+  function bounds(){
+    const yrs = Web.years(S.all.filter(r => !r.x)) || [min, max];
+    min = yrs[0]; max = Math.max(yrs[1], new Date().getFullYear());
+    range.min = min; range.max = max + 1; if (!range.dataset.touched) range.value = max + 1;
+  }
+  function set(v, quiet){
+    v = +v; range.value = v;
+    const all = v > max;
+    label.textContent = all ? 'All years' : `Through ${v}`;
+    Web.setYear(all ? null : v);
+    if (!quiet) fx.tap();
+  }
+  function stop(){ clearInterval(timer); timer = 0; btn.classList.remove('on'); btn.setAttribute('aria-label', 'Replay how your network grew'); }
+  function play(){
+    if (timer){ stop(); return; }
+    bounds(); let y = min; set(y, true);
+    btn.classList.add('on'); btn.setAttribute('aria-label', 'Stop replay');
+    timer = setInterval(() => { y++; if (y > max + 1){ stop(); return; } set(y, y <= max ? false : true); if (y > max) stop(); }, REDUCED ? 300 : 850);
+  }
+  range.addEventListener('input', () => { range.dataset.touched = '1'; stop(); set(range.value); });
+  btn.addEventListener('click', play);
+  return {bounds, stop};
+})();
+
+/* ---------- peek (long-press preview) ---------- */
+const Peek = (() => {
+  const el = $('#peek');
+  function show(k){
+    const r = S.all.find(x => x.k === k); if (!r) return;
+    buzz(ImpactStyle.Medium);
+    const c = r.cl, star = r.ed && r.ed.star;
+    const chips = [c.grade ? `${c.branch || ''} ${c.grade}`.trim() : c.branch, c.agency, c.status, c.func].filter(Boolean).slice(0, 4);
+    el.innerHTML = `<div class="peek-card">${avatar(r)}<div class="peek-main"><b>${esc(r.f)} ${esc(r.l)}</b><span>${esc(r.p || '')}</span><span class="dim">${esc(r.c || '')}</span><div class="chips">${chips.map(x => `<span class="chip">${esc(x)}</span>`).join('')}</div></div></div>
+      <div class="peek-actions"><button type="button" class="btn" data-peek-star="${esc(k)}">${star ? '★ Starred' : '☆ Star'}</button><button type="button" class="btn primary" data-peek-open="${esc(k)}">Open profile</button></div>`;
+    el.hidden = false; el.classList.remove('show'); void el.offsetWidth; el.classList.add('show');
+  }
+  function hide(){ el.hidden = true; el.classList.remove('show'); }
+  document.addEventListener('pointerdown', e => { if (!el.hidden && !e.target.closest('#peek')) setTimeout(hide, 0); }, true);
+  return {show, hide};
+})();
+
+/* ---------- swipe and long-press on people rows ---------- */
+(() => {
+  const list = $('#people'); let sw = null;
+  list.addEventListener('pointerdown', e => {
+    const b = e.target.closest('.person'); if (!b || e.button > 0) return;
+    sw = {b, li: b.parentElement, x: e.clientX, y: e.clientY, dx: 0, mode: null, armed: false, k: b.dataset.open};
+    sw.t = setTimeout(() => { if (sw && !sw.mode){ sw.mode = 'peek'; Peek.show(sw.k); } }, 480);
+  });
+  list.addEventListener('pointermove', e => {
+    if (!sw) return;
+    const dx = e.clientX - sw.x, dy = e.clientY - sw.y;
+    if (!sw.mode){
+      if (Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy) * 1.3){ sw.mode = 'swipe'; clearTimeout(sw.t); try { sw.b.setPointerCapture(e.pointerId); } catch {} sw.b.classList.add('dragging'); }
+      else if (Math.abs(dy) > 10){ clearTimeout(sw.t); sw = null; return; }
+    }
+    if (sw.mode !== 'swipe') return;
+    sw.dx = Math.max(-140, Math.min(140, dx));
+    sw.b.style.transform = `translateX(${sw.dx}px)`;
+    sw.li.classList.toggle('sw-r', sw.dx > 0); sw.li.classList.toggle('sw-l', sw.dx < 0);
+    const armed = Math.abs(sw.dx) > 80;
+    if (armed !== sw.armed){ sw.armed = armed; sw.li.classList.toggle('armed', armed); if (armed) fx.tap(); }
+  });
+  const end = async () => {
+    if (!sw) return; clearTimeout(sw.t);
+    const s = sw; sw = null;
+    if (s.mode === 'peek'){ suppressClick(); return; }
+    if (s.mode !== 'swipe') return;
+    suppressClick();
+    s.b.classList.remove('dragging'); s.b.style.transform = '';
+    setTimeout(() => s.li.classList.remove('sw-r', 'sw-l', 'armed'), 250);
+    if (s.dx > 80){ const on = !(S.edits[s.k] && S.edits[s.k].star); on ? fx.star() : fx.unstar(); await setEdit(s.k, {star: on}, {quiet: true}); const r = S.all.find(x => x.k === s.k); if (r){ s.li.outerHTML = personRow(r); } toast(on ? 'Starred' : 'Removed star'); }
+    else if (s.dx < -80){ openProfile(s.k, {focusNotes: true}); }
+  };
+  list.addEventListener('pointerup', end); list.addEventListener('pointercancel', end);
+})();
+let clickBlockUntil = 0;
+function suppressClick(){ clickBlockUntil = Date.now() + 350; }
+
+/* ---------- target accounts and unit pages ---------- */
+const LADDER = [[1, 'Exec, flag, SES, O-6'], [2, 'Director, O-4 to O-5, GS-15, E-9'], [3, 'Manager, O-1 to O-3, GS-13/14, senior NCO'], [4, 'Staff and individual contributors']];
+function unitPeople(name){
+  const n = name.toLowerCase();
+  return S.all.filter(r => !r.x && (r.cl.agency === name || r.c === name || (n.length > 3 && (r.c || '').toLowerCase().includes(n))));
+}
+function coverage(ps){
+  const lv = [0, 0, 0, 0, 0]; ps.forEach(r => lv[Math.min(4, Math.max(1, r.cl.lv))]++);
+  const score = (lv[1] ? 40 : 0) + Math.min(lv[2], 2) / 2 * 30 + Math.min(lv[3], 3) / 3 * 20 + Math.min(lv[4], 3) / 3 * 10;
+  return {lv, score: Math.round(score)};
+}
+function gapsOf(cov){
+  const g = [];
+  if (!cov.lv[1]) g.push('No exec, flag or SES-level contact');
+  if (cov.lv[2] < 2) g.push(cov.lv[2] ? 'Only one director-level contact' : 'No director-level contact');
+  if (!cov.lv[3]) g.push('No manager-level contact');
+  return g;
+}
+function ringSVG(score, size = 64){
+  const r = size / 2 - 5, C = 2 * Math.PI * r, col = score >= 75 ? 'var(--ok)' : score >= 45 ? 'var(--amber)' : 'var(--coral)';
+  return `<svg class="ring" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" aria-label="Coverage ${score} percent"><circle cx="${size / 2}" cy="${size / 2}" r="${r}" stroke="rgba(150,180,220,.14)" stroke-width="5"/><circle class="arc" cx="${size / 2}" cy="${size / 2}" r="${r}" stroke="${col}" stroke-width="5" stroke-linecap="round" stroke-dasharray="${C}" stroke-dashoffset="${C}" data-off="${C * (1 - score / 100)}" transform="rotate(-90 ${size / 2} ${size / 2})" style="filter:drop-shadow(0 0 6px ${col})"/><text x="50%" y="50%" text-anchor="middle" dominant-baseline="central">${score}</text></svg>`;
+}
+function animateRings(root){ requestAnimationFrame(() => requestAnimationFrame(() => $$('.ring .arc', root).forEach(a => { a.style.strokeDashoffset = a.dataset.off; }))); }
+const SAMPLE_TARGETS = ['NAVFAC', 'USACE', 'DISA', 'Duke Energy', 'CISA'];
+const isTarget = name => S.targets.some(t => t.name === name);
+let targetsT = 0;
+function saveTargets(){ if (S.mode !== 'live') return; clearTimeout(targetsT); targetsT = setTimeout(() => Store.write('targets.json', {targets: S.targets}).catch(() => {}), 400); }
+
+function renderUnits(){
+  $$('#unitsCtl button').forEach(b => b.setAttribute('aria-checked', String(b.dataset.units === S.unitsMode)));
+  $$('[data-usub]').forEach(el => { el.hidden = el.dataset.usub !== S.unitsMode; });
+  if (S.unitsMode === 'orgs') renderOrgs();
+  if (S.unitsMode === 'branches') renderRanks();
+  if (S.unitsMode !== 'targets') return;
+  const box = $('#targets');
+  const cards = S.targets.map(t => {
+    const ps = unitPeople(t.name), cov = coverage(ps), gaps = gapsOf(cov);
+    const stars = ps.filter(r => r.ed && r.ed.star).length, news = ps.filter(r => r.isNew || r.movedNow).length;
+    const seg = ps.length ? segColor(ps[0].cl.seg) : 'var(--ink-3)';
+    return `<button type="button" class="tcard" data-unit="${esc(t.name)}" style="--seg:${seg}">${ringSVG(cov.score)}<span class="tmain"><b>${esc(t.name)}</b><span>${fmt(ps.length)} ${ps.length === 1 ? 'contact' : 'contacts'}${stars ? `, ${stars} starred` : ''}${news ? `, <em>${news} new or moved</em>` : ''}</span><span class="tgap">${esc(gaps[0] || 'Covered at every level')}</span></span><span class="ladder-mini">${[1, 2, 3, 4].map(l => `<i style="--n:${Math.min(cov.lv[l], 8)}"></i>`).join('')}</span></button>`;
+  });
+  box.innerHTML = cards.join('') + `<button type="button" class="tcard add" data-act="add-target"><span class="plus">+</span><span class="tmain"><b>Add a target</b><span>Pick an agency, command or company you're working</span></span></button>`;
+  if (!S.targets.length) box.insertAdjacentHTML('afterbegin', '<p class="muted" style="grid-column:1/-1">Target accounts show how well you\'re connected at each level of the organizations you\'re selling into, and where the gaps are.</p>');
+  animateRings(box);
+}
+function openUnit(name){
+  const ps = unitPeople(name).sort((a, b) => a.cl.lv - b.cl.lv || b.cl.gn - a.cl.gn);
+  const cov = coverage(ps), gaps = gapsOf(cov), target = S.targets.find(t => t.name === name);
+  const rows = LADDER.map(([lv, label]) => {
+    const at = ps.filter(r => Math.min(4, Math.max(1, r.cl.lv)) === lv);
+    const shown = at.slice(0, 14);
+    return `<div class="rung${at.length ? '' : ' gap'}"><div class="rung-h"><span>${label}</span><b>${at.length}</b></div><div class="rung-people">${shown.map(r => `<button type="button" class="mini" data-open="${esc(r.k)}" data-back="${esc(name)}" title="${esc(r.f + ' ' + r.l)}">${avatar(r)}<span>${esc(r.f)} ${esc((r.l || '')[0] || '')}.${r.cl.grade ? ` <em>${esc(r.cl.grade)}</em>` : ''}</span></button>`).join('')}${at.length > shown.length ? `<span class="more">+${at.length - shown.length}</span>` : ''}${at.length ? '' : '<span class="muted">Nobody yet</span>'}</div></div>`;
+  }).join('');
+  Sheet.open('unit', `
+    <div class="sh-head"><div class="unit-top">${ringSVG(cov.score, 84)}<div><h2>${esc(name)}</h2><p>${fmt(ps.length)} ${ps.length === 1 ? 'contact' : 'contacts'}, coverage ${cov.score}%</p></div></div><button type="button" class="x" data-act="close" aria-label="Close">${ICON.x}</button></div>
+    <div class="row"><button type="button" class="btn${target ? '' : ' primary'}" data-toggle-target="${esc(name)}">${target ? 'Remove from targets' : '+ Add to targets'}</button><button type="button" class="btn" data-unit-people="${esc(name)}">Show in People</button></div>
+    ${gaps.length ? `<div class="gaps">${gaps.map(g => `<p><span>!</span>${esc(g)}</p>`).join('')}</div>` : '<div class="gaps ok"><p><span>✓</span>Covered at every level</p></div>'}
+    <div class="ladder">${rows}</div>
+    ${target ? `<label class="form full" style="display:flex;flex-direction:column;gap:6px;font-size:12.5px;color:var(--ink-2)">Account notes<textarea id="unitNote" data-unit-note="${esc(name)}" placeholder="Program, contract vehicle, next step">${esc(target.note || '')}</textarea></label>` : ''}`);
+  animateRings(Sheet.body);
+}
+function showAddTarget(q = ''){
+  const counts = new Map();
+  for (const r of S.all){ if (r.x) continue; if (r.cl.agency) counts.set(r.cl.agency, (counts.get(r.cl.agency) || 0) + 1); if (r.c) counts.set(r.c, (counts.get(r.c) || 0) + 1); }
+  const ql = q.toLowerCase();
+  const list = [...counts.entries()].filter(([n]) => !isTarget(n) && (!ql || n.toLowerCase().includes(ql))).sort((a, b) => b[1] - a[1]).slice(0, 40);
+  const html = head('Add a target', 'Agencies, commands and companies in your network, most connected first.') +
+    `<label class="search" style="background:rgba(4,10,20,.5)"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 5 5"/></svg><input id="targetQ" type="search" value="${esc(q)}" placeholder="Search, or type a new name" autocomplete="off" autofocus></label>
+    <ul class="pick">${list.map(([n, c]) => `<li><button type="button" data-add-target="${esc(n)}"><span>${esc(n)}</span><em>${fmt(c)}</em><b>+</b></button></li>`).join('')}${q && !counts.has(q) && !isTarget(q) ? `<li><button type="button" data-add-target="${esc(q)}"><span>Add “${esc(q)}”</span><em>new</em><b>+</b></button></li>` : ''}</ul>`;
+  if (Sheet.kind === 'add-target'){ const ul = $('.pick', Sheet.body); ul.outerHTML = html.slice(html.indexOf('<ul class="pick">')); }
+  else Sheet.open('add-target', html);
+}
+function toggleTarget(name){
+  if (isTarget(name)){ S.targets = S.targets.filter(t => t.name !== name); fx.unstar(); toast(`Removed ${name} from targets`); }
+  else { S.targets.push({name, added: TODAY}); fx.star(); toast(`Added ${name} to targets`); }
+  saveTargets(); renderBadge();
+  if (S.tab === 'units') renderUnits();
+  if (S.tab === 'sitrep') renderSitrep();
+}
+
+/* ---------- sitrep ---------- */
+const ICONS = {
+  review: '<path d="M7 4h10a2 2 0 0 1 2 2v14l-7-4-7 4V6a2 2 0 0 1 2-2z"/>',
+  move: '<path d="M4 12h12M12 6l6 6-6 6"/>',
+  new: '<circle cx="10" cy="8" r="3.5"/><path d="M3.5 20a6.5 6.5 0 0 1 13 0M19 8v6M16 11h6"/>',
+  first: '<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/>',
+  gap: '<path d="M12 3 2 20h20zM12 10v4M12 17h.01"/>',
+  cake: '<path d="M4 20h16M5 20v-7h14v7M8 13V9M12 13V9M16 13V9M8 6.5v.01M12 6.5v.01M16 6.5v.01"/>',
+  star: '<path d="m12 3.5 2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"/>',
+  pulse: '<path d="M3 12h4l3-7 4 14 3-7h4"/>',
+  target: '<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r=".8"/>',
+};
+const fullName = r => `${r.cl.grade && /^O-([3-9]|10)$/.test(r.cl.grade) && r.cl.status !== 'Veteran / Retired' ? shortRank(r) + ' ' : ''}${r.f} ${r.l}`;
+function shortRank(r){ const m = {'O-10': 'Gen', 'O-9': 'Lt Gen', 'O-8': 'Maj Gen', 'O-7': 'Brig Gen', 'O-6': 'Col', 'O-5': 'Lt Col', 'O-4': 'Maj', 'O-3': 'Capt'}; const nav = {'O-6': 'CAPT', 'O-5': 'CDR', 'O-4': 'LCDR', 'O-3': 'LT'}; return (/Navy|Coast/.test(r.cl.branch) ? nav[r.cl.grade] : m[r.cl.grade]) || r.cl.grade; }
+function buildCards(){
+  const A = S.all.filter(r => !r.x), cards = [];
+  const bySenior = (a, b) => a.cl.lv - b.cl.lv || b.cl.gn - a.cl.gn;
+  const names = (rs, n = 2) => rs.slice(0, n).map(r => fullName(r)).join(', ') + (rs.length > n ? ` and ${fmt(rs.length - n)} more` : '');
+  const rq = Deck.count();
+  if (rq) cards.push({tone: 'coral', icon: 'review', title: `${fmt(rq)} to review`, body: 'New connections and job changes from your last refresh. Swipe through them in a couple of minutes.', people: A.filter(r => r.isNew || r.movedNow).sort(bySenior), act: {kind: 'tab', tab: 'review'}});
+  const moved = A.filter(r => r.movedNow).sort(bySenior), senMoved = moved.filter(r => r.cl.lv <= 2);
+  if (senMoved.length){
+    const top = senMoved[0];
+    cards.push({tone: 'sky', icon: 'move', title: `${fmt(senMoved.length)} senior ${senMoved.length === 1 ? 'contact' : 'contacts'} changed jobs`, body: `${fullName(top)} is now ${top.p || 'in a new role'}${top.c ? ' at ' + top.c : ''}.${senMoved.length > 1 ? ' Also ' + names(senMoved.slice(1), 2) + '.' : ''}`, people: senMoved, act: {kind: 'filter', sig: ['jcw']}});
+  } else if (moved.length) cards.push({tone: 'sky', icon: 'move', title: `${fmt(moved.length)} ${moved.length === 1 ? 'contact' : 'contacts'} changed jobs`, body: names(moved, 3) + '.', people: moved, act: {kind: 'filter', sig: ['jcw']}});
+  const fresh = A.filter(r => r.isNew).sort(bySenior);
+  if (fresh.length) cards.push({tone: 'amber', icon: 'new', title: `${fmt(fresh.length)} new ${fresh.length === 1 ? 'connection' : 'connections'}`, body: `Most senior: ${names(fresh, 2)}.`, people: fresh, act: {kind: 'filter', sig: ['new']}});
+  // first contact at an organization
+  const orgs = new Map();
+  for (const r of A){ const o = r.cl.agency || r.c; if (!o) continue; if (!orgs.has(o)) orgs.set(o, []); orgs.get(o).push(r); }
+  const firsts = [...orgs.entries()].filter(([, rs]) => rs.every(r => r.isNew)).sort((a, b) => Math.min(...a[1].map(r => r.cl.lv)) - Math.min(...b[1].map(r => r.cl.lv))).slice(0, 2);
+  for (const [o, rs] of firsts) cards.push({tone: 'violet', icon: 'first', title: `First ${rs.length === 1 ? 'contact' : 'contacts'} at ${o}`, body: `${names(rs.sort(bySenior), 2)}. ${isTarget(o) ? 'It’s on your target list.' : 'Tap to see the unit and add it as a target.'}`, people: rs, act: {kind: 'unit', name: o}});
+  // target coverage gaps
+  if (S.targets.length){
+    const weak = S.targets.map(t => { const ps = unitPeople(t.name), cov = coverage(ps); return {t, ps, cov, gaps: gapsOf(cov)}; }).filter(x => x.gaps.length).sort((a, b) => a.cov.score - b.cov.score).slice(0, 3);
+    for (const w of weak) cards.push({tone: 'amber', icon: 'gap', title: `${w.t.name}: ${w.gaps[0].replace(/^No /, 'no ').replace(/^Only/, 'only')}`, body: `${fmt(w.ps.length)} ${w.ps.length === 1 ? 'contact' : 'contacts'}, coverage ${w.cov.score}%. ${w.gaps.length > 1 ? w.gaps.slice(1).join('. ') + '.' : ''}`, people: w.ps.sort(bySenior), act: {kind: 'unit', name: w.t.name}, ring: w.cov.score});
+  } else cards.push({tone: 'amber', icon: 'target', title: 'Pick your target accounts', body: 'Choose the agencies, commands and companies you’re selling into. Sitrep will flag where you have no senior contact.', people: [], act: {kind: 'units'}});
+  const anniv = A.filter(r => isAnniversary(r.d)).sort((a, b) => (a.d || '').localeCompare(b.d || ''));
+  if (anniv.length){ const y = new Date().getFullYear(); cards.push({tone: 'green', icon: 'cake', title: `${fmt(anniv.length)} connection ${anniv.length === 1 ? 'anniversary' : 'anniversaries'} this week`, body: 'An easy reason to say hello: ' + anniv.slice(0, 2).map(r => `${fullName(r)} (${y - +r.d.slice(0, 4)} ${y - +r.d.slice(0, 4) === 1 ? 'year' : 'years'})`).join(', ') + (anniv.length > 2 ? ` and ${anniv.length - 2} more.` : '.'), people: anniv, act: {kind: 'filter', sig: ['anniv']}}); }
+  const quiet = A.filter(r => r.ed && r.ed.star && (!r.ed.updated || daysAgo(r.ed.updated) > 45));
+  if (quiet.length) cards.push({tone: 'amber', icon: 'star', title: `Check in with ${fmt(quiet.length)} starred ${quiet.length === 1 ? 'contact' : 'contacts'}`, body: 'No note from you in over six weeks: ' + names(quiet, 2) + '.', people: quiet, act: {kind: 'filter', sig: ['star']}});
+  const dod = A.filter(r => r.cl.seg === 'DoD & Military').length, vets = A.filter(r => r.cl.status === 'Veteran / Retired').length, orgN = orgs.size;
+  cards.push({tone: 'sky', icon: 'pulse', title: `${fmt(A.length)} contacts across ${fmt(orgN)} organizations`, body: `${fmt(dod)} DoD and military, ${fmt(vets)} veterans, ${fmt(A.filter(r => r.cl.seg === 'Federal Civilian').length)} federal civilian. Open the Web to see how they cluster.`, people: [], act: {kind: 'web'}});
+  return cards;
+}
+function stack(ps){
+  if (!ps.length) return '';
+  const show = ps.slice(0, 5);
+  return `<span class="stack">${show.map(r => avatar(r)).join('')}${ps.length > 5 ? `<span class="av more">+${fmt(ps.length - 5)}</span>` : ''}</span>`;
+}
+let sitrepAnimated = false;
+function renderSitrep(){
+  const last = S.meta && S.meta.lastImport;
+  const A = S.all.filter(r => !r.x);
+  $('#sitrepSub').textContent = `${dtg()}. ${fmt(A.length)} contacts${last ? `, refreshed ${niceDate(last)}` : ''}.`;
+  const hist = (S.meta && S.meta.imports || []).map(i => i.total);
+  $('#sitrepSpark').innerHTML = sparkPath(hist, 160, 44);
+  S.cards = buildCards();
+  const anim = !sitrepAnimated && !REDUCED; sitrepAnimated = true;
+  $('#cards').innerHTML = S.cards.map((c, i) => `<button type="button" class="scard t-${c.tone}${anim ? ' in' : ''}" style="--i:${i}" data-card="${i}"><span class="sic"><svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[c.icon]}</svg></span><span class="sbody"><b>${esc(c.title)}</b><span>${esc(c.body)}</span>${stack(c.people)}</span>${c.ring != null ? ringSVG(c.ring, 48) : '<svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>'}</button>`).join('');
+  animateRings($('#cards'));
+}
+function dtg(){ const d = new Date(), p = n => String(n).padStart(2, '0'); return `${p(d.getUTCDate())}${p(d.getUTCHours())}${p(d.getUTCMinutes())}Z ${['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'][d.getUTCMonth()]} ${String(d.getUTCFullYear()).slice(2)}`; }
+function sparkPath(vals, w, h){
+  if (!vals || vals.length < 2) return '';
+  const mn = Math.min(...vals), mx = Math.max(...vals), rg = mx - mn || 1;
+  const pts = vals.map((v, i) => [i * (w - 8) / (vals.length - 1) + 4, h - 6 - (v - mn) / rg * (h - 14)]);
+  const d = pts.map((p, i) => (i ? 'L' : 'M') + p[0].toFixed(1) + ' ' + p[1].toFixed(1)).join(' ');
+  const l = pts[pts.length - 1];
+  return `<defs><linearGradient id="sg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFB547" stop-opacity=".35"/><stop offset="1" stop-color="#FFB547" stop-opacity="0"/></linearGradient></defs><path d="${d} L${l[0].toFixed(1)} ${h} L4 ${h}Z" fill="url(#sg)" stroke="none"/><path d="${d}" stroke="#FFB547" stroke-width="1.8" fill="none"/><circle cx="${l[0]}" cy="${l[1]}" r="3.2" fill="#FFB547" stroke="none"/><text x="${w - 4}" y="${h - 3}" text-anchor="end" fill="#9DAEC6" font-size="10.5" stroke="none" font-family="IBM Plex Sans">+${fmt(vals[vals.length - 1] - vals[0])} since ${vals.length} refreshes ago</text>`;
+}
+function runCard(i){
+  const c = S.cards[i]; if (!c) return; fx.select();
+  const a = c.act;
+  if (a.kind === 'tab') setTab(a.tab);
+  else if (a.kind === 'unit') openUnit(a.name);
+  else if (a.kind === 'units'){ S.unitsMode = 'targets'; setTab('units'); setTimeout(() => showAddTarget(), 250); }
+  else if (a.kind === 'web'){ S.mapMode = 'web'; setTab('map'); }
+  else if (a.kind === 'filter'){ for (const k of Object.keys(F)) F[k] = F[k] instanceof Set ? new Set : (k === 'removed' ? false : ''); S.nl = null; S.nlChips = []; $('#q').value = ''; for (const s of a.sig || []) F.sig.add(s); render(); setTab('people'); }
+}
 
 /* ---------- ranks ---------- */
 function renderRanks(){
@@ -460,8 +783,8 @@ function renderOrgs(){
     if (r.cl.agency){ ag.set(r.cl.agency, (ag.get(r.cl.agency) || 0) + 1); agSeg[r.cl.agency] = r.cl.seg; }
   }
   const top = m => [...m.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).slice(0, 25);
-  bars($('#coList'), top(co), 'company', k => segColor(coSeg[k]));
-  bars($('#agList'), top(ag), 'agency', k => segColor(agSeg[k]));
+  bars($('#coList'), top(co), 'unit', k => segColor(coSeg[k]));
+  bars($('#agList'), top(ag), 'unit', k => segColor(agSeg[k]));
 }
 
 /* ---------- people ---------- */
@@ -610,7 +933,7 @@ function selectOpts(group, getter, current, allLabel){
 }
 function renderFilterSheet(update){
   const sigCounts = {};
-  for (const r of S.all){ if (!match(r, 'sig')) continue; for (const [s] of SIGNALS) if (sigOk(r, s)) sigCounts[s] = (sigCounts[s] || 0) + 1; }
+  for (const r of S.all){ if (!match(r, 'sig')) continue; for (const [s] of SIGNALS_UI) if (sigOk(r, s)) sigCounts[s] = (sigCounts[s] || 0) + 1; }
   const html = head('Filters', 'Combine as many as you like. Counts update as you go.') + `
     <div class="fgroup"><h3>Segment</h3>${facet('seg', SEGS.map(s => s.id), r => r.cl.seg)}</div>
     <div class="fgroup"><h3>Military branch</h3>${facet('branch', BRANCHES, r => r.cl.branch)}</div>
@@ -622,21 +945,23 @@ function renderFilterSheet(update){
     <div class="fgroup"><h3>Function</h3>${facet('func', FUNCS, r => r.cl.func)}</div>
     <div class="fgroup"><h3>Certifications</h3>${facet('cert', CERTS.map(c => c[0]), r => r.cl.certs)}</div>
     <div class="fgroup"><h3><label for="fSince">Connected</label></h3><select class="fsel" id="fSince">${SINCE.map(([v, l]) => `<option value="${v}"${F.since === v ? ' selected' : ''}>${l}</option>`).join('')}</select></div>
-    <div class="fgroup"><h3>Signals</h3><div class="chips">${SIGNALS.map(([v, l]) => `<button type="button" class="chip${F.sig.has(v) ? ' on' : ''}${sigCounts[v] ? '' : ' zero'}" data-g="sig" data-v="${v}">${l}<em>${fmt(sigCounts[v] || 0)}</em></button>`).join('')}</div></div>
+    <div class="fgroup"><h3>Signals</h3><div class="chips">${SIGNALS_UI.map(([v, l]) => `<button type="button" class="chip${F.sig.has(v) ? ' on' : ''}${sigCounts[v] ? '' : ' zero'}" data-g="sig" data-v="${v}">${l}<em>${fmt(sigCounts[v] || 0)}</em></button>`).join('')}</div></div>
     <label class="switch">Include people no longer in your export<input type="checkbox" id="fRemoved"${F.removed ? ' checked' : ''}></label>
     <div class="sheet-foot"><button type="button" class="btn" data-act="clear">Clear all</button><button type="button" class="btn primary block" data-act="close">Show ${fmt(VIEW.length)} ${VIEW.length === 1 ? 'person' : 'people'}</button></div>`;
   if (update){ const st = Sheet.body.scrollTop; Sheet.body.innerHTML = html; Sheet.body.scrollTop = st; }
   else Sheet.open('filters', html);
 }
 
-function openProfile(k){
+function openProfile(k, {focusNotes, back} = {}){
   const r = S.all.find(x => x.k === k); if (!r) return;
+  Peek.hide();
   S.sel = k; Radar.redraw();
   const c = r.cl, ed = r.ed || {};
   const opt = (vals, cur, auto) => `<option value="">${auto}</option>` + vals.map(v => { const [val, lab] = Array.isArray(v) ? v : [v, v]; return `<option value="${esc(val)}"${cur === val ? ' selected' : ''}>${esc(lab)}</option>`; }).join('');
   const link = S.mode === 'sample' ? '<span class="muted">Sample contact, no LinkedIn profile</span>' : r.u ? `<button type="button" class="btn" data-link="${esc(r.u)}">${ICON.ext}LinkedIn profile</button>` : '';
   const hist = (r.pv || []).map(h => `<li>${esc(h.p || '—')}<br><small>${esc(h.c || '—')}, until ${niceDate(h.until)}</small></li>`).join('');
   Sheet.open('profile', `
+    ${back ? `<button type="button" class="backlink" data-unit="${esc(back)}">${ICON.back}${esc(back)}</button>` : ''}
     <div class="sh-head"><div class="prof-top">${avatar(r)}<div><h2>${esc(r.f)} ${esc(r.l)}</h2><p>${esc(r.p || '')}</p><p style="color:var(--ink)">${esc(r.c || '')}</p></div></div><button type="button" class="x" data-act="close" aria-label="Close">${ICON.x}</button></div>
     <div class="row"><button type="button" class="btn${ed.star ? ' primary' : ''}" data-act="toggle-star" data-k="${esc(k)}">${ed.star ? '★ Starred' : '☆ Star'}</button>${link}${r.e ? `<button type="button" class="btn" data-copy="${esc(r.e)}">Copy email</button>` : ''}</div>
     <dl class="kv">
@@ -664,6 +989,7 @@ function openProfile(k){
       <label class="full">Notes<textarea id="eNote" placeholder="How you know them, last touch, next step">${esc(ed.note || '')}</textarea></label>
       <div class="row full"><button type="submit" class="btn primary">Save changes</button><span class="muted" id="edMsg">${S.mode === 'live' ? '' : 'Sample data: changes are not saved.'}</span></div>
     </form>`);
+  if (focusNotes) setTimeout(() => { const n = $('#eNote'); if (n){ n.scrollIntoView({block: 'center', behavior: REDUCED ? 'auto' : 'smooth'}); n.focus({preventScroll: true}); } }, 340);
 }
 async function setEdit(k, patch, {quiet} = {}){
   const cur = Object.assign({}, S.edits[k] || {}, patch);
@@ -703,7 +1029,7 @@ async function commitImport(){
   try {
     const wasSample = S.mode === 'sample';
     await persist(plan); S.mode = 'live';
-    if (wasSample){ S.edits = {}; S.review = {}; await saveEdits(); await saveReview(); }
+    if (wasSample){ S.edits = {}; S.review = {}; S.targets = []; await saveEdits(); await saveReview(); }
     S.meta = plan.meta; hydrate(plan.rows); S.pending = null; Deck.reset();
     Sheet.close(); render(); fx.success();
     const st = plan.stats;
@@ -776,7 +1102,8 @@ async function loadStore(opts = {}){
     if (n.pending){ S.syncNote = 'Downloading your network from iCloud. This can take a minute on a new device.'; renderHeader(); setTimeout(() => loadStore(), 6000); return; }
     S.syncNote = '';
     if (!n.data || !n.data.rows){ render(); return; }
-    const [e, rv] = await Promise.all([Store.read('edits.json'), Store.read('review.json')]);
+    const [e, rv, tg] = await Promise.all([Store.read('edits.json'), Store.read('review.json'), Store.read('targets.json').catch(() => ({}))]);
+    S.targets = (tg && tg.data && tg.data.targets) || [];
     const nextEdits = (e.data && e.data.edits) || {}, nextReview = (rv.data && rv.data.review) || {};
     if (opts.onlyIfChanged && S.mode === 'live' && n.data.meta && n.data.meta.rev === S.rev && JSON.stringify(nextEdits) === JSON.stringify(S.edits)){ S.review = nextReview; return; }
     S.edits = nextEdits; S.review = nextReview;
@@ -817,13 +1144,24 @@ async function openIncoming(url){
 })();
 
 /* ---------- events ---------- */
-function clearAll(){ for (const k of Object.keys(F)) F[k] = F[k] instanceof Set ? new Set : (k === 'removed' ? false : ''); $('#q').value = ''; render(); }
+function clearAll(){ for (const k of Object.keys(F)) F[k] = F[k] instanceof Set ? new Set : (k === 'removed' ? false : ''); S.nl = null; S.nlChips = []; $('#q').value = ''; render(); }
 document.addEventListener('click', async e => {
+  if (Date.now() < clickBlockUntil){ e.preventDefault(); e.stopPropagation(); return; }
   const t = e.target.closest('button, .drop'); if (!t) return;
   const d = t.dataset;
+  if (d.map){ if (d.map !== S.mapMode) setMapMode(d.map); return; }
+  if (d.units){ S.unitsMode = d.units; fx.select(); try { localStorage.setItem('oob.units', d.units); } catch {} renderUnits(); return; }
+  if (d.card !== undefined){ runCard(+d.card); return; }
+  if (d.addTarget){ toggleTarget(d.addTarget); showAddTarget($('#targetQ') ? $('#targetQ').value : ''); return; }
+  if (d.toggleTarget){ toggleTarget(d.toggleTarget); openUnit(d.toggleTarget); return; }
+  if (d.unitPeople){ const n = d.unitPeople; clearAll(); if (S.all.some(r => r.cl.agency === n)) F.agency = n; else F.company = n; Sheet.close(); render(); setTab('people'); return; }
+  if (d.peekStar){ const k = d.peekStar, on = !(S.edits[k] && S.edits[k].star); on ? fx.star() : fx.unstar(); await setEdit(k, {star: on}); Peek.show(k); return; }
+  if (d.peekOpen){ Peek.hide(); openProfile(d.peekOpen); return; }
+  if (d.open && d.back){ fx.tap(); openProfile(d.open, {back: d.back}); return; }
+  if (d.unit){ fx.select(); openUnit(d.unit); return; }
   if (t.id === 'drop'){ $('#file').click(); return; }
   if (d.g){ const s = F[d.g]; s.has(d.v) ? s.delete(d.v) : s.add(d.v); fx.select(); render(); return; }
-  if (d.rm){ const g = d.rm; if (F[g] instanceof Set) F[g].delete(d.v); else if (g === 'q'){ F.q = ''; $('#q').value = ''; } else if (g === 'removed') F.removed = false; else F[g] = ''; fx.tap(); render(); return; }
+  if (d.rm){ const g = d.rm; if (g === 'nl' || g === 'q'){ $('#q').value = ''; S.nl = null; S.nlChips = []; F.q = ''; } else if (F[g] instanceof Set) F[g].delete(d.v); else if (g === 'removed') F.removed = false; else F[g] = ''; fx.tap(); render(); return; }
   if (d.kpi){ fx.select(); if (d.kpi === 'clear'){ clearAll(); return; } const [g, v] = d.kpi.split(/:(.+)/); const s = F[g]; if (s.size === 1 && s.has(v)) s.clear(); else { s.clear(); s.add(v); } render(); return; }
   if (d.cell){ const [tier, b] = d.cell.split('|'); F.tier = new Set([tier]); F.branch = new Set([b]); fx.select(); render(); setTab('people'); return; }
   if (d.company !== undefined){ F.company = F.company === d.company ? '' : d.company; fx.select(); render(); setTab('people'); return; }
@@ -840,6 +1178,7 @@ document.addEventListener('click', async e => {
     case 'import': showImport(); return;
     case 'commit': commitImport(); return;
     case 'export': exportView(); return;
+    case 'add-target': fx.tap(); showAddTarget(); return;
     case 'deck-star': Deck.decide('star'); return;
     case 'deck-skip': Deck.decide('skip'); return;
     case 'deck-open': { const r = Deck.current(); if (r) openProfile(r.k); return; }
@@ -860,8 +1199,20 @@ document.addEventListener('change', e => {
   else if (t.id === 'pSound'){ prefs.sound = t.checked; savePrefs(); fx.select(); }
   else if (t.id === 'file' && t.files[0]){ handleFile(t.files[0]); t.value = ''; }
 });
+document.addEventListener('input', e => {
+  const t = e.target;
+  if (t.id === 'targetQ'){ clearTimeout(t._t); t._t = setTimeout(() => showAddTarget(t.value), 120); }
+  else if (t.id === 'unitNote'){ const tg = S.targets.find(x => x.name === t.dataset.unitNote); if (tg){ tg.note = t.value.slice(0, 4000); saveTargets(); } }
+});
 document.addEventListener('submit', e => { if (e.target.id === 'edForm'){ e.preventDefault(); saveProfileForm(e.target); } });
-let qT; $('#q').addEventListener('input', e => { clearTimeout(qT); qT = setTimeout(() => { F.q = e.target.value.trim(); render(); }, 160); });
+function applySearch(text){
+  const agencies = [...new Set(S.all.map(r => r.cl.agency).filter(Boolean))];
+  const {nl, rest, chips} = parseQuery(text || '', agencies);
+  S.nl = nl; S.nlChips = chips; F.q = nl ? rest : (text || '').trim();
+  render();
+}
+let qT; $('#q').addEventListener('input', e => { clearTimeout(qT); qT = setTimeout(() => applySearch(e.target.value), 180); });
+$('#q').addEventListener('keydown', e => { if (e.key === 'Enter'){ e.target.blur(); if (S.tab === 'sitrep' || S.tab === 'review') setTab('people'); } });
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape' && Sheet.kind) Sheet.close();
   if (S.tab === 'review' && !Sheet.kind && !e.target.closest('input,textarea,select')){ if (e.key === 'ArrowRight') Deck.decide('star'); if (e.key === 'ArrowLeft') Deck.decide('skip'); }
@@ -874,9 +1225,11 @@ document.addEventListener('drop', e => { const d = e.target.closest && e.target.
 (async () => {
   const sample = sampleNetwork();
   S.edits = sample.edits; S.meta = sample.meta; hydrate(sample.rows);
-  let startTab = 'map'; try { startTab = localStorage.getItem('oob.tab') || 'map'; } catch {}
+  S.targets = SAMPLE_TARGETS.map(name => ({name, added: TODAY}));
+  let startTab = 'sitrep';
+  try { startTab = localStorage.getItem('oob.tab') || 'sitrep'; const m = localStorage.getItem('oob.map'); if (m === 'web' || m === 'scope') S.mapMode = m; const u = localStorage.getItem('oob.units'); if (['targets', 'orgs', 'branches'].includes(u)) S.unitsMode = u; } catch {}
   VIEW = S.all.filter(r => match(r));
-  setTab(['map', 'ranks', 'orgs', 'people', 'review'].includes(startTab) ? startTab : 'map', {silent: true});
+  setTab(['sitrep', 'map', 'units', 'people', 'review'].includes(startTab) ? startTab : 'sitrep', {silent: true});
   render();
   await Store.init(); renderHeader();
   await loadStore();
