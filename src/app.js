@@ -11,6 +11,7 @@ import {
 } from './core.js';
 import { parseQuery, matchNL } from './nlq.js';
 import { createWeb } from './web.js';
+import { INDUSTRIES, indColor, indShort, setIndustryOverrides, companyKey, UNCLASSIFIED, GOV_IND } from './industry.js';
 
 const CloudStore = registerPlugin('CloudStore');
 const NATIVE = Capacitor.isNativePlatform();
@@ -60,12 +61,13 @@ const fx = {
 };
 
 /* ---------- state ---------- */
-const S = {all: [], edits: {}, review: {}, targets: [], meta: null, mode: 'sample', rev: null, tab: 'sitrep', mapMode: 'scope', unitsMode: 'targets', sort: 'new', shown: 60, sel: null, deck: 'week', pending: null, syncNote: '', nl: null, nlChips: [], cards: []};
-const F = {q: '', seg: new Set, branch: new Set, status: new Set, tier: new Set, sen: new Set, func: new Set, cert: new Set, sig: new Set, agency: '', company: '', since: '', removed: false};
+const S = {all: [], edits: {}, review: {}, targets: [], meta: null, mode: 'sample', rev: null, tab: 'sitrep', mapMode: 'scope', unitsMode: 'targets', sort: 'new', shown: 60, sel: null, deck: 'week', pending: null, syncNote: '', nl: null, nlChips: [], cards: [], coInd: {}, uncShown: 25};
+const F = {q: '', seg: new Set, branch: new Set, status: new Set, tier: new Set, sen: new Set, func: new Set, ind: new Set, cert: new Set, sig: new Set, agency: '', company: '', since: '', removed: false};
 let VIEW = [];
 
 function hydrate(rows){
   const imp = (S.meta && S.meta.n) || 0;
+  setIndustryOverrides(S.coInd);
   S.all = rows.map(r => {
     const k = r.k || keyOf(r);
     const ed = S.edits[k];
@@ -73,7 +75,7 @@ function hydrate(rows){
     const isNew = S.mode === 'sample' ? !!r._new : (imp > 1 && r.fi === imp);
     const lastImp = S.meta && S.meta.lastImport;
     const movedNow = !!r.jc && (S.mode === 'sample' ? daysAgo(r.jc) < 8 : r.jc === lastImp);
-    const hay = [r.f, r.l, r.p, r.c, cl.agency, cl.rank, cl.grade, cl.branch, ed && ed.note, ed && (ed.tags || []).join(' ')].join(' ').toLowerCase();
+    const hay = [r.f, r.l, r.p, r.c, cl.agency, cl.rank, cl.grade, cl.branch, cl.ind, ed && ed.note, ed && (ed.tags || []).join(' ')].join(' ').toLowerCase();
     return Object.assign({}, r, {k, cl, ed: ed || null, isNew, movedNow, hay});
   });
 }
@@ -118,6 +120,7 @@ function match(r, skip){
   if (skip !== 'tier' && F.tier.size && !F.tier.has(c.tier)) return false;
   if (skip !== 'sen' && F.sen.size && !F.sen.has(c.sen)) return false;
   if (skip !== 'func' && F.func.size && !F.func.has(c.func)) return false;
+  if (skip !== 'ind' && F.ind.size && !F.ind.has(c.ind)) return false;
   if (skip !== 'cert' && F.cert.size && !c.certs.some(x => F.cert.has(x))) return false;
   if (skip !== 'sig' && F.sig.size) for (const s of F.sig) if (!sigOk(r, s)) return false;
   if (skip !== 'agency' && F.agency && c.agency !== F.agency) return false;
@@ -126,7 +129,7 @@ function match(r, skip){
   if (F.q){ for (const t of F.q.toLowerCase().split(/\s+/)) if (t && !r.hay.includes(t)) return false; }
   return true;
 }
-const activeCount = () => F.seg.size + F.branch.size + F.status.size + F.tier.size + F.sen.size + F.func.size + F.cert.size + F.sig.size + (F.agency ? 1 : 0) + (F.company ? 1 : 0) + (F.since ? 1 : 0) + (F.removed ? 1 : 0);
+const activeCount = () => F.seg.size + F.branch.size + F.status.size + F.tier.size + F.sen.size + F.func.size + F.ind.size + F.cert.size + F.sig.size + (F.agency ? 1 : 0) + (F.company ? 1 : 0) + (F.since ? 1 : 0) + (F.removed ? 1 : 0);
 
 /* ---------- render orchestration ---------- */
 function render(){
@@ -227,7 +230,7 @@ function renderActive(){
   const parts = [];
   for (const c of S.nlChips) parts.push(['nl', c, c]);
   if (F.q) parts.push(['q', '', `“${F.q}”`]);
-  for (const g of ['seg', 'branch', 'status', 'tier', 'sen', 'func', 'cert']) for (const v of F[g]) parts.push([g, v, v]);
+  for (const g of ['seg', 'ind', 'branch', 'status', 'tier', 'sen', 'func', 'cert']) for (const v of F[g]) parts.push([g, v, v]);
   for (const v of F.sig) parts.push(['sig', v, (SIGNALS_UI.find(s => s[0] === v) || [, v])[1]]);
   if (F.agency) parts.push(['agency', '', F.agency]);
   if (F.company) parts.push(['company', '', F.company]);
@@ -542,7 +545,7 @@ const Peek = (() => {
     const r = S.all.find(x => x.k === k); if (!r) return;
     buzz(ImpactStyle.Medium);
     const c = r.cl, star = r.ed && r.ed.star;
-    const chips = [c.grade ? `${c.branch || ''} ${c.grade}`.trim() : c.branch, c.agency, c.status, c.func].filter(Boolean).slice(0, 4);
+    const chips = [c.grade ? `${c.branch || ''} ${c.grade}`.trim() : c.branch, c.agency, c.ind !== GOV_IND && c.ind !== UNCLASSIFIED ? c.ind : '', c.status, c.func].filter(Boolean).slice(0, 4);
     el.innerHTML = `<div class="peek-card">${avatar(r)}<div class="peek-main"><b>${esc(r.f)} ${esc(r.l)}</b><span>${esc(r.p || '')}</span><span class="dim">${esc(r.c || '')}</span><div class="chips">${chips.map(x => `<span class="chip">${esc(x)}</span>`).join('')}</div></div></div>
       <div class="peek-actions"><button type="button" class="btn" data-peek-star="${esc(k)}">${star ? '★ Starred' : '☆ Star'}</button><button type="button" class="btn primary" data-peek-open="${esc(k)}">Open profile</button></div>`;
     el.hidden = false; el.classList.remove('show'); void el.offsetWidth; el.classList.add('show');
@@ -623,6 +626,7 @@ function renderUnits(){
   $$('[data-usub]').forEach(el => { el.hidden = el.dataset.usub !== S.unitsMode; });
   if (S.unitsMode === 'orgs') renderOrgs();
   if (S.unitsMode === 'branches') renderRanks();
+  if (S.unitsMode === 'industries') renderIndustries();
   if (S.unitsMode !== 'targets') return;
   const box = $('#targets');
   const cards = S.targets.map(t => {
@@ -638,6 +642,9 @@ function renderUnits(){
 function openUnit(name){
   const ps = unitPeople(name).sort((a, b) => a.cl.lv - b.cl.lv || b.cl.gn - a.cl.gn);
   const cov = coverage(ps), gaps = gapsOf(cov), target = S.targets.find(t => t.name === name);
+  const isCo = S.all.some(r => r.c === name) && !S.all.some(r => r.cl.agency === name);
+  const indCount = new Map(); ps.forEach(r => indCount.set(r.cl.ind, (indCount.get(r.cl.ind) || 0) + 1));
+  const autoInd = ([...indCount.entries()].sort((a, b) => b[1] - a[1])[0] || [UNCLASSIFIED])[0];
   const rows = LADDER.map(([lv, label]) => {
     const at = ps.filter(r => Math.min(4, Math.max(1, r.cl.lv)) === lv);
     const shown = at.slice(0, 14);
@@ -645,6 +652,7 @@ function openUnit(name){
   }).join('');
   Sheet.open('unit', `
     <div class="sh-head"><div class="unit-top">${ringSVG(cov.score, 84)}<div><h2>${esc(name)}</h2><p>${fmt(ps.length)} ${ps.length === 1 ? 'contact' : 'contacts'}, coverage ${cov.score}%</p></div></div><button type="button" class="x" data-act="close" aria-label="Close">${ICON.x}</button></div>
+    ${isCo ? `<label class="unit-ind">Industry<select class="fsel sm" data-co-ind="${esc(name)}">${indOpts(S.coInd[companyKey(name)] || '', 'Auto: ' + autoInd)}</select></label>` : `<p class="unit-ind muted">${esc(autoInd)}</p>`}
     <div class="row"><button type="button" class="btn${target ? '' : ' primary'}" data-toggle-target="${esc(name)}">${target ? 'Remove from targets' : '+ Add to targets'}</button><button type="button" class="btn" data-unit-people="${esc(name)}">Show in People</button></div>
     ${gaps.length ? `<div class="gaps">${gaps.map(g => `<p><span>!</span>${esc(g)}</p>`).join('')}</div>` : '<div class="gaps ok"><p><span>✓</span>Covered at every level</p></div>'}
     <div class="ladder">${rows}</div>
@@ -670,6 +678,95 @@ function toggleTarget(name){
   if (S.tab === 'sitrep') renderSitrep();
 }
 
+/* ---------- industries ---------- */
+let coIndT = 0;
+function saveIndustries(){ if (S.mode !== 'live') return; clearTimeout(coIndT); coIndT = setTimeout(() => Store.write('industries.json', {companies: S.coInd}).catch(() => {}), 400); }
+function setCompanyIndustry(company, ind){
+  const key = companyKey(company); if (!key) return;
+  if (ind) S.coInd[key] = ind; else delete S.coInd[key];
+  saveIndustries();
+  hydrate(S.all.map(stripRow)); render();
+}
+const indOpts = (cur, auto) => `<option value="">${esc(auto)}</option>` + INDUSTRIES.filter(i => i.id !== UNCLASSIFIED).map(i => `<option value="${esc(i.id)}"${cur === i.id ? ' selected' : ''}>${esc(i.id)}</option>`).join('');
+function senMix(ps){ const lv = [0, 0, 0, 0, 0]; ps.forEach(r => lv[Math.min(4, Math.max(1, r.cl.lv))]++); return lv; }
+function mixBar(lv, total){
+  const cols = ['', 'var(--amber)', '#FFD58A', 'var(--sky)', 'rgba(150,180,220,.35)'];
+  return `<span class="mix" aria-hidden="true">${[1, 2, 3, 4].map(l => lv[l] ? `<i style="flex:${lv[l]};background:${cols[l]}"></i>` : '').join('')}</span>`;
+}
+function unclassifiedCompanies(rows){
+  const m = new Map();
+  for (const r of rows){ if (r.x || r.cl.ind !== UNCLASSIFIED || !r.c) continue; m.set(r.c, (m.get(r.c) || 0) + 1); }
+  return [...m.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+}
+function renderIndustries(){
+  const base = VIEW.filter(r => !r.x);
+  const by = new Map();
+  for (const r of base){ if (!by.has(r.cl.ind)) by.set(r.cl.ind, []); by.get(r.cl.ind).push(r); }
+  const list = [...by.entries()].sort((a, b) => (a[0] === UNCLASSIFIED) - (b[0] === UNCLASSIFIED) || b[1].length - a[1].length);
+  const max = Math.max(1, ...list.filter(([k]) => k !== UNCLASSIFIED).map(([, v]) => v.length));
+  const total = base.length || 1;
+  const priv = base.filter(r => r.cl.ind !== GOV_IND).length;
+  const unc = by.get(UNCLASSIFIED) || [];
+  const known = total - unc.length;
+  $('#indSummary').innerHTML = `
+    <div class="isum"><b>${fmt(list.filter(([k]) => k !== UNCLASSIFIED).length)}</b><span>industries</span></div>
+    <div class="isum"><b>${fmt(priv)}</b><span>outside government</span></div>
+    <div class="isum"><b>${Math.round(known / total * 100)}%</b><span>classified</span></div>`;
+  const govN = (by.get(GOV_IND) || []).length;
+  $('#indTree').innerHTML = treemap(list.filter(([k]) => k !== UNCLASSIFIED && (S.indGov || k !== GOV_IND)).map(([k, v]) => [k, v.length]));
+  $('#indTreeHead').innerHTML = `<span>${S.indGov ? 'Whole network by industry' : 'Private sector by industry'}</span>${govN ? `<button type="button" class="achip" data-act="ind-gov">${S.indGov ? 'Hide' : 'Show'} government (${fmt(govN)})</button>` : ''}`;
+  $('#indList').innerHTML = list.map(([k, ps]) => {
+    const lv = senMix(ps), cos = new Set(ps.map(r => r.c).filter(Boolean)).size;
+    const top = topCompanies(ps, 2).map(([c]) => c).join(', ');
+    return `<li><button type="button" data-ind="${esc(k)}" style="--c:${indColor(k)}"><span class="ihead"><i class="dot"></i><span class="n">${esc(k)}</span><span class="c">${fmt(ps.length)}<em>${Math.round(ps.length / total * 100)}%</em></span></span><span class="t"><i data-w="${k === UNCLASSIFIED ? 100 : (ps.length / max * 100).toFixed(1)}"></i></span><span class="isub">${fmt(cos)} ${cos === 1 ? 'company' : 'companies'}${top ? ': ' + esc(top) : ''}</span>${mixBar(lv)}</button></li>`;
+  }).join('') || '<li class="empty">Nothing in this view</li>';
+  requestAnimationFrame(() => requestAnimationFrame(() => $$('#indList i[data-w]').forEach(i => { i.style.width = i.dataset.w + '%'; })));
+  const uc = unclassifiedCompanies(S.all), ucPeople = uc.reduce((a, [, n]) => a + n, 0);
+  $('#uncMeta').textContent = uc.length ? `${fmt(uc.length)} ${uc.length === 1 ? 'company' : 'companies'}, ${fmt(ucPeople)} ${ucPeople === 1 ? 'person' : 'people'}. Tag a company once and everyone there, now and in future imports, follows.` : 'Every company in your network has an industry. Nice.';
+  const shown = uc.slice(0, S.uncShown || 25);
+  $('#uncList').innerHTML = shown.map(([c, n]) => `<li><span class="n">${esc(c)}</span><em>${fmt(n)}</em><select class="fsel sm" data-co-ind="${esc(c)}" aria-label="Industry for ${esc(c)}">${indOpts('', 'Pick industry')}</select></li>`).join('') + (uc.length > shown.length ? `<li class="more"><button type="button" class="btn" data-act="unc-more">Show ${fmt(Math.min(25, uc.length - shown.length))} more</button></li>` : '');
+  $('#uncPanel').hidden = !uc.length && !Object.keys(S.coInd).length;
+  const tagged = Object.keys(S.coInd).length;
+  $('#uncTagged').textContent = tagged ? `${fmt(tagged)} ${tagged === 1 ? 'company' : 'companies'} tagged by you` : '';
+}
+function topCompanies(ps, n){ const m = new Map(); ps.forEach(r => { if (r.c) m.set(r.c, (m.get(r.c) || 0) + 1); }); return [...m.entries()].sort((a, b) => b[1] - a[1]).slice(0, n); }
+// Squarified treemap, drawn as absolutely positioned tiles in percent units.
+function treemap(items){
+  if (!items.length) return '';
+  const W0 = 100, H0 = 100, total = items.reduce((a, [, v]) => a + v, 0);
+  const nodes = items.map(([k, v]) => ({k, v, a: v / total * W0 * H0}));
+  const out = []; let x = 0, y = 0, w = W0, h = H0, row = [];
+  const worst = (r, side) => { const s = r.reduce((a, n) => a + n.a, 0); let m = 0; for (const n of r){ const q = Math.max(side * side * n.a / (s * s), (s * s) / (side * side * n.a)); if (q > m) m = q; } return m; };
+  const layout = (r) => {
+    const s = r.reduce((a, n) => a + n.a, 0);
+    if (w >= h){ const cw = s / h; let cy = y; for (const n of r){ const ch = n.a / cw; out.push({...n, x, y: cy, w: cw, h: ch}); cy += ch; } x += cw; w -= cw; }
+    else { const rh = s / w; let cx = x; for (const n of r){ const cw = n.a / rh; out.push({...n, x: cx, y, w: cw, h: rh}); cx += cw; } y += rh; h -= rh; }
+  };
+  for (const n of nodes){
+    const side = Math.min(w, h);
+    if (!row.length || worst(row.concat(n), side) <= worst(row, side)) row.push(n);
+    else { layout(row); row = [n]; }
+  }
+  if (row.length) layout(row);
+  return out.map((t, i) => `<button type="button" class="tile" data-ind="${esc(t.k)}" style="left:${t.x}%;top:${t.y}%;width:${t.w}%;height:${t.h}%;--c:${indColor(t.k)};--i:${i}" title="${esc(t.k)}: ${fmt(t.v)}">${t.h > 11 && t.w > 7 ? `<span>${esc(t.w > 30 && t.h > 22 ? t.k : indShort(t.k))}</span>` : ''}<b>${fmt(t.v)}</b></button>`).join('');
+}
+function openIndustry(id){
+  const ps = S.all.filter(r => !r.x && r.cl.ind === id).sort((a, b) => a.cl.lv - b.cl.lv || b.cl.gn - a.cl.gn);
+  const lv = senMix(ps), cos = topCompanies(ps, 12), maxc = cos.length ? cos[0][1] : 1;
+  const fn = new Map(); ps.forEach(r => fn.set(r.cl.func, (fn.get(r.cl.func) || 0) + 1));
+  const fns = [...fn.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6);
+  const vets = ps.filter(r => r.cl.status === 'Veteran / Retired').length, stars = ps.filter(r => r.ed && r.ed.star).length;
+  const senior = ps.filter(r => r.cl.lv <= 2).slice(0, 10);
+  Sheet.open('industry', `
+    <div class="sh-head"><div class="unit-top"><span class="ind-badge" style="--c:${indColor(id)}">${esc(indShort(id).slice(0, 2).toUpperCase())}</span><div><h2>${esc(id)}</h2><p>${fmt(ps.length)} ${ps.length === 1 ? 'person' : 'people'} at ${fmt(new Set(ps.map(r => r.c).filter(Boolean)).size)} companies${vets ? `, ${fmt(vets)} veterans` : ''}${stars ? `, ${fmt(stars)} starred` : ''}</p></div></div><button type="button" class="x" data-act="close" aria-label="Close">${ICON.x}</button></div>
+    <div class="row"><button type="button" class="btn primary" data-ind-people="${esc(id)}">Show in People</button></div>
+    <h3 class="sect">Seniority</h3>
+    <div class="lvls">${[['Exec', 1], ['Director', 2], ['Manager', 3], ['Staff', 4]].map(([l, i]) => `<div><b>${fmt(lv[i])}</b><span>${l}</span></div>`).join('')}</div>
+    ${senior.length ? `<h3 class="sect">Most senior</h3><div class="rung-people">${senior.map(r => `<button type="button" class="mini" data-open="${esc(r.k)}" title="${esc(r.p || '')}">${avatar(r)}<span>${esc(r.f)} ${esc(r.l)}<em>${esc(r.c || '')}</em></span></button>`).join('')}</div>` : ''}
+    ${cos.length ? `<h3 class="sect">Top companies</h3><ol class="bars">${cos.map(([c, n]) => `<li><button type="button" data-unit="${esc(c)}"><span class="n">${esc(c)}</span><span class="c">${fmt(n)}</span><span class="t"><i style="width:${(n / maxc * 100).toFixed(1)}%;background:${indColor(id)};color:${indColor(id)}"></i></span></button></li>`).join('')}</ol>` : ''}
+    ${fns.length ? `<h3 class="sect">What they do</h3><div class="chips">${fns.map(([f, n]) => `<span class="chip">${esc(f)}<em>${fmt(n)}</em></span>`).join('')}</div>` : ''}`);
+}
+
 /* ---------- sitrep ---------- */
 const ICONS = {
   review: '<path d="M7 4h10a2 2 0 0 1 2 2v14l-7-4-7 4V6a2 2 0 0 1 2-2z"/>',
@@ -680,6 +777,8 @@ const ICONS = {
   cake: '<path d="M4 20h16M5 20v-7h14v7M8 13V9M12 13V9M16 13V9M8 6.5v.01M12 6.5v.01M16 6.5v.01"/>',
   star: '<path d="m12 3.5 2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"/>',
   pulse: '<path d="M3 12h4l3-7 4 14 3-7h4"/>',
+  grid: '<rect x="3.5" y="3.5" width="10" height="10" rx="1.5"/><rect x="15.5" y="3.5" width="5" height="7" rx="1.5"/><rect x="15.5" y="12.5" width="5" height="8" rx="1.5"/><rect x="3.5" y="15.5" width="10" height="5" rx="1.5"/>',
+  tag: '<path d="M3.5 12.2V4.5a1 1 0 0 1 1-1h7.7l8.3 8.3-8.7 8.7z"/><circle cx="8" cy="8" r="1.4"/>',
   target: '<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r=".8"/>',
 };
 const fullName = r => `${r.cl.grade && /^O-([3-9]|10)$/.test(r.cl.grade) && r.cl.status !== 'Veteran / Retired' ? shortRank(r) + ' ' : ''}${r.f} ${r.l}`;
@@ -712,6 +811,11 @@ function buildCards(){
   const quiet = A.filter(r => r.ed && r.ed.star && (!r.ed.updated || daysAgo(r.ed.updated) > 45));
   if (quiet.length) cards.push({tone: 'amber', icon: 'star', title: `Check in with ${fmt(quiet.length)} starred ${quiet.length === 1 ? 'contact' : 'contacts'}`, body: 'No note from you in over six weeks: ' + names(quiet, 2) + '.', people: quiet, act: {kind: 'filter', sig: ['star']}});
   const dod = A.filter(r => r.cl.seg === 'DoD & Military').length, vets = A.filter(r => r.cl.status === 'Veteran / Retired').length, orgN = orgs.size;
+  const indM = new Map(); A.forEach(r => { if (r.cl.ind !== GOV_IND && r.cl.ind !== UNCLASSIFIED) indM.set(r.cl.ind, (indM.get(r.cl.ind) || 0) + 1); });
+  const topInd = [...indM.entries()].sort((a, b) => b[1] - a[1]);
+  if (topInd.length) cards.push({tone: 'violet', icon: 'grid', title: `Outside government: ${fmt(topInd.length)} industries`, body: 'Biggest: ' + topInd.slice(0, 3).map(([k, n]) => `${k} (${fmt(n)})`).join(', ') + '.', people: [], act: {kind: 'industries'}, bars: topInd.slice(0, 6)});
+  const uc = unclassifiedCompanies(S.all);
+  if (uc.length){ const n = uc.reduce((a, [, v]) => a + v, 0); cards.push({tone: 'coral', icon: 'tag', title: `${fmt(uc.length)} ${uc.length === 1 ? 'company needs' : 'companies need'} an industry`, body: `${fmt(n)} ${n === 1 ? 'person isn’t' : 'people aren’t'} in an industry yet. Biggest: ${uc.slice(0, 3).map(([c]) => c).join(', ')}. Tag each company once and it sticks.`, people: [], act: {kind: 'industries'}}); }
   cards.push({tone: 'sky', icon: 'pulse', title: `${fmt(A.length)} contacts across ${fmt(orgN)} organizations`, body: `${fmt(dod)} DoD and military, ${fmt(vets)} veterans, ${fmt(A.filter(r => r.cl.seg === 'Federal Civilian').length)} federal civilian. Open the Web to see how they cluster.`, people: [], act: {kind: 'web'}});
   return cards;
 }
@@ -729,7 +833,7 @@ function renderSitrep(){
   $('#sitrepSpark').innerHTML = sparkPath(hist, 160, 44);
   S.cards = buildCards();
   const anim = !sitrepAnimated && !REDUCED; sitrepAnimated = true;
-  $('#cards').innerHTML = S.cards.map((c, i) => `<button type="button" class="scard t-${c.tone}${anim ? ' in' : ''}" style="--i:${i}" data-card="${i}"><span class="sic"><svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[c.icon]}</svg></span><span class="sbody"><b>${esc(c.title)}</b><span>${esc(c.body)}</span>${stack(c.people)}</span>${c.ring != null ? ringSVG(c.ring, 48) : '<svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>'}</button>`).join('');
+  $('#cards').innerHTML = S.cards.map((c, i) => `<button type="button" class="scard t-${c.tone}${anim ? ' in' : ''}" style="--i:${i}" data-card="${i}"><span class="sic"><svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[c.icon]}</svg></span><span class="sbody"><b>${esc(c.title)}</b><span>${esc(c.body)}</span>${stack(c.people)}${c.bars ? `<span class="ibar">${c.bars.map(([k, n]) => `<i style="flex:${n};background:${indColor(k)}" title="${esc(k)}"></i>`).join('')}</span>` : ''}</span>${c.ring != null ? ringSVG(c.ring, 48) : '<svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>'}</button>`).join('');
   animateRings($('#cards'));
 }
 function dtg(){ const d = new Date(), p = n => String(n).padStart(2, '0'); return `${p(d.getUTCDate())}${p(d.getUTCHours())}${p(d.getUTCMinutes())}Z ${['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'][d.getUTCMonth()]} ${String(d.getUTCFullYear()).slice(2)}`; }
@@ -748,6 +852,7 @@ function runCard(i){
   else if (a.kind === 'unit') openUnit(a.name);
   else if (a.kind === 'units'){ S.unitsMode = 'targets'; setTab('units'); setTimeout(() => showAddTarget(), 250); }
   else if (a.kind === 'web'){ S.mapMode = 'web'; setTab('map'); }
+  else if (a.kind === 'industries'){ S.unitsMode = 'industries'; setTab('units'); }
   else if (a.kind === 'filter'){ for (const k of Object.keys(F)) F[k] = F[k] instanceof Set ? new Set : (k === 'removed' ? false : ''); S.nl = null; S.nlChips = []; $('#q').value = ''; for (const s of a.sig || []) F.sig.add(s); render(); setTab('people'); }
 }
 
@@ -936,6 +1041,7 @@ function renderFilterSheet(update){
   for (const r of S.all){ if (!match(r, 'sig')) continue; for (const [s] of SIGNALS_UI) if (sigOk(r, s)) sigCounts[s] = (sigCounts[s] || 0) + 1; }
   const html = head('Filters', 'Combine as many as you like. Counts update as you go.') + `
     <div class="fgroup"><h3>Segment</h3>${facet('seg', SEGS.map(s => s.id), r => r.cl.seg)}</div>
+    <div class="fgroup"><h3>Industry</h3>${facet('ind', INDUSTRIES.map(i => i.id), r => r.cl.ind)}</div>
     <div class="fgroup"><h3>Military branch</h3>${facet('branch', BRANCHES, r => r.cl.branch)}</div>
     <div class="fgroup"><h3>Service status</h3>${facet('status', STATUSES, r => r.cl.status)}</div>
     <div class="fgroup"><h3>Rank or grade</h3>${facet('tier', TIERS.map(t => t[0]), r => r.cl.tier)}</div>
@@ -969,6 +1075,7 @@ function openProfile(k, {focusNotes, back} = {}){
       <dt>Branch</dt><dd>${esc(c.branch || '—')}</dd>
       <dt>Status</dt><dd>${esc(c.status || '—')}</dd>
       <dt>Rank</dt><dd>${c.grade ? `${c.rank && c.rank !== c.grade ? esc(c.rank) + ' ' : ''}<span class="grade">${esc(c.grade)}</span>` : '—'}</dd>
+      <dt>Industry</dt><dd><span style="color:${indColor(c.ind)}">●</span> ${esc(c.ind)}${c.indHow === 'you' ? ' <span class="muted">(set by you)</span>' : ''}</dd>
       <dt>Agency or cmd</dt><dd>${esc(c.agency || '—')}</dd>
       <dt>Seniority</dt><dd>${esc(c.sen)}</dd>
       <dt>Function</dt><dd>${esc(c.func)}</dd>
@@ -984,6 +1091,8 @@ function openProfile(k, {focusNotes, back} = {}){
       <label>Branch<select id="eBranch">${opt([...BRANCHES, ['__none', 'None']], ed.branch || '', 'Auto')}</select></label>
       <label>Status<select id="eStatus">${opt([...STATUSES, ['__none', 'None']], ed.status || '', 'Auto')}</select></label>
       <label>Grade<select id="eGrade">${opt([...GRADE_OPTS, ['__none', 'None']], ed.grade || '', 'Auto')}</select></label>
+      <label class="full">Industry<select id="eInd">${indOpts(ed.ind || (r.c && S.coInd[companyKey(r.c)]) || '', 'Auto: ' + (c.indHow === 'you' && !ed.ind ? 'set for company' : c.ind))}</select></label>
+      ${r.c ? `<label class="check full"><input type="checkbox" id="eIndCo" ${ed.ind ? '' : 'checked'}> Apply to everyone at ${esc(r.c)}</label>` : ''}
       <label class="full">Rank title<input id="eRank" type="text" value="${esc(ed.rank || '')}" placeholder="${esc(c.rank || 'e.g. Colonel, USMC (Ret.)')}"></label>
       <label class="full">Tags, separated by commas<input id="eTags" type="text" value="${esc((ed.tags || []).join(', '))}" placeholder="e.g. NAVFAC target, warm intro"></label>
       <label class="full">Notes<textarea id="eNote" placeholder="How you know them, last touch, next step">${esc(ed.note || '')}</textarea></label>
@@ -1001,7 +1110,9 @@ async function setEdit(k, patch, {quiet} = {}){
 }
 async function saveProfileForm(form){
   const k = form.dataset.k;
-  const patch = {seg: $('#eSeg').value, branch: $('#eBranch').value, status: $('#eStatus').value, grade: $('#eGrade').value, rank: $('#eRank').value.trim().slice(0, 80), tags: $('#eTags').value.split(',').map(s => s.trim()).filter(Boolean).slice(0, 20), note: $('#eNote').value.slice(0, 4000)};
+  const indV = $('#eInd').value, toCo = $('#eIndCo') && $('#eIndCo').checked, rr = S.all.find(x => x.k === k);
+  if (toCo && rr && rr.c){ const key = companyKey(rr.c); if (indV) S.coInd[key] = indV; else delete S.coInd[key]; saveIndustries(); }
+  const patch = {ind: toCo ? '' : indV, seg: $('#eSeg').value, branch: $('#eBranch').value, status: $('#eStatus').value, grade: $('#eGrade').value, rank: $('#eRank').value.trim().slice(0, 80), tags: $('#eTags').value.split(',').map(s => s.trim()).filter(Boolean).slice(0, 20), note: $('#eNote').value.slice(0, 4000)};
   const msg = $('#edMsg'); msg.textContent = 'Saving…';
   try { await setEdit(k, patch); fx.success(); toast(S.mode === 'live' ? (Store.kind === 'icloud' ? 'Saved and syncing to iCloud' : 'Saved') : 'Sample data: not saved'); openProfile(k); }
   catch (e) { msg.textContent = `Couldn’t save: ${(e && e.message) || 'unknown error'}. Try again.`; }
@@ -1029,7 +1140,7 @@ async function commitImport(){
   try {
     const wasSample = S.mode === 'sample';
     await persist(plan); S.mode = 'live';
-    if (wasSample){ S.edits = {}; S.review = {}; S.targets = []; await saveEdits(); await saveReview(); }
+    if (wasSample){ S.edits = {}; S.review = {}; S.targets = []; S.coInd = {}; await saveEdits(); await saveReview(); }
     S.meta = plan.meta; hydrate(plan.rows); S.pending = null; Deck.reset();
     Sheet.close(); render(); fx.success();
     const st = plan.stats;
@@ -1058,9 +1169,9 @@ function showMenu(){
 let toastT = 0;
 function toast(msg){ const t = $('#toast'); t.textContent = msg; t.hidden = false; t.style.animation = 'none'; void t.offsetWidth; t.style.animation = ''; clearTimeout(toastT); toastT = setTimeout(() => { t.hidden = true; }, 3200); }
 async function exportView(){
-  const cols = ['First Name', 'Last Name', 'Company', 'Position', 'Segment', 'Agency / Command', 'Branch', 'Status', 'Rank', 'Grade', 'Rank Tier', 'Seniority', 'Function', 'Certifications', 'Clearance Mentioned', 'Connected On', 'First Seen', 'Job Change', 'LinkedIn URL', 'Email', 'Tags', 'Notes', 'Starred'];
+  const cols = ['First Name', 'Last Name', 'Company', 'Position', 'Segment', 'Industry', 'Agency / Command', 'Branch', 'Status', 'Rank', 'Grade', 'Rank Tier', 'Seniority', 'Function', 'Certifications', 'Clearance Mentioned', 'Connected On', 'First Seen', 'Job Change', 'LinkedIn URL', 'Email', 'Tags', 'Notes', 'Starred'];
   const q = v => { v = String(v ?? ''); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
-  const csv = [cols.join(',')].concat(sorted().map(r => { const c = r.cl, e = r.ed || {}; return [r.f, r.l, r.c, r.p, c.seg, c.agency, c.branch, c.status, c.rank, c.grade, c.tier, c.sen, c.func, c.certs.join('; '), c.clr ? 'Yes' : '', r.d, r.fs, r.jc || '', S.mode === 'sample' ? '' : r.u, r.e, (e.tags || []).join('; '), e.note, e.star ? 'Yes' : ''].map(q).join(','); })).join('\n');
+  const csv = [cols.join(',')].concat(sorted().map(r => { const c = r.cl, e = r.ed || {}; return [r.f, r.l, r.c, r.p, c.seg, c.ind, c.agency, c.branch, c.status, c.rank, c.grade, c.tier, c.sen, c.func, c.certs.join('; '), c.clr ? 'Yes' : '', r.d, r.fs, r.jc || '', S.mode === 'sample' ? '' : r.u, r.e, (e.tags || []).join('; '), e.note, e.star ? 'Yes' : ''].map(q).join(','); })).join('\n');
   const name = `order-of-battle-${TODAY}.csv`;
   try {
     if (NATIVE){ const w = await Filesystem.writeFile({path: name, data: csv, directory: Directory.Cache, encoding: Encoding.UTF8}); await Share.share({title: 'Order of Battle export', files: [w.uri], dialogTitle: 'Export connections'}); }
@@ -1102,8 +1213,9 @@ async function loadStore(opts = {}){
     if (n.pending){ S.syncNote = 'Downloading your network from iCloud. This can take a minute on a new device.'; renderHeader(); setTimeout(() => loadStore(), 6000); return; }
     S.syncNote = '';
     if (!n.data || !n.data.rows){ render(); return; }
-    const [e, rv, tg] = await Promise.all([Store.read('edits.json'), Store.read('review.json'), Store.read('targets.json').catch(() => ({}))]);
+    const [e, rv, tg, ci] = await Promise.all([Store.read('edits.json'), Store.read('review.json'), Store.read('targets.json').catch(() => ({})), Store.read('industries.json').catch(() => ({}))]);
     S.targets = (tg && tg.data && tg.data.targets) || [];
+    S.coInd = (ci && ci.data && ci.data.companies) || {};
     const nextEdits = (e.data && e.data.edits) || {}, nextReview = (rv.data && rv.data.review) || {};
     if (opts.onlyIfChanged && S.mode === 'live' && n.data.meta && n.data.meta.rev === S.rev && JSON.stringify(nextEdits) === JSON.stringify(S.edits)){ S.review = nextReview; return; }
     S.edits = nextEdits; S.review = nextReview;
@@ -1159,6 +1271,8 @@ document.addEventListener('click', async e => {
   if (d.peekOpen){ Peek.hide(); openProfile(d.peekOpen); return; }
   if (d.open && d.back){ fx.tap(); openProfile(d.open, {back: d.back}); return; }
   if (d.unit){ fx.select(); openUnit(d.unit); return; }
+  if (d.ind){ fx.select(); openIndustry(d.ind); return; }
+  if (d.indPeople){ const v = d.indPeople; clearAll(); F.ind.add(v); Sheet.close(); render(); setTab('people'); return; }
   if (t.id === 'drop'){ $('#file').click(); return; }
   if (d.g){ const s = F[d.g]; s.has(d.v) ? s.delete(d.v) : s.add(d.v); fx.select(); render(); return; }
   if (d.rm){ const g = d.rm; if (g === 'nl' || g === 'q'){ $('#q').value = ''; S.nl = null; S.nlChips = []; F.q = ''; } else if (F[g] instanceof Set) F[g].delete(d.v); else if (g === 'removed') F.removed = false; else F[g] = ''; fx.tap(); render(); return; }
@@ -1179,6 +1293,8 @@ document.addEventListener('click', async e => {
     case 'commit': commitImport(); return;
     case 'export': exportView(); return;
     case 'add-target': fx.tap(); showAddTarget(); return;
+    case 'ind-gov': S.indGov = !S.indGov; fx.select(); renderIndustries(); return;
+    case 'unc-more': S.uncShown = (S.uncShown || 25) + 25; renderIndustries(); return;
     case 'deck-star': Deck.decide('star'); return;
     case 'deck-skip': Deck.decide('skip'); return;
     case 'deck-open': { const r = Deck.current(); if (r) openProfile(r.k); return; }
@@ -1194,6 +1310,7 @@ document.addEventListener('change', e => {
   if (t.id === 'fAgency'){ F.agency = t.value; render(); }
   else if (t.id === 'fCompany'){ F.company = t.value; render(); }
   else if (t.id === 'fSince'){ F.since = t.value; render(); }
+  else if (t.dataset && t.dataset.coInd !== undefined && t.value){ const co = t.dataset.coInd, v = t.value; const li = t.closest('li'); if (li) li.classList.add('done'); fx.star(); toast(`${co}: ${v}`); setTimeout(() => setCompanyIndustry(co, v), li ? 260 : 0); if (Sheet.kind === 'unit') setTimeout(() => openUnit(co), 300); }
   else if (t.id === 'fRemoved'){ F.removed = t.checked; render(); }
   else if (t.id === 'pHaptics'){ prefs.haptics = t.checked; savePrefs(); fx.tap(); }
   else if (t.id === 'pSound'){ prefs.sound = t.checked; savePrefs(); fx.select(); }
@@ -1227,7 +1344,7 @@ document.addEventListener('drop', e => { const d = e.target.closest && e.target.
   S.edits = sample.edits; S.meta = sample.meta; hydrate(sample.rows);
   S.targets = SAMPLE_TARGETS.map(name => ({name, added: TODAY}));
   let startTab = 'sitrep';
-  try { startTab = localStorage.getItem('oob.tab') || 'sitrep'; const m = localStorage.getItem('oob.map'); if (m === 'web' || m === 'scope') S.mapMode = m; const u = localStorage.getItem('oob.units'); if (['targets', 'orgs', 'branches'].includes(u)) S.unitsMode = u; } catch {}
+  try { startTab = localStorage.getItem('oob.tab') || 'sitrep'; const m = localStorage.getItem('oob.map'); if (m === 'web' || m === 'scope') S.mapMode = m; const u = localStorage.getItem('oob.units'); if (['targets', 'industries', 'orgs', 'branches'].includes(u)) S.unitsMode = u; } catch {}
   VIEW = S.all.filter(r => match(r));
   setTab(['sitrep', 'map', 'units', 'people', 'review'].includes(startTab) ? startTab : 'sitrep', {silent: true});
   render();

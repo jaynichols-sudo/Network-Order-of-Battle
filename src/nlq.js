@@ -61,6 +61,33 @@ const SEN = [
   [/\b(directors?|heads? of)\b/, 'Director / Head'],
   [/\b(managers?)\b/, 'Manager / Lead'],
 ];
+const IND = [
+  [/\b(banks?|banking|bankers?|financial services|finance companies|fintech|wealth management|credit unions?|investment firms?)\b/, 'Financial Services'],
+  [/\b(insurance(?: companies)?|insurers?)\b/, 'Insurance'],
+  [/\b(health ?care|hospitals?|health systems?|pharma\w*|biotech|medical|life sciences)\b/, 'Healthcare & Life Sciences'],
+  [/\b(software(?: companies)?|saas|tech companies|big tech|cloud (?:companies|providers))\b/, 'Software & Cloud'],
+  [/\b(consulting firms?|consultanc(?:y|ies)|big four|it services|resellers?|vars?)\b/, 'IT Services & Consulting'],
+  [/\b(telecom\w*|telcos?|carriers|hardware|networking companies|semiconductors?)\b/, 'Hardware, Telecom & Networking'],
+  [/\b(manufactur\w*|industrial|factories|automotive)\b/, 'Industrial & Manufacturing'],
+  [/\b(construction|engineering firms?|a&e|architects?)\b/, 'Engineering & Construction'],
+  [/\b(real estate|realtors?|brokers)\b/, 'Real Estate'],
+  [/\b(law firms?|lawyers?|attorneys?|legal|accounting firms?|cpas?|accountants?)\b/, 'Legal & Accounting'],
+  [/\b(non-?profits?|charit(?:y|ies)|associations?|churches)\b/, 'Nonprofit & Associations'],
+  [/\b(retail\w*|consumer|cpg|food(?: and beverage)?|restaurants?|grocery)\b/, 'Retail, Consumer & Food'],
+  [/\b(transportation|logistics|trucking|airlines?|railroads?|shipping|freight)\b/, 'Transportation & Logistics'],
+  [/\b(travel|hospitality|hotels?|tourism)\b/, 'Travel & Hospitality'],
+  [/\b(media|marketing agencies|advertising|journalists?|press)\b/, 'Media & Marketing'],
+  [/\b(self-?employed|freelancers?|startups?|entrepreneurs?)\b/, 'Self-Employed & Startups'],
+  [/\b(between roles|job seekers?|open to work|unemployed)\b/, 'Retired or Between Roles'],
+  [/\b(unclassified|no industry|unknown industry)\b/, 'Unclassified'],
+  [/\b(private sector|commercial)\b/, '__private'],
+  [/\b(government|public sector|gov)\b/, 'Government & Military'],
+  [/\b(defense contractors?|defense industry|gov(?:ernment)? contractors?|defense companies)\b/, 'Defense & Gov Contracting'],
+  [/\b(energy companies|utilit(?:y|ies)|oil and gas|oil & gas|power companies)\b/, 'Energy & Utilities'],
+  [/\b(cyber ?security (?:companies|vendors|firms)|security vendors|cyber companies)\b/, 'Cybersecurity'],
+  [/\b(universit(?:y|ies)|colleges?|schools?|academia|research labs?|national labs?)\b/, 'Education & Research'],
+  [/\b(staffing (?:firms|agencies)|recruiting firms|recruiters?)\b/, 'Staffing & Recruiting'],
+];
 const RANKWORD = [
   [/\b(ltcs?|lt ?cols?|lieutenant colonels?)\b/, 'O-5'], [/\b(colonels?|cols?)\b/, 'O-6'], [/\b(majors?|majs?)\b/, 'O-4'],
   [/\b(commanders?|cdrs?)\b/, 'O-5'], [/\b(lcdrs?|lieutenant commanders?)\b/, 'O-4'], [/\b(navy captains?)\b/, 'O-6'],
@@ -70,7 +97,7 @@ const STOP = /\b(in|at|and|or|the|of|with|who|are|people|contacts?|connections?|
 
 export function parseQuery(text, agencies = []){
   let t = ' ' + text.toLowerCase().replace(/[“”"]/g, ' ') + ' ';
-  const nl = {branch: [], seg: [], func: [], status: [], sig: [], tier: [], sen: [], agency: [], minGrade: 0, grades: []};
+  const nl = {branch: [], seg: [], func: [], status: [], sig: [], tier: [], sen: [], agency: [], ind: [], minGrade: 0, grades: []};
   const chips = [];
   const take = (re, fn) => { t = t.replace(new RegExp(re.source, 'g'), (...m) => { fn(m); return ' '; }); };
   // grades first so "o-5+" is not split
@@ -87,12 +114,12 @@ export function parseQuery(text, agencies = []){
     const up = m[m.length - 3];
     if (up){ nl.minGrade = Math.max(nl.minGrade, gradeNum(g)); chips.push(`${g} and up`); } else { nl.grades.push(g); chips.push(g); }
   });
-  const sets = [[TIER, 'tier'], [SEN, 'sen'], [BRANCH, 'branch'], [STATUS, 'status'], [SIG, 'sig'], [FUNC, 'func'], [SEG, 'seg']];
+  const sets = [[IND, 'ind'], [TIER, 'tier'], [SEN, 'sen'], [BRANCH, 'branch'], [STATUS, 'status'], [SIG, 'sig'], [FUNC, 'func'], [SEG, 'seg']];
   const SIGLABEL = {new: 'New', jc: 'Moved jobs', star: 'Starred', clr: 'Clearance', anniv: 'Anniversaries'};
   for (const [list, key] of sets){
     for (const [re, val] of list){
       let hit = false; take(re, () => { hit = true; });
-      if (hit && !nl[key].includes(val)){ nl[key].push(val); chips.push(key === 'sig' ? SIGLABEL[val] : val); }
+      if (hit && !nl[key].includes(val)){ nl[key].push(val); chips.push(key === 'sig' ? SIGLABEL[val] : val === '__private' ? 'Private sector' : val); }
     }
   }
   for (const a of agencies){
@@ -114,6 +141,11 @@ export function matchNL(nl, r){
   if (nl.tier.length && !nl.tier.includes(c.tier)) return false;
   if (nl.sen.length && !nl.sen.includes(c.sen)) return false;
   if (nl.agency.length && !nl.agency.includes(c.agency)) return false;
+  if (nl.ind && nl.ind.length){
+    const want = nl.ind.filter(x => x !== '__private');
+    const priv = nl.ind.includes('__private') && c.ind !== 'Government & Military';
+    if (!(want.includes(c.ind) || priv)) return false;
+  }
   if (nl.grades.length && !nl.grades.includes(c.grade)) return false;
   if (nl.minGrade){
     if (!c.grade || c.gn < nl.minGrade) return false;

@@ -101,11 +101,22 @@
       <div class="view-ctl">
         <div class="seg-ctl" id="unitsCtl" role="radiogroup" aria-label="Units view">
           <button type="button" data-units="targets">Targets</button>
+          <button type="button" data-units="industries">Industries</button>
           <button type="button" data-units="orgs">All orgs</button>
-          <button type="button" data-units="branches">Branch and rank</button>
+          <button type="button" data-units="branches">Ranks</button>
         </div>
       </div>
       <div data-usub="targets"><div class="targets" id="targets"></div></div>
+      <div data-usub="industries" hidden>
+        <div class="isums" id="indSummary"></div>
+        <div class="tree-head" id="indTreeHead"></div>
+        <div class="treemap" id="indTree" aria-label="Your network by industry"></div>
+        <div class="ind-grid">
+          <div class="panel"><div class="panel-head"><h2>By industry</h2><p>Tap one to see its companies and people</p></div><ol class="ilist" id="indList"></ol>
+            <p class="legend-mix"><span><i style="background:var(--amber)"></i>Exec</span><span><i style="background:#FFD58A"></i>Director</span><span><i style="background:var(--sky)"></i>Manager</span><span><i style="background:rgba(150,180,220,.35)"></i>Staff</span></p></div>
+          <div class="panel" id="uncPanel"><div class="panel-head"><h2>Needs an industry</h2><p id="uncMeta"></p></div><ul class="unc" id="uncList"></ul><p class="muted tagged" id="uncTagged"></p></div>
+        </div>
+      </div>
       <div data-usub="orgs" hidden>
         <div class="orgs">
           <div class="panel"><div class="panel-head"><h2>Companies</h2><p>Tap one to open it</p></div><ol class="bars" id="coList"></ol></div>

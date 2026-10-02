@@ -1,3 +1,4 @@
+import { inferIndustry } from './industry.js';
 import JSZip from 'jszip';
 
 export const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -222,7 +223,7 @@ export function classify(r, ed){
     else status = 'DoD Civilian';
   } else if (vet) status = 'Veteran / Retired';
   if (!seg) {
-    if (branch) seg = 'DoD & Military';
+    if (branch && !(status === 'Veteran / Retired' && co && !/\b(retired|veteran|self[- ]employed|seeking|transition)\b/i.test(co))) seg = 'DoD & Military';
     else if (/\.mil$/i.test(r.e || '')) seg = 'DoD & Military';
     else if (/\.gov$/i.test(r.e || '')) seg = 'Federal Civilian';
     else seg = 'Other Commercial';
@@ -246,7 +247,8 @@ export function classify(r, ed){
   let lv = {'C-suite / Owner':1,'VP':1,'Director / Head':2,'Manager / Lead':3}[sen] || 4;
   const gn = gradeNum(grade);
   if (grade){ const gl = grade === 'SES' || /^O-(6|7|8|9|10)$/.test(grade) ? 1 : /^O-[45]$|^E-9$|^GS-15$|^NH-04$/.test(grade) ? 2 : /^O-[123]$|^W-|^E-[78]$|^GS-1[34]$|^NH-03$/.test(grade) ? 3 : 4; lv = Math.min(lv, gl); }
-  return {seg, branch, status, rank, grade, tier, gn, sen, func, agency, certs, clr, lv, vet: status === 'Veteran / Retired'};
+  const {ind, how: indHow} = inferIndustry({c: co, p: pos, seg, status, vet: status === 'Veteran / Retired'}, ed.ind);
+  return {seg, branch, status, rank, grade, tier, gn, sen, func, agency, certs, clr, lv, vet: status === 'Veteran / Retired', ind, indHow};
 }
 
 
@@ -367,7 +369,23 @@ export function sampleNetwork(){
     [12,['Lockheed Martin','Leidos','Booz Allen Hamilton','SAIC','CACI International','Peraton','General Dynamics Information Technology','Northrop Grumman','ManTech','Parsons','Jacobs','Huntington Ingalls Industries','KBR','Amentum'],['Capture Manager','Program Manager supporting NAVWAR','Cyber Engineer (TS/SCI)','Director, Business Development','Systems Engineer','Senior Associate, supporting U.S. Army | Army Veteran','Capture Director | Retired USAF Col','Deputy Program Manager | CMMC RP','Solutions Architect | Former Marine']],
     [5,['Idaho National Laboratory','Pacific Northwest National Laboratory','Oak Ridge National Laboratory','Sandia National Laboratories','MITRE','Johns Hopkins Applied Physics Laboratory','North Carolina State University','EPRI'],['Cybersecurity Researcher','Program Manager, Critical Infrastructure','Principal Engineer','Professor of Electrical Engineering','Group Leader, ICS Security']],
     [3,['TEKsystems','Robert Half','ClearanceJobs','Insight Global'],['Technical Recruiter','Talent Acquisition Partner','Account Manager, Cleared Staffing']],
-    [7,['Amazon Web Services','Microsoft','Google Public Sector','Salesforce','Accenture','Self-employed','Wells Fargo','Lowe’s Companies','Volvo Group','Cone Health'],['Account Executive, Public Sector','Senior Manager','Founder & CEO','Consultant','Vice President, Operations','Customer Success Manager','Marketing Director']],
+    [8,['Amazon Web Services','Microsoft','Google Public Sector','Salesforce','ServiceNow','Oracle','Esri','Snowflake'],['Account Executive, Public Sector','Senior Solutions Architect','Customer Success Manager','Regional Vice President','Partner Manager']],
+    [5,['Accenture','Deloitte','IBM','KPMG','Gartner','Capgemini'],['Senior Manager','Managing Director','Consultant','Research Director','Partner, Public Sector']],
+    [4,['Verizon','AT&T','Lumen Technologies','Dell Technologies','Motorola Solutions','Corning'],['Federal Account Director','Network Engineer','Solutions Architect','Regional Sales Manager']],
+    [4,['Volvo Group','Caterpillar','Eaton','Honeywell Building Technologies','Nucor','Mack Trucks'],['Plant Manager','Director, Operations','Controls Engineer','Supply Chain Manager | Navy Veteran']],
+    [4,['Wells Fargo','Truist','Bank of America','Navy Federal Credit Union','Fidelity Investments','Edward Jones'],['Vice President, Commercial Banking','Financial Advisor','Information Security Manager','Branch Manager','Wealth Advisor | USMC Veteran']],
+    [2,['USAA','State Farm','Nationwide','The Hartford'],['Insurance Agent','Cyber Risk Underwriter','Claims Manager']],
+    [4,['Cone Health','Novant Health','Atrium Health','Labcorp','Pfizer','UNC Health'],['Registered Nurse','Director of IT Security','Clinical Research Associate','Physician','Practice Manager']],
+    [2,['Smith Anderson LLP','Womble Bond Dickinson','Cherry Bekaert','FORVIS'],['Partner, Government Contracts','Attorney','Senior Audit Manager, CPA']],
+    [3,['Keller Williams Realty','CBRE','Coldwell Banker','Berkshire Hathaway HomeServices'],['Realtor','Property Manager','Broker | Army Veteran']],
+    [3,['Marriott International','Hilton','Destinara Travel','Delta Air Lines','American Airlines'],['Director of Sales, Government & Military','Travel Advisor','Captain, A320 | Former USAF Pilot','Group Sales Manager']],
+    [3,['FedEx','UPS','Norfolk Southern','Old Dominion Freight Line','XPO'],['Operations Manager','Fleet Manager | Army Veteran','Regional Director, Logistics']],
+    [3,['Lowe’s Companies','Krispy Kreme','Food Lion','Hanesbrands','PepsiCo'],['District Manager','Merchandising Director','Store Manager','Brand Manager']],
+    [2,['WFMY News 2','Greensboro News & Record','iHeartMedia'],['Reporter','Marketing Director','Producer']],
+    [3,['AFCEA International','Wounded Warrior Project','Fisher House Foundation','Greensboro Chamber of Commerce','Navy League of the United States'],['Chapter President','Program Director','Volunteer Coordinator','Executive Director | Retired Navy CAPT']],
+    [3,['Self-employed','Independent Consultant','Stealth Startup'],['Founder & CEO','Independent Consultant','Owner','Freelance Writer']],
+    [3,['Blue Ridge Partners LLC','Piedmont Ventures Group','Summit Peak Group','Tarheel Holdings','Carolina Gateway LLC','Ironclad Partners'],['Principal','Managing Partner','Director','Associate']],
+    [2,['','Retired'],['Retired','Retired, U.S. Marine Corps','Seeking new opportunities | Navy Veteran']],
   ];
   const tw = T.reduce((a, t) => a + t[0], 0);
   const rows = []; const N = 680;
