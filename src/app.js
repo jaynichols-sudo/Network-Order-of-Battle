@@ -45,7 +45,7 @@ const ICON = {
 };
 
 /* ---------- preferences, haptics, sound ---------- */
-const prefs = {haptics: true, sound: true, theme: 'system', name: '', lens: null, notify: true};
+const prefs = {haptics: true, sound: true, theme: 'system', name: '', lens: null, notify: true, salesnav: false};
 try { Object.assign(prefs, JSON.parse(localStorage.getItem('oob.prefs') || '{}')); } catch {}
 const savePrefs = () => { try { localStorage.setItem('oob.prefs', JSON.stringify(prefs)); } catch {} };
 let actx = null;
@@ -612,7 +612,7 @@ const Peek = (() => {
     const c = r.cl, star = r.ed && r.ed.star;
     const chips = (LENS_FED ? [c.grade ? `${c.branch || ''} ${c.grade}`.trim() : c.branch, c.agency, c.ind !== GOV_IND && c.ind !== UNCLASSIFIED ? c.ind : '', c.status, c.func] : [c.ind !== UNCLASSIFIED ? c.ind : '', c.sen, c.func, c.status === 'Veteran / Retired' ? 'Veteran' : '']).filter(Boolean).slice(0, 4);
     el.innerHTML = `<div class="peek-card">${avatar(r)}<div class="peek-main"><b>${esc(r.f)} ${esc(r.l)}</b><span>${esc(r.p || '')}</span><span class="dim">${esc(r.c || '')}</span><div class="chips">${chips.map(x => `<span class="chip">${esc(x)}</span>`).join('')}</div></div></div>
-      <div class="peek-actions"><button type="button" class="btn" data-peek-star="${esc(k)}">${star ? '★ Starred' : '☆ Star'}</button>${liPerson(r) ? `<button type="button" class="btn li" data-link="${esc(liPerson(r))}" aria-label="Open on LinkedIn">${ICON.ext}LinkedIn</button>` : ''}<button type="button" class="btn primary" data-peek-open="${esc(k)}">Open profile</button></div>`;
+      <div class="peek-actions"><button type="button" class="btn" data-peek-star="${esc(k)}">${star ? '★ Starred' : '☆ Star'}</button>${liPerson(r) ? `<button type="button" class="btn li" data-link="${esc(liPerson(r))}" aria-label="Open on LinkedIn">${ICON.ext}LinkedIn</button>` : ''}${S.mode !== 'sample' && prefs.salesnav ? `<button type="button" class="btn li sn" data-link="${esc(snPerson(r))}" aria-label="Open in Sales Navigator">${ICON.ext}Sales Nav</button>` : ''}<button type="button" class="btn primary" data-peek-open="${esc(k)}">Open profile</button></div>`;
     el.hidden = false; el.classList.remove('show'); void el.offsetWidth; el.classList.add('show');
   }
   function hide(){ el.hidden = true; el.classList.remove('show'); }
@@ -718,7 +718,7 @@ function openUnit(name){
     <div class="sh-head"><div class="unit-top">${ringSVG(cov.score, 84)}<div><h2>${esc(name)}</h2><p>You know ${fmt(ps.length)} ${ps.length === 1 ? 'person' : 'people'} here. Coverage ${cov.score}%.</p></div></div><button type="button" class="x" data-act="close" aria-label="Close">${ICON.x}</button></div>
     ${isCo ? `<label class="unit-ind">Industry<select class="fsel sm" data-co-ind="${esc(name)}">${indOpts(S.coInd[companyKey(name)] || '', 'Auto: ' + autoInd)}</select></label>` : `<p class="unit-ind muted">${esc(autoInd)}</p>`}
     <div class="row"><button type="button" class="btn${target ? '' : ' primary'}" data-toggle-target="${esc(name)}">${target ? 'Remove from watchlist' : 'Add to watchlist'}</button><button type="button" class="btn" data-unit-people="${esc(name)}">Show in People</button></div>
-    <div class="li-row" id="liRow"><span class="li-label">On LinkedIn</span><button type="button" class="btn li" data-link="${esc(liCompany(name))}">${ICON.ext}${liExact(name) ? 'Company page' : 'Find company page'}</button><button type="button" class="btn li" data-link="${esc(liPeopleAt(name))}">${ICON.ext}Your connections there</button><button type="button" class="linkish" data-set-li-page="${esc(name)}">${liExact(name) ? 'Change page link' : 'Save the exact page'}</button></div>
+    <div class="li-row" id="liRow"><span class="li-label">On LinkedIn</span><button type="button" class="btn li" data-link="${esc(liCompany(name))}">${ICON.ext}${liExact(name) ? 'Company page' : 'Find company page'}</button><button type="button" class="btn li" data-link="${esc(liPeopleAt(name))}">${ICON.ext}Your connections there</button>${snButton(snCompany(name))}<button type="button" class="linkish" data-set-li-page="${esc(name)}">${liExact(name) ? 'Change page link' : 'Save the exact page'}</button></div>
     ${gaps.length ? `<div class="gaps">${gaps.map(g => `<p><span>!</span>${esc(g)}</p>`).join('')}</div>` : '<div class="gaps ok"><p><span>✓</span>Covered at every level</p></div>'}
     <div class="ladder">${rows}</div>
     ${target ? `<label class="form full" style="display:flex;flex-direction:column;gap:6px;font-size:14px;font-weight:600;color:var(--ink-2)">Notes<textarea id="unitNote" data-unit-note="${esc(name)}" placeholder="What you’re working on here, who to meet next">${esc(target.note || '')}</textarea></label>` : ''}`);
@@ -764,6 +764,10 @@ const LI = 'https://www.linkedin.com';
 const liPerson = r => r.u ? r.u : S.mode === 'sample' ? '' : `${LI}/search/results/people/?keywords=${encodeURIComponent(`${r.f} ${r.l} ${r.c || ''}`.trim())}`;
 const liCompany = name => (Object.hasOwn(S.coLink, companyKey(name)) && S.coLink[companyKey(name)]) || `${LI}/search/results/companies/?keywords=${encodeURIComponent(name)}`;
 const liPeopleAt = name => `${LI}/search/results/people/?keywords=${encodeURIComponent(name)}&network=%5B%22F%22%5D`;
+// Sales Navigator has no public sign-in for apps like this, so these open its search using your existing Sales Navigator login
+const snPerson = r => `${LI}/sales/search/people?keywords=${encodeURIComponent(`${r.f} ${r.l} ${r.c || ''}`.trim())}`;
+const snCompany = name => `${LI}/sales/search/company?keywords=${encodeURIComponent(name)}`;
+const snButton = url => prefs.salesnav ? `<button type="button" class="btn li sn" data-link="${esc(url)}">${ICON.ext}Sales Navigator</button>` : '';
 const liExact = name => Object.hasOwn(S.coLink, companyKey(name)) && !!S.coLink[companyKey(name)];
 function openLinkedIn(url){
   if (!url) return;
@@ -1191,6 +1195,7 @@ function openProfile(k, {focusNotes, back} = {}){
   const c = r.cl, ed = r.ed || {};
   const opt = (vals, cur, auto) => `<option value="">${auto}</option>` + vals.map(v => { const [val, lab] = Array.isArray(v) ? v : [v, v]; return `<option value="${esc(val)}"${cur === val ? ' selected' : ''}>${esc(lab)}</option>`; }).join('');
   const li = liPerson(r), link = li ? `<button type="button" class="btn li" data-link="${esc(li)}" title="${r.u ? 'Open their LinkedIn profile' : 'Search LinkedIn for them'}">${ICON.ext}${r.u ? 'LinkedIn profile' : 'Find on LinkedIn'}</button>` : '';
+  const sn = S.mode !== 'sample' ? snButton(snPerson(r)) : '';
   const hist = (r.pv || []).map(h => `<li>${esc(h.p || '—')}<br><small>${esc(h.c || '—')}, until ${niceDate(h.until)}</small></li>`).join('');
   const due = ed.due;
   const follow = due
@@ -1204,7 +1209,7 @@ function openProfile(k, {focusNotes, back} = {}){
   Sheet.open('profile', `
     ${back ? `<button type="button" class="backlink" data-unit="${esc(back)}">${ICON.back}${esc(back)}</button>` : ''}
     <div class="sh-head"><div class="prof-top">${avatar(r)}<div><h2>${esc(r.f)} ${esc(r.l)}</h2><p>${esc(r.p || '')}</p>${r.c ? `<p style="color:var(--ink);font-weight:600">${esc(r.c)}</p>` : ''}</div></div><button type="button" class="x" data-act="close" aria-label="Close">${ICON.x}</button></div>
-    <div class="row"><button type="button" class="btn${ed.star ? ' accent' : ''}" data-act="toggle-star" data-k="${esc(k)}">${ed.star ? '★ Starred' : '☆ Star'}</button>${link}${r.e ? `<button type="button" class="btn" data-copy="${esc(r.e)}">Copy email</button>` : ''}${r.c ? `<button type="button" class="btn ghost" data-unit="${esc(r.c)}">More at ${esc(r.c.length > 18 ? r.c.slice(0, 17) + '…' : r.c)}</button>` : ''}</div>
+    <div class="row"><button type="button" class="btn${ed.star ? ' accent' : ''}" data-act="toggle-star" data-k="${esc(k)}">${ed.star ? '★ Starred' : '☆ Star'}</button>${link}${sn}${r.e ? `<button type="button" class="btn" data-copy="${esc(r.e)}">Copy email</button>` : ''}${r.c ? `<button type="button" class="btn ghost" data-unit="${esc(r.c)}">More at ${esc(r.c.length > 18 ? r.c.slice(0, 17) + '…' : r.c)}</button>` : ''}</div>
     ${relSection(r)}
     <h3 class="sect">Follow up</h3>
     ${follow}
@@ -1322,6 +1327,7 @@ function showMenu(){
     <h3 class="sect">Your network</h3>
     <div class="card-box">
       <label class="set-row switch"><span>Federal and military view<small>Branch, rank, agency and federal segments</small></span><input type="checkbox" id="pLens"${LENS_FED ? ' checked' : ''}></label>
+      <label class="set-row switch"><span>I use Sales Navigator<small>Adds Sales Navigator buttons to people and companies</small></span><input type="checkbox" id="pSalesNav"${prefs.salesnav ? ' checked' : ''}></label>
       <label class="set-row switch"><span>Reminders<small>Follow-ups you set, plus a weekly nudge to refresh${NATIVE ? '' : '. Works in the phone and Mac apps.'}</small></span><input type="checkbox" id="pNotify"${prefs.notify ? ' checked' : ''}></label>
       <label class="set-row switch"><span>Haptics${NATIVE ? '' : '<small>Phone only</small>'}</span><input type="checkbox" id="pHaptics"${prefs.haptics ? ' checked' : ''}></label>
       <label class="set-row switch"><span>Sounds</span><input type="checkbox" id="pSound"${prefs.sound ? ' checked' : ''}></label>
@@ -1632,6 +1638,7 @@ document.addEventListener('change', e => {
   else if (t.id === 'fSince'){ F.since = t.value; render(); }
   else if (t.dataset && t.dataset.coInd !== undefined && t.value){ const co = t.dataset.coInd, v = t.value; const li = t.closest('li'); if (li) li.classList.add('done'); fx.star(); toast(`${co}: ${v}`); setTimeout(() => setCompanyIndustry(co, v), li ? 260 : 0); if (Sheet.kind === 'unit') setTimeout(() => openUnit(co), 300); }
   else if (t.id === 'fRemoved'){ F.removed = t.checked; render(); }
+  else if (t.id === 'pSalesNav'){ prefs.salesnav = t.checked; savePrefs(); fx.select(); toast(t.checked ? 'Sales Navigator buttons are on' : 'Sales Navigator buttons are off'); }
   else if (t.id === 'pHaptics'){ prefs.haptics = t.checked; savePrefs(); fx.tap(); }
   else if (t.id === 'pLens'){ prefs.lens = t.checked; savePrefs(); fx.select(); applyLens(); hydrate(S.all.map(stripRow)); render(); toast(t.checked ? 'Federal and military view is on' : 'Federal and military view is off'); }
   else if (t.id === 'pNotify'){ prefs.notify = t.checked; savePrefs(); fx.select(); if (t.checked) askNotify(); scheduleReminders(); }

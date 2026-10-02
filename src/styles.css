@@ -585,3 +585,6 @@ body:not(.has-rel) .rel-only{display:none!important}
 .li-edit input{border:1px solid var(--line-2);background:var(--surface);border-radius:12px;padding:10px 11px;font-size:15px;color:var(--ink)}
 .li-row .row{width:100%}
 .peek-actions .btn.li{flex:0 0 auto}
+
+.btn.li.sn{color:#0A66C2;border-color:color-mix(in srgb,#0A66C2 35%,var(--line-2))}
+:root[data-theme="dark"] .btn.li.sn{color:#70B5F9}
