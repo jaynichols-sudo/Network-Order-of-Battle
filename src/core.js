@@ -40,9 +40,9 @@ export const SIGNALS = [['new','New since last refresh'],['jc','Job change detec
 const BRANCH_RX = [
   ['National Guard', [/\b(National Guard|Air National Guard|Army National Guard)\b/i, /\b(ARNG|NGB|ANG)\b/]],
   ['Marine Corps', [/\b(Marine Corps|U\.?\s?S\.? Marines|Marines|Marine Aircraft|Marine Forces|MARFOR[A-Z]*|MARCORSYSCOM|MARSOC|MARCENT|HMX-1|Camp Lejeune|Cherry Point|(?:former|ex-|retired) Marine|Marine veteran)\b/i, /\b(USMC|USMCR|MCAS|MCSC|I{1,3} MEF|MEF)\b/]],
-  ['Space Force', [/\b(Space Force|Space Systems Command)\b/i, /\b(USSF|SSC)\b/]],
+  ['Space Force', [/\b(Space Forces?|Space Systems Command)\b/i, /\b(USSF|SSC)\b/]],
   ['Coast Guard', [/\bCoast Guard\b/i, /\bUSCG\b/]],
-  ['Air Force', [/\b(Air Force|AFB)\b/i, /\b(USAF|AFRL|AFLCMC|AFCEC|AFCYBER|AFMC|AFGSC|AFSOC|AFRC)\b/]],
+  ['Air Force', [/\b(Air Forces?|AFB|PACAF|USAFE)\b/i, /\b(USAF|AFRL|AFLCMC|AFCEC|AFCYBER|AFMC|AFGSC|AFSOC|AFRC)\b/]],
   ['Army', [/\b(U\.?S\.? Army|Army Corps of Engineers|Army Futures Command|Army Cyber|Army)\b/i, /\b(USACE|ARCYBER|TRADOC|FORSCOM|DEVCOM|CECOM|NETCOM|USAR)\b/]],
   ['Navy', [/\b(U\.?S\.? Navy|Navy|Naval)\b/i, /\b(USN|USNR|NAVSEA|NAVAIR|NAVWAR|NAVFAC|NAVSUP|NAVIFOR|SPAWAR|NIWC|ONR|FLTCYBER)\b/]],
   ['Joint / DoD', [/\b(Department of Defense|Dept\.? of Defense|Defense Information Systems Agency|Defense Logistics Agency|Missile Defense Agency|Defense Health Agency|Joint Staff|Pentagon|Cyber Command|Office of the Secretary of Defense|Defense Counterintelligence)\b/i, /\b(DoD|DOD|DISA|DLA|DTRA|DCSA|DCMA|DCAA|DIA|NSA|USCYBERCOM|CYBERCOM|JFHQ|OSD|OUSD|DARPA|DIU|MDA|USSOCOM|SOCOM|INDOPACOM|EUCOM|CENTCOM|NORTHCOM|NORAD|SOUTHCOM|AFRICOM|TRANSCOM|STRATCOM|SPACECOM|CDAO|NGA|NRO)\b/]],
@@ -54,7 +54,7 @@ const RES_RX = /\b(reserve|reservist|USMCR|USAR|USNR|USAFR|IRR|drilling)\b/i;
 const NAVAL = b => b === 'Navy' || b === 'Coast Guard';
 const RANKS = [
   {re:/\b(SgtMaj|Sgt\.? ?Maj\.?|Sergeant Major|Command Sergeant Major|MGySgt|Master Gunnery Sergeant|CMSgt|Chief Master Sergeant|MCPO|FLTCM|CMDCM|Master Chief(?: Petty Officer)?|SEAC)\b/, r:'Senior Enlisted (E-9)', g:'E-9'},
-  {re:/\b(SGM|CSM)\b/, r:'Sergeant Major', g:'E-9', req:1},
+  {re:/(?:^|\| )(SGM|CSM)\b(?![^|]*(?:scrum|pmp|pmi|safe|agile))/i, r:'Sergeant Major', g:'E-9', req:1, pos:1},
   {re:/\b(LtGen|LTG|Lt\.? ?Gen\.?|Lieutenant General)\b/, r:'Lieutenant General', g:'O-9'},
   {re:/\b(MajGen|Maj\.? ?Gen\.?|Major General)\b/, r:'Major General', g:'O-8'},
   {re:/\b(BGen|BrigGen|Brig\.? ?Gen\.?|Brigadier General)\b/, r:'Brigadier General', g:'O-7'},
@@ -130,7 +130,7 @@ const AG = [
   ['AFRL','DoD & Military',/\b(AFRL|Air Force Research Lab)/i],['AFCEC','DoD & Military',/\bAFCEC\b/],
   ['Space Systems Command','DoD & Military',/\b(Space Systems Command|SSC)\b/],['DCSA','DoD & Military',/\bDCSA\b/],['DCMA','DoD & Military',/\bDCMA\b/],
   ['Defense Health Agency','DoD & Military',/\b(DHA|Defense Health Agency)\b/],['Missile Defense Agency','DoD & Military',/\b(MDA|Missile Defense Agency)\b/],
-  ['SOCOM','DoD & Military',/\b(USSOCOM|SOCOM|MARSOC)\b/],['Combatant Command','DoD & Military',/\b(INDOPACOM|EUCOM|CENTCOM|NORTHCOM|NORAD|SOUTHCOM|AFRICOM|TRANSCOM|STRATCOM|SPACECOM)\b/],
+  ['SOCOM','DoD & Military',/\b(USSOCOM|SOCOM|MARSOC|SOCPAC|Special Operations Command)\b/i],['Combatant Command','DoD & Military',/\b(INDOPACOM|EUCOM|CENTCOM|NORTHCOM|NORAD|SOUTHCOM|AFRICOM|TRANSCOM|STRATCOM|SPACECOM)\b/],
   ['OSD / Pentagon','DoD & Military',/\b(OSD|OUSD|Office of the Secretary of Defense|Pentagon|Joint Staff|CDAO)\b/],
   ['CISA','Federal Civilian',/\b(CISA|Cybersecurity and Infrastructure Security Agency)\b/],
   ['DHS','Federal Civilian',/\b(DHS|Homeland Security|FEMA|TSA|CBP|USCIS|Secret Service)\b/],
@@ -142,7 +142,8 @@ const AG = [
   ['DOJ / FBI','Federal Civilian',/\b(FBI|DOJ|Department of Justice|Federal Bureau of Investigation|DEA|ATF|U\.?S\.? Marshals)\b/],
   ['DOT / FAA','Federal Civilian',/\b(FAA|Federal Aviation Administration|U\.?S\.? Department of Transportation|USDOT|PHMSA)\b/],
   ['GSA','Federal Civilian',/\b(GSA|General Services Administration)\b/],['NASA','Federal Civilian',/\bNASA\b/],
-  ['Treasury / IRS','Federal Civilian',/\b(Department of the Treasury|U\.?S\.? Treasury|IRS)\b/],
+  ['Treasury / IRS','Federal Civilian',/\b(Department of the Treasury|U\.?S\.? Treasury|IRS|Internal Revenue Service)\b/],
+  ['SBA','Federal Civilian',/\b(Small Business Administration|SBA)\b/],
   ['State / USAID','Federal Civilian',/\b(Department of State|State Department|USAID)\b/],
   ['HHS','Federal Civilian',/\b(HHS|Health and Human Services|Centers for Disease Control|NIH|FDA)\b/],
   ['Commerce / NIST','Federal Civilian',/\b(NIST|Department of Commerce|NOAA|NTIA|Census Bureau)\b/],
@@ -163,7 +164,7 @@ const SEG_RX = [
 ];
 const SEN_RX = [
   ['VP', /\b(vice president|vp|svp|evp|avp)\b/i],
-  ['C-suite / Owner', /\b(chief(?! (?:warrant|petty|master|of staff|engineer\b|of))|ceo|cto|cio|ciso|coo|cfo|cro|cmo|cso|president|founder|co-founder|owner|managing partner|managing director|executive director)\b/i],
+  ['C-suite / Owner', /\b(chief (?:[\w&-]+ ){0,3}officer|chief executive|ceo|cto|cio|ciso|coo|cfo|cro|cmo|cso|president|founder|co-founder|owner|managing partner|managing director|executive director)\b/i],
   ['Director / Head', /\b(director|head of|dir\.|deputy chief|chief of staff)\b/i],
   ['Manager / Lead', /\b(manager|mgr|lead|supervisor|team lead|branch chief|section chief|division chief|chief of)\b/i],
 ];
@@ -189,13 +190,17 @@ export function classify(r, ed){
   ed = ed || {};
   const name = `${r.f||''} ${r.l||''}`, pos = r.p || '', co = r.c || '';
   const np = `${name} | ${pos}`, all = `${np} | ${co}`;
-  let branch = '';
-  for (const [b, rxs] of BRANCH_RX) if (rxs.some(x => x.test(all))) { branch = b; break; }
-  const vet = VET_RX.test(np);
+  let branch = '', branchWork = '';
+  for (const [b, rxs] of BRANCH_RX) if (rxs.some(x => x.test(`${pos} | ${co}`))) { branchWork = b; break; }
+  if (!branchWork) for (const [b, rxs] of BRANCH_RX) if (rxs.some(x => x.test(name))) { branch = b; break; }
+  // a branch that only shows up in someone's name ("Jane Doe, USMC") marks a veteran, not their employer
+  const nameOnly = !branchWork && !!branch;
+  if (branchWork) branch = branchWork;
+  const vet = VET_RX.test(np) || nameOnly;
   let rank = '', grade = '';
   for (const R of RANKS){
     if (R.req && !branch) continue;
-    const m = np.match(R.re); if (!m) continue;
+    const m = (R.pos ? pos : np).match(R.re); if (!m) continue;
     const g = typeof R.g === 'function' ? R.g(branch, m) : R.g;
     if (!g) continue;
     rank = R.r; grade = g; break;
@@ -220,7 +225,8 @@ export function classify(r, ed){
     else if (branch === 'National Guard' || RES_RX.test(np)) status = 'Reserve / Guard';
     else if (milRank) status = 'Serving';
     else if (seg && COMMERCIAL.has(seg)) { if (!agency) agency = branch === 'Joint / DoD' ? 'DoD (supported)' : branch + ' (supported)'; branch = ''; }
-    else status = 'DoD Civilian';
+    else if (/^(GS|NH|SES)/.test(grade) || /\b(?:GS|GG|NH)[- ]?\d|\bcivilian\b|\bDAC\b|Senior Executive Service/i.test(np)) status = 'DoD Civilian';
+    // otherwise uniformed or civilian is unknown, so leave it blank rather than guess
   } else if (vet) status = 'Veteran / Retired';
   if (!seg) {
     if (branch && !(status === 'Veteran / Retired' && co && !/\b(retired|veteran|self[- ]employed|seeking|transition)\b/i.test(co))) seg = 'DoD & Military';
@@ -258,7 +264,7 @@ export function keyOf(r){
   return 'n_' + hash(`${r.f}|${r.l}|${r.c}`.toLowerCase()).toString(36);
 }
 
-export const stripRow = r => { const o = {}; for (const f of ['k','f','l','u','e','c','p','d','fs','fi','x','jc','pv','_new']) if (r[f] !== undefined && r[f] !== null && r[f] !== '') o[f] = r[f]; return o; };
+export const stripRow = r => { const o = {}; for (const f of ['k','f','l','u','e','c','p','d','fs','fi','x','jc','pv','rx','_new']) if (r[f] !== undefined && r[f] !== null && r[f] !== '') o[f] = r[f]; return o; };
 
 export function parseCSV(text){
   const out = []; let row = [], f = '', q = false;
@@ -301,11 +307,80 @@ export function rowsFromCSV(text){
 export async function readFile(file){
   if (/\.zip$/i.test(file.name) || file.type === 'application/zip'){
     const zip = await JSZip.loadAsync(file);
-    const entry = Object.values(zip.files).find(f => /(^|\/)connections\.csv$/i.test(f.name));
+    const files = Object.values(zip.files);
+    const find = rx => files.find(f => rx.test(f.name));
+    const entry = find(/(^|\/)connections\.csv$/i);
     if (!entry) throw new Error('No Connections.csv inside that zip. Request the export with “Connections” selected.');
-    return rowsFromCSV(await entry.async('string'));
+    const rows = rowsFromCSV(await entry.async('string'));
+    const text = async rx => { const e = find(rx); return e ? e.async('string') : ''; };
+    const t = {messages: await text(/(^|\/)messages\.csv$/i), invitations: await text(/(^|\/)invitations\.csv$/i),
+      endGiven: await text(/(^|\/)endorsement_given_info\.csv$/i), endRecv: await text(/(^|\/)endorsement_received_info\.csv$/i),
+      recGiven: await text(/(^|\/)recommendations_given\.csv$/i), recRecv: await text(/(^|\/)recommendations_received\.csv$/i)};
+    if (Object.values(t).some(Boolean)) rows.rel = relationsFromArchive(t, rows);
+    return rows;
   }
   return rowsFromCSV(await file.text());
+}
+
+/* ---------- relationships from the rest of the LinkedIn archive ---------- */
+export const slugOf = u => { const m = String(u || '').match(/linkedin\.com\/in\/([^/?#\s,"]+)/i); if (!m) return ''; let k = m[1]; try { k = decodeURIComponent(k); } catch {} return k.toLowerCase().replace(/\/+$/, ''); };
+function table(text){
+  if (!text) return [];
+  const g = parseCSV(text.replace(/^\uFEFF/, ''));
+  const hi = g.findIndex(r => r.length > 2); if (hi < 0) return [];
+  const H = g[hi].map(h => h.trim().toLowerCase());
+  return g.slice(hi + 1).filter(r => r.length > 1).map(r => Object.fromEntries(H.map((h, i) => [h, (r[i] || '').trim()])));
+}
+function stamp(s){
+  s = (s || '').trim(); if (!s) return '';
+  let m = s.match(/^(\d{4})[-\/](\d{2})[-\/](\d{2})/); if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+  m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})/); if (m){ const y = m[3].length === 2 ? '20' + m[3] : m[3]; return `${y}-${m[1].padStart(2, '0')}-${m[2].padStart(2, '0')}`; }
+  return parseDate(s);
+}
+const clean = t => String(t || '').replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/\s+/g, ' ').trim();
+export function relationsFromArchive(t, rows){
+  const bySlug = new Map(), byName = new Map();
+  for (const r of rows){ const s = slugOf(r.u); if (s) bySlug.set(s, r.k); byName.set(`${r.f} ${r.l}`.toLowerCase().replace(/\s+/g, ' ').trim(), r.k); }
+  const rel = new Map(); const get = k => { let o = rel.get(k); if (!o){ o = {}; rel.set(k, o); } return o; };
+  // work out which profile is "me": the one that shows up in the most messages
+  const msgs = table(t.messages).filter(m => (m['is message draft'] || '').toLowerCase() !== 'yes' && (m.folder || '').toUpperCase() !== 'SPAM');
+  const freq = new Map(); const bump = s => s && freq.set(s, (freq.get(s) || 0) + 1);
+  for (const m of msgs){ bump(slugOf(m['sender profile url'])); for (const u of (m['recipient profile urls'] || '').split(',')) bump(slugOf(u)); }
+  const me = [...freq.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || '';
+  for (const m of msgs){
+    const from = slugOf(m['sender profile url']), to = (m['recipient profile urls'] || '').split(',').map(slugOf).filter(Boolean);
+    const out = from === me, others = out ? to.filter(x => x !== me) : [from];
+    const d = stamp(m.date); if (!d) continue;
+    for (const o of others){
+      const k = bySlug.get(o); if (!k) continue;
+      const x = get(k);
+      x.m = (x.m || 0) + 1; if (out) x.o = (x.o || 0) + 1; else x.i = (x.i || 0) + 1;
+      if (!x.f || d < x.f) x.f = d;
+      if (!x.t || d > x.t || (d === x.t && !out)){ x.t = d; x.dir = out ? 'o' : 'i'; if (others.length === 1){ const c = clean(m.content); x.s = c.length > 150 ? c.slice(0, 147) + '…' : c; } }
+    }
+  }
+  for (const v of table(t.invitations)){
+    const outgoing = (v.direction || '').toUpperCase() === 'OUTGOING';
+    const k = bySlug.get(slugOf(outgoing ? v.inviteeprofileurl : v.inviterprofileurl)); if (!k) continue;
+    const x = get(k); x.inv = outgoing ? 'o' : 'i'; x.invd = stamp(v['sent at']); const n = clean(v.message); if (n) x.invn = n.slice(0, 200);
+  }
+  for (const e of table(t.endGiven)){ const k = bySlug.get(slugOf(e['endorsee public url'])); if (k){ const x = get(k); x.eg = (x.eg || 0) + 1; } }
+  for (const e of table(t.endRecv)){ const k = bySlug.get(slugOf(e['endorser public url'])); if (k){ const x = get(k); x.er = (x.er || 0) + 1; } }
+  const nm = r => `${r['first name'] || ''} ${r['last name'] || ''}`.toLowerCase().replace(/\s+/g, ' ').trim();
+  for (const e of table(t.recGiven)){ const k = byName.get(nm(e)); if (k) get(k).rg = 1; }
+  for (const e of table(t.recRecv)){ const k = byName.get(nm(e)); if (k) get(k).rr = 1; }
+  return rel;
+}
+/** 0 to 100, plus a plain band. Recency counts most, then volume, two-way conversation and endorsements. */
+export function warmth(x, today){
+  if (!x || !(x.m || x.eg || x.er || x.rg || x.rr || x.inv)) return {score: 0, band: 'none'};
+  let s = 0;
+  if (x.t){ const days = (Date.parse(today) - Date.parse(x.t)) / 864e5; s += days < 30 ? 40 : days < 90 ? 32 : days < 180 ? 24 : days < 365 ? 16 : days < 730 ? 8 : 3; }
+  s += Math.min(x.m || 0, 30) / 30 * 25;
+  if (x.o && x.i) s += 15;
+  s += Math.min(((x.eg ? 1 : 0) + (x.er ? 1 : 0)) * 5, 10) + (x.rg || x.rr ? 10 : 0) + (x.inv === 'i' ? 3 : 0);
+  s = Math.round(Math.min(100, s));
+  return {score: s, band: s >= 60 ? 'strong' : s >= 35 ? 'warm' : s >= 12 ? 'light' : 'none'};
 }
 
 export function mergeImport(incoming, prevRows, prevMeta){
@@ -315,10 +390,11 @@ export function mergeImport(incoming, prevRows, prevMeta){
   const n = (live && prevMeta && prevMeta.n || 0) + 1;
   const seen = new Set(); let added = 0, changed = 0, back = 0;
   const out = [];
+  const rel = incoming.rel;
   for (const inc of incoming){
     if (seen.has(inc.k)) continue; seen.add(inc.k);
     const o = prev.get(inc.k);
-    if (!o){ out.push(Object.assign({}, inc, {fs: TODAY, fi: n})); if (!first) added++; continue; }
+    if (!o){ const nr = Object.assign({}, inc, {fs: TODAY, fi: n}); if (rel && rel.has(inc.k)) nr.rx = rel.get(inc.k); out.push(nr); if (!first) added++; continue; }
     const r = Object.assign({}, o, {f: inc.f, l: inc.l, u: inc.u || o.u, e: inc.e || o.e, d: inc.d || o.d});
     if (r.x){ delete r.x; back++; }
     if ((o.c || '') !== (inc.c || '') || (o.p || '') !== (inc.p || '')){
@@ -326,13 +402,14 @@ export function mergeImport(incoming, prevRows, prevMeta){
       r.jc = TODAY; changed++;
     }
     r.c = inc.c; r.p = inc.p;
+    if (rel){ if (rel.has(inc.k)) r.rx = rel.get(inc.k); else delete r.rx; }
     out.push(r);
   }
   let removed = 0;
   for (const [k, o] of prev) if (!seen.has(k)){ const r = Object.assign({}, o); if (!r.x){ r.x = TODAY; removed++; } out.push(r); }
   const total = out.filter(r => !r.x).length;
   const imports = (live && prevMeta && prevMeta.imports ? prevMeta.imports.slice() : []).concat([{d: TODAY, total, added, changed, removed}]).slice(-104);
-  return {rows: out, meta: {lastImport: TODAY, imports, n}, stats: {total, added: first ? total : added, changed, removed, back, first}};
+  return {rows: out, meta: {lastImport: TODAY, imports, n, rel: rel ? TODAY : (prevMeta && prevMeta.rel) || ''}, stats: {total, added: first ? total : added, changed, removed, back, first, rel: rel ? rel.size : null}};
 }
 
 export function sampleNetwork(){
@@ -405,6 +482,14 @@ export function sampleNetwork(){
   rows.sort((a, b) => b.d.localeCompare(a.d));
   for (let i = 0; i < 16; i++){ rows[i]._new = true; rows[i].d = rows[i].fs = isoDay(Date.now() - (i % 6) * 864e5); }
   for (let i = 40; i < 400; i += 33){ const r = rows[i]; r.pv = [{c: pick(['Leidos','Booz Allen Hamilton','U.S. Army','Duke Energy','Fortinet','SAIC']), p: pick(['Program Manager','Senior Engineer','Account Executive','Cyber Analyst']), until: isoDay(Date.now() - (i % 5 + 1) * 864e5)}]; r.jc = r.pv[0].until; }
+  // pretend message history so the relationship features have something to show
+  for (const r of rows){
+    if (rnd() > 0.46) continue;
+    const m = Math.ceil(Math.pow(rnd(), 2.2) * 40), span = Math.pow(rnd(), 1.4) * 900, f = isoDay(Date.now() - (span + 30 + rnd() * 400) * 864e5);
+    const t = isoDay(Date.now() - span * 864e5), o = Math.round(m * (0.3 + rnd() * 0.5));
+    r.rx = {m, o, i: m - o, f, t, dir: rnd() < 0.45 ? 'i' : 'o', s: pick(['Thanks for the intro, let’s find time next week.', 'Great seeing you at TechNet. Sending the deck now.', 'Congrats on the new role!', 'Are you going to be at the AFCEA chapter lunch?', 'Following up on our call about the pilot.', 'Appreciate it. Talk soon.'])};
+    if (rnd() < 0.15) r.rx.eg = 1; if (rnd() < 0.12) r.rx.er = 1; if (rnd() < 0.3) r.rx.inv = rnd() < 0.6 ? 'o' : 'i';
+  }
   // a few demo notes
   const edits = {'sample-3': {star: true, tags: ['warm intro'], note: 'Example note: met at a trade show; follow up on the pilot.'}, 'sample-9': {star: true}};
   const imports = []; let tot = N - 120;

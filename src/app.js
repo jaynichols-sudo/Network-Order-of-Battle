@@ -9,7 +9,7 @@ import { LocalNotifications } from '@capacitor/local-notifications';
 import {
   esc, fmt, isoDay, TODAY, daysAgo, niceDate, h01, hash,
   SEGS, SEGI, BRANCHES, STATUSES, TIERS, SENIORITY, FUNCS, SINCE, SIGNALS, GRADE_OPTS, CERTS,
-  classify, keyOf, stripRow, readFile, mergeImport, sampleNetwork,
+  classify, keyOf, stripRow, readFile, mergeImport, sampleNetwork, warmth,
 } from './core.js';
 import { parseQuery, matchNL } from './nlq.js';
 import { createWeb } from './web.js';
@@ -27,10 +27,15 @@ const SEG_COLORS = ['#B7D25A', '#66A8FF', '#43D0C0', '#A58BFF', '#FFD166', '#FF6
 const segColor = seg => SEG_COLORS[SEGI[seg] ?? 9];
 /* the lens decides how people are grouped and colored: federal segments, or industries */
 let LENS_FED = false;
-const groupKey = () => LENS_FED ? 'seg' : 'ind';
-const groupOf = r => LENS_FED ? r.cl.seg : r.cl.ind;
-const groupList = () => LENS_FED ? SEGS.map((s, i) => ({id: s.id, short: s.short, color: SEG_COLORS[i]})) : INDUSTRIES.map(i => ({id: i.id, short: i.short, color: i.color}));
-const groupColor = g => LENS_FED ? segColor(g) : indColor(g);
+const GOV_SEGS3 = ['DoD & Military', 'Federal Civilian', 'State & Local'];
+// With the federal lens on, government splits into its segments; everyone else is grouped by industry.
+const groupOf = r => LENS_FED && r.cl.ind === GOV_IND ? (GOV_SEGS3.includes(r.cl.seg) ? r.cl.seg : 'Federal Civilian') : r.cl.ind;
+const groupList = () => [
+  ...(LENS_FED ? GOV_SEGS3.map(id => ({id, short: SEGS[SEGI[id]].short, color: SEG_COLORS[SEGI[id]], key: 'seg'})) : []),
+  ...INDUSTRIES.filter(i => !LENS_FED || i.id !== GOV_IND).map(i => ({id: i.id, short: i.short, color: i.color, key: 'ind'})),
+];
+const groupColor = g => GOV_SEGS3.includes(g) ? segColor(g) : indColor(g);
+const groupKeyOf = g => GOV_SEGS3.includes(g) ? 'seg' : 'ind';
 const personColor = r => groupColor(groupOf(r));
 const initials = r => ((r.f || '?')[0] + (r.l || '')[0] || '').toUpperCase();
 const ICON = {
@@ -77,13 +82,14 @@ function readTheme(){
 readTheme();
 
 /* ---------- state ---------- */
-const S = {all: [], edits: {}, review: {}, targets: [], meta: null, mode: 'sample', rev: null, tab: 'home', mapMode: 'scope', unitsMode: 'targets', sort: 'new', shown: 60, sel: null, deck: 'week', pending: null, syncNote: '', nl: null, nlChips: [], cards: [], coInd: {}, uncShown: 25};
-const F = {q: '', seg: new Set, branch: new Set, status: new Set, tier: new Set, sen: new Set, func: new Set, ind: new Set, cert: new Set, sig: new Set, agency: '', company: '', since: '', removed: false};
+const S = {all: [], edits: {}, review: {}, targets: [], meta: null, mode: 'sample', rev: null, tab: 'home', mapMode: 'scope', unitsMode: 'targets', sort: 'new', shown: 60, sel: null, deck: 'week', pending: null, syncNote: '', nl: null, nlChips: [], cards: [], coInd: Object.create(null), uncShown: 25};
+const F = {q: '', rel: new Set, seg: new Set, branch: new Set, status: new Set, tier: new Set, sen: new Set, func: new Set, ind: new Set, cert: new Set, sig: new Set, agency: '', company: '', since: '', removed: false};
 let VIEW = [];
 
 function hydrate(rows){
   const imp = (S.meta && S.meta.n) || 0;
   setIndustryOverrides(S.coInd);
+  let anyRel = false;
   S.all = rows.map(r => {
     const k = r.k || keyOf(r);
     const ed = S.edits[k];
@@ -92,8 +98,10 @@ function hydrate(rows){
     const lastImp = S.meta && S.meta.lastImport;
     const movedNow = !!r.jc && (S.mode === 'sample' ? daysAgo(r.jc) < 8 : r.jc === lastImp);
     const hay = [r.f, r.l, r.p, r.c, cl.agency, cl.rank, cl.grade, cl.branch, cl.ind, ed && ed.note, ed && (ed.tags || []).join(' ')].join(' ').toLowerCase();
-    return Object.assign({}, r, {k, cl, ed: ed || null, isNew, movedNow, hay});
+    const wm = warmth(r.rx, TODAY); if (r.rx) anyRel = true;
+    return Object.assign({}, r, {k, cl, ed: ed || null, isNew, movedNow, hay, wm});
   });
+  S.hasRel = anyRel; document.body.classList.toggle('has-rel', anyRel);
 }
 
 /* ---------- filtering ---------- */
@@ -116,10 +124,22 @@ function sigOk(r, s){
     case 'jcw': return r.movedNow;
     case 'anniv': return isAnniversary(r.d);
     case 'due': return isDue(r);
+    case 'waiting': return isWaiting(r);
+    case 'cold': return isCooling(r);
+    case 'never': return !(r.rx && r.rx.m);
   }
   return true;
 }
-const SIGNALS_UI = [...SIGNALS, ['jcw', 'Changed jobs this refresh'], ['anniv', 'Anniversary this week'], ['due', 'Follow-up due']];
+const SIGNALS_UI = [...SIGNALS, ['jcw', 'Changed jobs this refresh'], ['anniv', 'Anniversary this week'], ['due', 'Follow-up due'], ['waiting', 'Waiting on your reply'], ['cold', 'Going cold'], ['never', 'Never messaged']];
+const BAND_LABEL = {strong: 'Close', warm: 'Warm', light: 'Light touch', none: 'No real contact'};
+const hasRel = () => !!S.hasRel;
+const daysSince = d => d ? Math.floor((Date.parse(TODAY) - Date.parse(d)) / 864e5) : 99999;
+// they wrote last, recently, in a real two-way conversation
+const isWaiting = r => !!(r.rx && r.rx.dir === 'i' && r.rx.o && daysSince(r.rx.t) <= 45 && !(r.ed && r.ed.replied === r.rx.t));
+// you used to talk regularly and it has gone quiet
+const isCooling = r => { const x = r.rx; if (!x || x.m < 8 || (x.o || 0) < 3 || (x.i || 0) < 3) return false; const d = daysSince(x.t); return d > 150 && d < 900; };
+function ago(d){ const n = daysSince(d); return n <= 0 ? 'today' : n === 1 ? 'yesterday' : n < 14 ? `${n} days ago` : n < 60 ? `${Math.round(n / 7)} weeks ago` : n < 730 ? `${Math.round(n / 30.4)} months ago` : `${Math.round(n / 365)} years ago`; }
+function agoShort(d){ const n = daysSince(d); return n < 1 ? 'today' : n < 14 ? `${n}d` : n < 60 ? `${Math.round(n / 7)}w` : n < 730 ? `${Math.round(n / 30.4)}mo` : `${Math.round(n / 365)}y`; }
 function isAnniversary(d){
   if (!d || d.length < 10) return false;
   const now = new Date(), y = now.getFullYear();
@@ -138,6 +158,7 @@ function match(r, skip){
   if (skip !== 'sen' && F.sen.size && !F.sen.has(c.sen)) return false;
   if (skip !== 'func' && F.func.size && !F.func.has(c.func)) return false;
   if (skip !== 'ind' && F.ind.size && !F.ind.has(c.ind)) return false;
+  if (skip !== 'rel' && F.rel.size && !F.rel.has(BAND_LABEL[r.wm.band])) return false;
   if (skip !== 'cert' && F.cert.size && !c.certs.some(x => F.cert.has(x))) return false;
   if (skip !== 'sig' && F.sig.size) for (const s of F.sig) if (!sigOk(r, s)) return false;
   if (skip !== 'agency' && F.agency && c.agency !== F.agency) return false;
@@ -146,7 +167,7 @@ function match(r, skip){
   if (F.q){ for (const t of F.q.toLowerCase().split(/\s+/)) if (t && !r.hay.includes(t)) return false; }
   return true;
 }
-const activeCount = () => F.seg.size + F.branch.size + F.status.size + F.tier.size + F.sen.size + F.func.size + F.ind.size + F.cert.size + F.sig.size + (F.agency ? 1 : 0) + (F.company ? 1 : 0) + (F.since ? 1 : 0) + (F.removed ? 1 : 0);
+const activeCount = () => F.rel.size + F.seg.size + F.branch.size + F.status.size + F.tier.size + F.sen.size + F.func.size + F.ind.size + F.cert.size + F.sig.size + (F.agency ? 1 : 0) + (F.company ? 1 : 0) + (F.since ? 1 : 0) + (F.removed ? 1 : 0);
 
 /* ---------- render orchestration ---------- */
 function render(){
@@ -236,6 +257,7 @@ function renderStats(){
   const tiles = [
     {id: 'all', l: 'People', v: A.length, d: newCount ? `+${fmt(newCount)} new this refresh` : 'in your network', up: newCount > 0, act: 'tab:people'},
     {id: 'jc', l: 'Changed jobs', v: n(r => !!r.jc), d: 'new title or company', act: 'sig:jc'},
+    ...(hasRel() ? [{id: 'wait', l: 'Waiting on you', v: n(r => isWaiting(r)), d: 'unanswered messages', act: 'sig:waiting'}] : []),
     {id: 'star', l: 'Starred', v: n(r => r.ed && r.ed.star), d: 'your shortlist', act: 'sig:star'},
     {id: 'due', l: 'Follow-ups', v: dueCount, d: dueCount ? 'due now' : 'none due', act: 'sig:due'},
     ...(LENS_FED ? [
@@ -259,7 +281,7 @@ function renderActive(){
   const parts = [];
   for (const c of S.nlChips) parts.push(['nl', c, c]);
   if (F.q) parts.push(['q', '', `“${F.q}”`]);
-  for (const g of ['seg', 'ind', 'branch', 'status', 'tier', 'sen', 'func', 'cert']) for (const v of F[g]) parts.push([g, v, v]);
+  for (const g of ['rel', 'seg', 'ind', 'branch', 'status', 'tier', 'sen', 'func', 'cert']) for (const v of F[g]) parts.push([g, v, v]);
   for (const v of F.sig) parts.push(['sig', v, (SIGNALS_UI.find(s => s[0] === v) || [, v])[1]]);
   if (F.agency) parts.push(['agency', '', F.agency]);
   if (F.company) parts.push(['company', '', F.company]);
@@ -351,8 +373,7 @@ const Radar = (() => {
     kick();
   }
   function renderLegend(counts){
-    const key = groupKey(), set = F[key];
-    $('#legend').innerHTML = G.map((s, i) => counts[i] || set.has(s.id) ? `<button type="button" class="${set.has(s.id) ? 'on' : ''}" data-g="${key}" data-v="${esc(s.id)}"><i style="background:${s.color}"></i>${esc(s.id)} <em>${fmt(counts[i])}</em></button>` : '').join('');
+    $('#legend').innerHTML = G.map((s, i) => counts[i] || F[s.key].has(s.id) ? `<button type="button" class="${F[s.key].has(s.id) ? 'on' : ''}" data-g="${s.key}" data-v="${esc(s.id)}"><i style="background:${s.color}"></i>${esc(s.id)} <em>${fmt(counts[i])}</em></button>` : '').join('');
   }
 
   function frame(now){
@@ -442,13 +463,14 @@ const Radar = (() => {
     ctx.fillText(fmt(VIEW.filter(r => F.removed || !r.x).length), cx, cy + cr * 0.3);
     // sector labels (wide screens, full view)
     if (W >= 640 && view.s < 1.05){
+      let lastLab = -9;
       for (const w of wedges){
-        const mid = (w.a0 + w.a1) / 2, span = w.a1 - w.a0; if (span < 0.13) continue;
+        const mid = (w.a0 + w.a1) / 2, span = w.a1 - w.a0; if (span < 0.13 || mid - lastLab < 0.2) continue; lastLab = mid;
         const lx = cx + Math.cos(mid) * (S_ + 14), ly = cy + Math.sin(mid) * (S_ + 14);
         const c = Math.cos(mid), s = Math.sin(mid);
         ctx.textAlign = Math.abs(c) < 0.2 ? 'center' : c > 0 ? 'left' : 'right';
         ctx.textBaseline = s > 0.5 ? 'top' : s < -0.5 ? 'bottom' : 'middle';
-        ctx.font = '700 14px "Bricolage Grotesque", sans-serif'; ctx.fillStyle = F[groupKey()].has(w.seg) ? TH.accentInk : TH.ink;
+        ctx.font = '700 14px "Bricolage Grotesque", sans-serif'; ctx.fillStyle = F[groupKeyOf(w.seg)].has(w.seg) ? TH.accentInk : TH.ink;
         ctx.fillText(G[w.i].short, lx, ly);
         ctx.font = '700 12px "Figtree", sans-serif'; ctx.fillStyle = dotColor(G[w.i].color);
         const off = ctx.textBaseline === 'top' ? 16 : ctx.textBaseline === 'bottom' ? -16 : 15;
@@ -690,7 +712,7 @@ function openUnit(name){
   const rows = ladder().map(([lv, label]) => {
     const at = ps.filter(r => Math.min(4, Math.max(1, r.cl.lv)) === lv);
     const shown = at.slice(0, 14);
-    return `<div class="rung${at.length ? '' : ' gap'}"><div class="rung-h"><span>${label}</span><b>${at.length}</b></div><div class="rung-people">${shown.map(r => `<button type="button" class="mini" data-open="${esc(r.k)}" data-back="${esc(name)}" title="${esc(r.f + ' ' + r.l)}">${avatar(r)}<span>${esc(r.f)} ${esc((r.l || '')[0] || '')}.${LENS_FED && r.cl.grade ? ` <em>${esc(r.cl.grade)}</em>` : ''}</span></button>`).join('')}${at.length > shown.length ? `<span class="more">+${at.length - shown.length}</span>` : ''}${at.length ? '' : '<span class="muted">Nobody yet</span>'}</div></div>`;
+    return `<div class="rung${at.length ? '' : ' gap'}"><div class="rung-h"><span>${label}</span><b>${at.length}</b></div><div class="rung-people">${shown.map(r => `<button type="button" class="mini${r.rx && r.wm.band !== 'none' ? ' w-' + r.wm.band : ''}" data-open="${esc(r.k)}" data-back="${esc(name)}" title="${esc(r.f + ' ' + r.l)}${r.rx && r.rx.t ? ', last message ' + esc(ago(r.rx.t)) : ''}">${avatar(r)}<span>${esc(r.f)} ${esc((r.l || '')[0] || '')}.${LENS_FED && r.cl.grade ? ` <em>${esc(r.cl.grade)}</em>` : ''}</span></button>`).join('')}${at.length > shown.length ? `<span class="more">+${at.length - shown.length}</span>` : ''}${at.length ? '' : '<span class="muted">Nobody yet</span>'}</div></div>`;
   }).join('');
   Sheet.open('unit', `
     <div class="sh-head"><div class="unit-top">${ringSVG(cov.score, 84)}<div><h2>${esc(name)}</h2><p>You know ${fmt(ps.length)} ${ps.length === 1 ? 'person' : 'people'} here. Coverage ${cov.score}%.</p></div></div><button type="button" class="x" data-act="close" aria-label="Close">${ICON.x}</button></div>
@@ -735,6 +757,11 @@ function mixBar(lv, total){
   const cols = ['', 'var(--violet)', 'color-mix(in srgb,var(--violet) 60%,var(--surface))', 'var(--accent)', 'var(--line-2)'];
   return `<span class="mix" aria-hidden="true">${[1, 2, 3, 4].map(l => lv[l] ? `<i style="flex:${lv[l]};background:${cols[l]}"></i>` : '').join('')}</span>`;
 }
+function guessedCompanies(rows){
+  const m = new Map();
+  for (const r of rows){ if (r.x || r.cl.indHow !== 'guess' || !r.c) continue; const g = m.get(r.c) || {n: 0, ind: r.cl.ind}; g.n++; m.set(r.c, g); }
+  return [...m.entries()].sort((a, b) => b[1].n - a[1].n || a[0].localeCompare(b[0]));
+}
 function unclassifiedCompanies(rows){
   const m = new Map();
   for (const r of rows){ if (r.x || r.cl.ind !== UNCLASSIFIED || !r.c) continue; m.set(r.c, (m.get(r.c) || 0) + 1); }
@@ -767,7 +794,9 @@ function renderIndustries(){
   $('#uncMeta').textContent = uc.length ? `${fmt(uc.length)} ${uc.length === 1 ? 'company' : 'companies'}, ${fmt(ucPeople)} ${ucPeople === 1 ? 'person' : 'people'}. Tag a company once and everyone there, now and in future imports, follows.` : 'Every company in your network has an industry. Nice.';
   const shown = uc.slice(0, S.uncShown || 25);
   $('#uncList').innerHTML = shown.map(([c, n]) => `<li><span class="n">${esc(c)}</span><em>${fmt(n)}</em><select class="fsel sm" data-co-ind="${esc(c)}" aria-label="Industry for ${esc(c)}">${indOpts('', 'Pick industry')}</select></li>`).join('') + (uc.length > shown.length ? `<li class="more"><button type="button" class="btn" data-act="unc-more">Show ${fmt(Math.min(25, uc.length - shown.length))} more</button></li>` : '');
-  $('#uncPanel').hidden = !uc.length && !Object.keys(S.coInd).length;
+  const gs = guessedCompanies(S.all);
+  if (gs.length) $('#uncList').insertAdjacentHTML('beforeend', `<li class="sub-h"><b>Best guesses to check</b><span>We guessed these from the company name. Fix any that are wrong.</span></li>` + gs.slice(0, S.guessShown || 15).map(([c, g]) => `<li><span class="n">${esc(c)}</span><em>${fmt(g.n)}</em><select class="fsel sm" data-co-ind="${esc(c)}" data-guess="1" aria-label="Industry for ${esc(c)}">${indOpts(g.ind, 'Pick industry')}</select></li>`).join('') + (gs.length > (S.guessShown || 15) ? `<li class="more"><button type="button" class="btn" data-act="guess-more">Show more guesses</button></li>` : ''));
+  $('#uncPanel').hidden = !uc.length && !gs.length && !Object.keys(S.coInd).length;
   const tagged = Object.keys(S.coInd).length;
   $('#uncTagged').textContent = tagged ? `${fmt(tagged)} ${tagged === 1 ? 'company' : 'companies'} tagged by you` : '';
 }
@@ -822,6 +851,8 @@ const ICONS = {
   grid: '<rect x="3.5" y="3.5" width="10" height="10" rx="1.5"/><rect x="15.5" y="3.5" width="5" height="7" rx="1.5"/><rect x="15.5" y="12.5" width="5" height="8" rx="1.5"/><rect x="3.5" y="15.5" width="10" height="5" rx="1.5"/>',
   tag: '<path d="M3.5 12.2V4.5a1 1 0 0 1 1-1h7.7l8.3 8.3-8.7 8.7z"/><circle cx="8" cy="8" r="1.4"/>',
   target: '<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r=".8"/>',
+  reply: '<path d="M9 7 4 12l5 5M4 12h11a5 5 0 0 1 5 5v1"/>',
+  cold: '<path d="M12 2v20M4.9 6l14.2 12M19.1 6 4.9 18M9 3.5 12 6l3-2.5M9 20.5 12 18l3 2.5"/>',
   bell: '<path d="M6 16V11a6 6 0 1 1 12 0v5l1.5 2h-15zM10 20.5a2 2 0 0 0 4 0"/>',
   swipe: '<rect x="5" y="4" width="12" height="16" rx="2.5"/><path d="M8 2.5h10.5A2.5 2.5 0 0 1 21 5v13"/>',
 };
@@ -835,6 +866,10 @@ function buildCards(){
   if (rq) cards.push({tone: 'coral', icon: 'swipe', hero: true, title: `Catch up on ${fmt(rq)} ${rq === 1 ? 'person' : 'people'}`, body: 'New connections and job changes since your last refresh. Swipe right to star, left to skip. Takes a couple of minutes.', people: A.filter(r => r.isNew || r.movedNow).sort(bySenior), act: {kind: 'tab', tab: 'catchup'}});
   const due = A.filter(r => isDue(r)).sort((a, b) => (a.ed.due || '').localeCompare(b.ed.due || ''));
   if (due.length) cards.push({tone: 'violet', icon: 'bell', title: `${fmt(due.length)} ${due.length === 1 ? 'follow-up' : 'follow-ups'} due`, body: `You planned to reach out to ${names(due, 2)}.`, people: due, act: {kind: 'filter', sig: ['due']}});
+  const waiting = A.filter(r => isWaiting(r)).sort((a, b) => b.rx.t.localeCompare(a.rx.t));
+  if (waiting.length) cards.push({tone: 'coral', icon: 'reply', title: `${fmt(waiting.length)} ${waiting.length === 1 ? 'person is' : 'people are'} waiting on your reply`, body: `They wrote last and you haven’t answered: ${names(waiting, 2)}.`, people: waiting, act: {kind: 'filter', sig: ['waiting']}});
+  const cooling = A.filter(r => isCooling(r)).sort((a, b) => b.wm.score - a.wm.score || a.cl.lv - b.cl.lv);
+  if (cooling.length) cards.push({tone: 'sky', icon: 'cold', title: `${fmt(cooling.length)} good ${cooling.length === 1 ? 'relationship is' : 'relationships are'} going cold`, body: `You used to talk regularly but it’s been a while: ${cooling.slice(0, 2).map(r => `${fullName(r)} (${ago(r.rx.t)})`).join(', ')}${cooling.length > 2 ? ` and ${fmt(cooling.length - 2)} more` : ''}.`, people: cooling, act: {kind: 'filter', sig: ['cold']}});
   const moved = A.filter(r => r.movedNow).sort(bySenior), senMoved = moved.filter(r => r.cl.lv <= 2);
   if (senMoved.length){
     const top = senMoved[0];
@@ -850,7 +885,8 @@ function buildCards(){
     const weak = S.targets.map(t => { const ps = unitPeople(t.name), cov = coverage(ps); return {t, ps, cov, gaps: gapsOf(cov)}; }).filter(x => x.gaps.length).sort((a, b) => a.cov.score - b.cov.score).slice(0, 3);
     for (const w of weak) cards.push({tone: 'amber', icon: 'gap', title: `${w.t.name}: ${w.gaps[0].replace(/^No /, 'no ').replace(/^Only/, 'only')}`, body: `You know ${fmt(w.ps.length)} ${w.ps.length === 1 ? 'person' : 'people'} there. ${w.gaps.length > 1 ? w.gaps.slice(1).join('. ') + '.' : ''}`, people: w.ps.sort(bySenior), act: {kind: 'unit', name: w.t.name}, ring: w.cov.score});
   } else cards.push({tone: 'amber', icon: 'target', title: 'Start a watchlist', body: 'Pick the companies you’re working. Home will tell you where you don’t know anyone senior yet.', people: [], act: {kind: 'units'}});
-  const anniv = A.filter(r => isAnniversary(r.d)).sort((a, b) => (a.d || '').localeCompare(b.d || ''));
+  let anniv = A.filter(r => isAnniversary(r.d)).sort((a, b) => (a.d || '').localeCompare(b.d || ''));
+  if (anniv.length > 15){ const y = new Date().getFullYear(); anniv = anniv.filter(r => (y - +r.d.slice(0, 4)) % 5 === 0); }
   if (anniv.length){ const y = new Date().getFullYear(); cards.push({tone: 'green', icon: 'cake', title: `${fmt(anniv.length)} connection ${anniv.length === 1 ? 'anniversary' : 'anniversaries'} this week`, body: 'An easy reason to say hello: ' + anniv.slice(0, 2).map(r => `${fullName(r)} (${y - +r.d.slice(0, 4)} ${y - +r.d.slice(0, 4) === 1 ? 'year' : 'years'})`).join(', ') + (anniv.length > 2 ? ` and ${anniv.length - 2} more.` : '.'), people: anniv, act: {kind: 'filter', sig: ['anniv']}}); }
   const quiet = A.filter(r => r.ed && r.ed.star && !r.ed.due && (!r.ed.updated || daysAgo(r.ed.updated) > 45));
   if (quiet.length) cards.push({tone: 'amber', icon: 'star', title: `Check in with ${fmt(quiet.length)} starred ${quiet.length === 1 ? 'person' : 'people'}`, body: 'You haven’t added a note in over six weeks: ' + names(quiet, 2) + '.', people: quiet, act: {kind: 'filter', sig: ['star']}});
@@ -859,6 +895,8 @@ function buildCards(){
   if (topInd.length) cards.push({tone: 'violet', icon: 'grid', title: `You know people in ${fmt(topInd.length)} industries${LENS_FED ? ' outside government' : ''}`, body: 'Biggest: ' + topInd.slice(0, 3).map(([k, n]) => `${k} (${fmt(n)})`).join(', ') + '.', people: [], act: {kind: 'industries'}, bars: topInd.slice(0, 7)});
   const uc = unclassifiedCompanies(S.all);
   if (uc.length){ const n = uc.reduce((a, [, v]) => a + v, 0); cards.push({tone: 'coral', icon: 'tag', title: `${fmt(uc.length)} ${uc.length === 1 ? 'company needs' : 'companies need'} an industry`, body: `${fmt(n)} ${n === 1 ? 'person isn’t' : 'people aren’t'} sorted yet. Biggest: ${uc.slice(0, 3).map(([c]) => c).join(', ')}. Pick an industry once per company and it sticks.`, people: [], act: {kind: 'industries'}}); }
+  const nNotes = Object.keys(S.edits).length;
+  if (S.mode === 'live' && nNotes >= 5 && daysSince(lastBackup()) > 30) cards.push({tone: 'green', icon: 'star', title: 'Back up your notes', body: `You have notes, stars or follow-ups on ${fmt(nNotes)} people. Save a backup file somewhere safe. It takes one tap.`, people: [], act: {kind: 'backup'}});
   if (LENS_FED){ const dod = A.filter(r => r.cl.seg === 'DoD & Military').length, vets = A.filter(r => r.cl.status === 'Veteran / Retired').length; cards.push({tone: 'sky', icon: 'pulse', title: `${fmt(A.length)} people across ${fmt(orgs.size)} organizations`, body: `${fmt(dod)} military and DoD, ${fmt(vets)} veterans, ${fmt(A.filter(r => r.cl.seg === 'Federal Civilian').length)} federal civilian. Open Clusters to see how they group.`, people: [], act: {kind: 'web'}}); }
   else cards.push({tone: 'sky', icon: 'pulse', title: `${fmt(A.length)} people across ${fmt(orgs.size)} companies`, body: 'Open Clusters to see who you know where, and replay how your network grew.', people: [], act: {kind: 'web'}});
   return cards;
@@ -894,6 +932,7 @@ function runCard(i){
   else if (a.kind === 'units'){ S.unitsMode = 'targets'; setTab('companies'); setTimeout(() => showAddTarget(), 250); }
   else if (a.kind === 'web'){ S.mapMode = 'web'; setTab('explore'); }
   else if (a.kind === 'industries'){ S.unitsMode = 'industries'; setTab('companies'); }
+  else if (a.kind === 'backup') backupNotes();
   else if (a.kind === 'filter'){ for (const k of Object.keys(F)) F[k] = F[k] instanceof Set ? new Set : (k === 'removed' ? false : ''); S.nl = null; S.nlChips = []; $('#q').value = ''; for (const s of a.sig || []) F.sig.add(s); render(); setTab('people'); }
 }
 
@@ -940,17 +979,19 @@ function sorted(){
     name: (a, b) => (a.l || '').localeCompare(b.l || '') || (a.f || '').localeCompare(b.f || ''),
     rank: (a, b) => b.cl.gn - a.cl.gn || (a.l || '').localeCompare(b.l || ''),
     level: (a, b) => a.cl.lv - b.cl.lv || b.cl.gn - a.cl.gn,
+    warm: (a, b) => b.wm.score - a.wm.score || ((b.rx && b.rx.t) || '').localeCompare((a.rx && a.rx.t) || ''),
   }[S.sort];
   return VIEW.slice().sort(by);
 }
 const avatar = (r, extra = '') => `<span class="av${r.ed && r.ed.star ? ' star' : ''}${extra}" style="--c:${personColor(r)}">${esc(initials(r))}</span>`;
 function personRow(r){
   const c = r.cl;
-  const flags = (r.isNew ? '<span class="flag new">New</span>' : '') + (r.movedNow ? '<span class="flag jc">New job</span>' : '') + (isDue(r) ? '<span class="flag due">Follow up</span>' : '') + (r.x ? '<span class="flag rm">Removed</span>' : '');
+  const flags = (r.isNew ? '<span class="flag new">New</span>' : '') + (r.movedNow ? '<span class="flag jc">New job</span>' : '') + (isDue(r) ? '<span class="flag due">Follow up</span>' : '') + (isWaiting(r) ? '<span class="flag wait">Reply</span>' : '') + (r.x ? '<span class="flag rm">Removed</span>' : '');
   const side = LENS_FED && c.grade ? `<span class="grade">${esc(c.grade)}</span><span class="psub">${esc(c.branch || c.status || '')}</span>`
     : LENS_FED && c.branch ? `<span class="psub">${esc(c.branch + (c.status ? ', ' + c.status : ''))}</span>`
     : c.ind !== UNCLASSIFIED ? `<span class="psub">${esc(indShort(c.ind))}</span>` : '';
-  return `<li><button type="button" class="person" data-open="${esc(r.k)}">${avatar(r)}<span class="pmain"><span class="pname">${esc(r.f)} ${esc(r.l)}${flags}</span><span class="ptitle">${esc(r.p || '—')}</span><span class="ptitle">${esc(r.c || '')}</span></span><span class="pside">${side}</span></button></li>`;
+  const warm = r.rx && r.rx.t ? `<span class="warm w-${r.wm.band}" title="${esc(BAND_LABEL[r.wm.band])}. Last message ${esc(ago(r.rx.t))}"><i></i>${esc(agoShort(r.rx.t))}</span>` : '';
+  return `<li><button type="button" class="person" data-open="${esc(r.k)}">${avatar(r)}<span class="pmain"><span class="pname">${esc(r.f)} ${esc(r.l)}${flags}</span><span class="ptitle">${esc(r.p || '—')}</span><span class="ptitle">${esc(r.c || '')}</span></span><span class="pside">${warm}${side}</span></button></li>`;
 }
 let peopleList = [];
 function renderPeople(reset){
@@ -983,7 +1024,8 @@ const Deck = (() => {
     const c = r.cl;
     const chips = (LENS_FED ? [c.seg, c.agency, c.branch && (c.grade ? `${c.branch} ${c.grade}` : c.branch), c.status, c.func] : [c.ind !== UNCLASSIFIED ? c.ind : '', c.sen, c.func, c.status === 'Veteran / Retired' ? 'Veteran' : '']).filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).slice(0, 5);
     const was = r.pv && r.pv[0] ? `<div class="was"><b style="color:var(--info)">New job.</b> Was ${esc(r.pv[0].p || 'unknown title')} at ${esc(r.pv[0].c || 'unknown company')}</div>` : r.isNew ? `<div class="was" style="background:var(--accent-soft)"><b style="color:var(--accent-ink)">New connection.</b> Connected ${niceDate(r.d)}</div>` : `<div class="was">Connected ${niceDate(r.d)}</div>`;
-    return `<article class="card ${cls}" data-k="${esc(r.k)}"><span class="stamp yes">Star</span><span class="stamp no">Skip</span>${avatar(r)}<div><h3>${esc(r.f)} ${esc(r.l)}</h3><div class="ct">${esc(r.p || '')}</div><div class="cc">${esc(r.c || '')}</div></div><div class="chips">${chips.map(x => `<span class="chip">${esc(x)}</span>`).join('')}</div>${was}</article>`;
+    const relLine = r.rx && r.rx.t ? `<div class="ct" style="font-size:14px">Last message ${esc(ago(r.rx.t))}, ${esc(BAND_LABEL[r.wm.band].toLowerCase())}</div>` : '';
+    return `<article class="card ${cls}" data-k="${esc(r.k)}"><span class="stamp yes">Star</span><span class="stamp no">Skip</span>${avatar(r)}<div><h3>${esc(r.f)} ${esc(r.l)}</h3><div class="ct">${esc(r.p || '')}</div><div class="cc">${esc(r.c || '')}</div>${relLine}</div><div class="chips">${chips.map(x => `<span class="chip">${esc(x)}</span>`).join('')}</div>${was}</article>`;
   }
   function render(){
     if (!queue.length || idx === 0) build();
@@ -1091,6 +1133,7 @@ function renderFilterSheet(update){
     <div class="fgroup"><h3><label for="fAgency">Agency or command</label></h3><select class="fsel" id="fAgency">${selectOpts('agency', r => r.cl.agency, F.agency, 'All agencies and commands')}</select></div>` : '';
   const html = head('Filters', 'Mix and match. The counts update as you go.') + `
     <div class="fgroup"><h3>Quick picks</h3><div class="chips">${sigList.map(([v, l]) => `<button type="button" class="chip${F.sig.has(v) ? ' on' : ''}${sigCounts[v] ? '' : ' zero'}" data-g="sig" data-v="${v}">${l}<em>${fmt(sigCounts[v] || 0)}</em></button>`).join('')}</div></div>
+    ${hasRel() ? `<div class="fgroup"><h3>How well you know them</h3>${facet('rel', Object.values(BAND_LABEL), r => BAND_LABEL[r.wm.band])}</div>` : ''}
     <div class="fgroup"><h3>Industry</h3>${facet('ind', INDUSTRIES.map(i => i.id), r => r.cl.ind)}</div>
     <div class="fgroup"><h3>Seniority</h3>${facet('sen', SENIORITY, r => r.cl.sen)}</div>
     <div class="fgroup"><h3>What they do</h3>${facet('func', FUNCS, r => r.cl.func)}</div>
@@ -1104,6 +1147,17 @@ function renderFilterSheet(update){
   else Sheet.open('filters', html);
 }
 
+function relSection(r){
+  const x = r.rx; if (!x) return hasRel() ? `<div class="rel"><div class="rel-top"><span class="rel-band w-none">No messages yet</span></div><p class="muted">You haven’t messaged ${esc(r.f)} on LinkedIn. A short hello is an easy start.</p></div>` : '';
+  const w = r.wm, parts = [];
+  if (x.m) parts.push(`${fmt(x.m)} ${x.m === 1 ? 'message' : 'messages'} since ${esc(niceDate(x.f))}`);
+  if (x.eg || x.er) parts.push(`${x.eg && x.er ? 'you endorsed each other' : x.eg ? 'you endorsed them' : 'they endorsed you'}`);
+  if (x.rg || x.rr) parts.push(x.rg && x.rr ? 'you recommended each other' : x.rg ? 'you wrote them a recommendation' : 'they wrote you a recommendation');
+  if (x.inv) parts.push(x.inv === 'o' ? `you invited them${x.invd ? ' on ' + esc(niceDate(x.invd)) : ''}` : 'they invited you');
+  const last = x.t ? `<p class="rel-last"><b>${x.dir === 'i' ? `${esc(r.f)} wrote you` : 'You wrote'} ${esc(ago(x.t))}</b>${x.dir === 'o' && x.i ? '' : ''}</p>${x.s ? `<blockquote>${esc(x.s)}</blockquote>` : ''}` : '';
+  const waiting = isWaiting(r) ? `<div class="due-note"><span style="flex:1"><b>Waiting on your reply.</b> Their last message hasn’t been answered.</span><button type="button" class="btn" data-replied="${esc(r.k)}">I replied</button></div>` : '';
+  return `<div class="rel"><div class="rel-top"><span class="rel-band w-${w.band}">${esc(BAND_LABEL[w.band])}</span><span class="rel-meter"><i style="width:${Math.max(4, w.score)}%"></i></span></div>${last}${parts.length ? `<p class="muted">${esc(parts.join(', ').replace(/^./, c => c.toUpperCase()))}.</p>` : ''}${x.invn ? `<p class="muted">Invite note: “${esc(x.invn)}”</p>` : ''}${waiting}</div>`;
+}
 function openProfile(k, {focusNotes, back} = {}){
   const r = S.all.find(x => x.k === k); if (!r) return;
   Peek.hide();
@@ -1117,7 +1171,7 @@ function openProfile(k, {focusNotes, back} = {}){
     ? `<div class="due-note"><span style="flex:1">${due <= TODAY ? '<b>Follow up now.</b> ' : ''}You planned to follow up ${due <= TODAY ? 'on' : 'on'} <b>${esc(niceDate(due))}</b>.</span><button type="button" class="btn" data-follow="${esc(k)}|0">Done</button></div>`
     : `<div class="follow">${[[7, 'In a week'], [14, 'In 2 weeks'], [30, 'In a month'], [90, 'In 3 months']].map(([n, l]) => `<button type="button" data-follow="${esc(k)}|${n}">${l}</button>`).join('')}</div>`;
   const fedRows = LENS_FED ? `
-      <dt>Segment</dt><dd><span style="color:${segColor(c.seg)}">●</span> ${esc(c.seg)}</dd>
+      ${c.seg !== 'Other Commercial' ? `<dt>Segment</dt><dd><span style="color:${segColor(c.seg)}">●</span> ${esc(c.seg)}</dd>` : ''}
       ${c.branch || c.status ? `<dt>Service</dt><dd>${esc([c.branch, c.status].filter(Boolean).join(', '))}</dd>` : ''}
       ${c.grade ? `<dt>Rank</dt><dd>${c.rank && c.rank !== c.grade ? esc(c.rank) + ' ' : ''}<span class="grade">${esc(c.grade)}</span></dd>` : ''}
       ${c.agency ? `<dt>Agency or command</dt><dd>${esc(c.agency)}</dd>` : ''}` : (c.status === 'Veteran / Retired' ? `<dt>Service</dt><dd>${esc([c.branch, 'Veteran'].filter(Boolean).join(' '))}</dd>` : '');
@@ -1125,10 +1179,11 @@ function openProfile(k, {focusNotes, back} = {}){
     ${back ? `<button type="button" class="backlink" data-unit="${esc(back)}">${ICON.back}${esc(back)}</button>` : ''}
     <div class="sh-head"><div class="prof-top">${avatar(r)}<div><h2>${esc(r.f)} ${esc(r.l)}</h2><p>${esc(r.p || '')}</p>${r.c ? `<p style="color:var(--ink);font-weight:600">${esc(r.c)}</p>` : ''}</div></div><button type="button" class="x" data-act="close" aria-label="Close">${ICON.x}</button></div>
     <div class="row"><button type="button" class="btn${ed.star ? ' accent' : ''}" data-act="toggle-star" data-k="${esc(k)}">${ed.star ? '★ Starred' : '☆ Star'}</button>${link}${r.e ? `<button type="button" class="btn" data-copy="${esc(r.e)}">Copy email</button>` : ''}${r.c ? `<button type="button" class="btn ghost" data-unit="${esc(r.c)}">More at ${esc(r.c.length > 18 ? r.c.slice(0, 17) + '…' : r.c)}</button>` : ''}</div>
+    ${relSection(r)}
     <h3 class="sect">Follow up</h3>
     ${follow}
     <dl class="kv">
-      <dt>Industry</dt><dd><span style="color:${indColor(c.ind)}">●</span> ${esc(c.ind)}${c.indHow === 'you' ? ' <span class="muted">(set by you)</span>' : ''}</dd>
+      <dt>Industry</dt><dd><span style="color:${indColor(c.ind)}">●</span> ${esc(c.ind)}${c.indHow === 'you' ? ' <span class="muted">(set by you)</span>' : c.indHow === 'guess' ? ' <span class="muted">(best guess from the company name)</span>' : ''}</dd>
       <dt>Seniority</dt><dd>${esc(c.sen)}</dd>
       <dt>Role</dt><dd>${esc(c.func)}</dd>${fedRows}
       ${c.certs.length || (LENS_FED && c.clr) ? `<dt>Certifications</dt><dd>${esc(c.certs.join(', ') || '—')}${LENS_FED && c.clr ? ', clearance mentioned' : ''}</dd>` : ''}
@@ -1179,7 +1234,7 @@ async function handleFile(file){
     const rows = await readFile(file);
     const plan = mergeImport(rows, S.mode === 'live' ? S.all : null, S.mode === 'live' ? S.meta : null); S.pending = plan;
     const st = plan.stats;
-    $('#impOut').innerHTML = `<div class="diff"><div><div class="v">${fmt(st.total)}</div><div class="l">Connections</div></div><div><div class="v" style="color:var(--bad)">${fmt(st.added)}</div><div class="l">${st.first ? 'Loaded' : 'New'}</div></div><div><div class="v" style="color:var(--info)">${fmt(st.changed)}</div><div class="l">Job changes</div></div><div><div class="v">${fmt(st.removed)}</div><div class="l">No longer listed</div></div></div><div class="row" style="margin-top:14px"><button type="button" class="btn primary block" data-act="commit">Save to my network</button></div>`;
+    $('#impOut').innerHTML = `<div class="diff"><div><div class="v">${fmt(st.total)}</div><div class="l">Connections</div></div><div><div class="v" style="color:var(--bad)">${fmt(st.added)}</div><div class="l">${st.first ? 'Loaded' : 'New'}</div></div><div><div class="v" style="color:var(--info)">${fmt(st.changed)}</div><div class="l">Job changes</div></div><div><div class="v">${fmt(st.removed)}</div><div class="l">No longer listed</div></div>${st.rel != null ? `<div style="grid-column:1/-1"><div class="v" style="color:var(--violet)">${fmt(st.rel)}</div><div class="l">people with messages, invitations or endorsements</div></div>` : ''}</div>${st.rel == null ? '<p class="muted" style="margin-top:10px">Tip: request the full LinkedIn archive (not just Connections) to see who you talk to and who’s waiting on a reply.</p>' : ''}<div class="row" style="margin-top:14px"><button type="button" class="btn primary block" data-act="commit">Save to my network</button></div>`;
     $('#impMsg').textContent = `Read ${fmt(rows.length)} rows from ${file.name}.`;
   } catch (e) { $('#impOut').innerHTML = `<p class="err">${esc(e.message || String(e))}</p>`; $('#impMsg').textContent = ''; }
 }
@@ -1189,7 +1244,7 @@ async function commitImport(){
   try {
     const wasSample = S.mode === 'sample';
     await persist(plan); S.mode = 'live';
-    if (wasSample){ S.edits = {}; S.review = {}; S.targets = []; S.coInd = {}; await saveEdits(); await saveReview(); }
+    if (wasSample){ S.edits = {}; S.review = {}; S.targets = []; S.coInd = Object.create(null); await saveEdits(); await saveReview(); }
     S.meta = plan.meta; hydrate(plan.rows); S.pending = null; Deck.reset();
     Onboard.done(); applyLens(); render(); fx.success(); scheduleReminders();
     const st = plan.stats;
@@ -1249,6 +1304,8 @@ function showMenu(){
     <div class="card-box">
       <div class="set-row"><span>${S.mode === 'live' ? 'Refresh connections' : 'Import connections'}<small>${S.mode === 'live' && S.meta && S.meta.lastImport ? 'Last refreshed ' + niceDate(S.meta.lastImport) : 'From your LinkedIn export'}</small></span><button type="button" class="btn" data-act="import">${S.mode === 'live' ? 'Refresh' : 'Import'}</button></div>
       <div class="set-row"><span>Export<small>What you’re looking at, as a spreadsheet</small></span><button type="button" class="btn" data-act="export">Export</button></div>
+      <div class="set-row"><span>Back up your notes<small>Stars, notes, follow-ups, corrections and watchlist in one file${lastBackup() ? '. Last backup ' + esc(niceDate(lastBackup())) : ''}</small></span><button type="button" class="btn" data-act="backup">Back up</button></div>
+      <div class="set-row"><span>Restore from a backup<small>Adds back anything missing. Your newer changes are kept.</small></span><button type="button" class="btn ghost" data-act="restore">Restore</button></div>
       <div class="set-row"><span>Saved to<small>${esc(where)}</small></span></div>
       <div class="set-row"><span>Welcome tour</span><button type="button" class="btn ghost" data-act="onboard">Show again</button></div>
     </div>
@@ -1269,7 +1326,7 @@ darkMQ.addEventListener && darkMQ.addEventListener('change', () => { if (prefs.t
 function autoLens(){
   const A = S.all.filter(r => !r.x); if (!A.length) return false;
   const fed = A.filter(r => r.cl.seg === 'DoD & Military' || r.cl.seg === 'Federal Civilian' || r.cl.status === 'Veteran / Retired' || r.cl.branch).length;
-  return fed / A.length >= 0.12;
+  return fed >= 60 || fed / A.length >= 0.04;
 }
 function applyLens(){
   const on = prefs.lens == null ? autoLens() : !!prefs.lens;
@@ -1348,6 +1405,42 @@ const Onboard = (() => {
   return {show, done, get open(){ return !el.hidden; }};
 })();
 
+/* ---------- backup and restore ---------- */
+async function saveFile(name, text, type){
+  if (NATIVE){ const w = await Filesystem.writeFile({path: name, data: text, directory: Directory.Cache, encoding: Encoding.UTF8}); await Share.share({title: name, files: [w.uri], dialogTitle: 'Save your backup'}); }
+  else { const url = URL.createObjectURL(new Blob([text], {type})); const a = document.createElement('a'); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 2000); }
+}
+const lastBackup = () => { try { return localStorage.getItem('oob.backup') || ''; } catch { return ''; } };
+async function backupNotes(){
+  const data = {app: 'order-of-battle', kind: 'notes-backup', version: 1, created: new Date().toISOString(), edits: S.edits, targets: S.targets, companies: S.coInd, review: S.review};
+  const n = Object.keys(S.edits).length;
+  try {
+    await saveFile(`order-of-battle-notes-${TODAY}.json`, JSON.stringify(data), 'application/json');
+    try { localStorage.setItem('oob.backup', TODAY); } catch {}
+    fx.success(); toast(`Backed up notes for ${fmt(n)} ${n === 1 ? 'person' : 'people'}`);
+  } catch (e) { if (!/cancel/i.test((e && e.message) || '')) toast('Backup failed: ' + ((e && e.message) || 'unknown error')); }
+}
+async function restoreNotes(file){
+  try {
+    const data = JSON.parse(await file.text());
+    if (!data || data.kind !== 'notes-backup' || typeof data.edits !== 'object') throw new Error('That isn’t an Order of Battle backup file.');
+    let added = 0, kept = 0;
+    for (const [k, e] of Object.entries(data.edits || {})){
+      const cur = S.edits[k];
+      if (!cur){ S.edits[k] = e; added++; }
+      else if ((e.updated || '') > (cur.updated || '')){ S.edits[k] = Object.assign({}, cur, e); added++; }
+      else kept++;
+    }
+    for (const t of data.targets || []) if (t && t.name && !S.targets.some(x => x.name === t.name)) S.targets.push(t);
+    for (const [k, v] of Object.entries(data.companies || {})) if (!Object.hasOwn(S.coInd, k)) S.coInd[k] = v;
+    for (const [k, v] of Object.entries(data.review || {})) if (!Object.hasOwn(S.review, k)) S.review[k] = v;
+    hydrate(S.all.map(stripRow));
+    if (S.mode === 'live'){ await saveEdits(); saveReview(); saveTargets(); saveIndustries(); }
+    render(); Sheet.close(); fx.success();
+    toast(`Restored ${fmt(added)} ${added === 1 ? 'person’s notes' : 'people’s notes'}${kept ? `, kept ${fmt(kept)} newer` : ''}`);
+  } catch (e) { toast(`Couldn’t restore: ${(e && e.message) || 'unknown error'}`); }
+}
+
 /* ---------- toast, export ---------- */
 let toastT = 0;
 function toast(msg){ const t = $('#toast'); t.textContent = msg; t.hidden = false; t.style.animation = 'none'; void t.offsetWidth; t.style.animation = ''; clearTimeout(toastT); toastT = setTimeout(() => { t.hidden = true; }, 3200); }
@@ -1398,7 +1491,7 @@ async function loadStore(opts = {}){
     if (!n.data || !n.data.rows){ render(); return; }
     const [e, rv, tg, ci] = await Promise.all([Store.read('edits.json'), Store.read('review.json'), Store.read('targets.json').catch(() => ({})), Store.read('industries.json').catch(() => ({}))]);
     S.targets = (tg && tg.data && tg.data.targets) || [];
-    S.coInd = (ci && ci.data && ci.data.companies) || {};
+    S.coInd = Object.assign(Object.create(null), (ci && ci.data && ci.data.companies) || {});
     const nextEdits = (e.data && e.data.edits) || {}, nextReview = (rv.data && rv.data.review) || {};
     if (opts.onlyIfChanged && S.mode === 'live' && n.data.meta && n.data.meta.rev === S.rev && JSON.stringify(nextEdits) === JSON.stringify(S.edits)){ S.review = nextReview; return; }
     S.edits = nextEdits; S.review = nextReview;
@@ -1447,6 +1540,7 @@ document.addEventListener('click', async e => {
   if (d.map){ if (d.map !== S.mapMode) setMapMode(d.map); return; }
   if (d.themePick){ prefs.theme = d.themePick; savePrefs(); applyTheme(); fx.select(); $$('[data-theme-pick]').forEach(b => b.setAttribute('aria-checked', String(b.dataset.themePick === prefs.theme))); return; }
   if (d.follow){ const [k, n] = d.follow.split('|'); setFollowUp(k, +n); return; }
+  if (d.replied){ const r = S.all.find(x => x.k === d.replied); if (r && r.rx){ fx.success(); await setEdit(r.k, {replied: r.rx.t}); toast('Marked as replied'); openProfile(r.k); } return; }
   if (d.units){ S.unitsMode = d.units; fx.select(); try { localStorage.setItem('oob.units', d.units); } catch {} renderUnits(); return; }
   if (d.card !== undefined){ runCard(+d.card); return; }
   if (d.addTarget){ toggleTarget(d.addTarget); showAddTarget($('#targetQ') ? $('#targetQ').value : ''); return; }
@@ -1480,12 +1574,15 @@ document.addEventListener('click', async e => {
     case 'import': showImport(); return;
     case 'commit': commitImport(); return;
     case 'export': exportView(); return;
+    case 'backup': backupNotes(); return;
+    case 'restore': $('#restoreFile').click(); return;
     case 'add-target': fx.tap(); showAddTarget(); return;
     case 'open-linkedin': fx.tap(); openLink(LINKEDIN_EXPORT_URL); return;
     case 'go-explore': Sheet.close(); S.mapMode = 'web'; setTab('explore'); return;
     case 'menu': showMenu(); return;
     case 'onboard': Sheet.close(); Onboard.show(); return;
     case 'ind-gov': S.indGov = !S.indGov; fx.select(); renderIndustries(); return;
+    case 'guess-more': S.guessShown = (S.guessShown || 15) + 25; renderIndustries(); return;
     case 'unc-more': S.uncShown = (S.uncShown || 25) + 25; renderIndustries(); return;
     case 'deck-star': Deck.decide('star'); return;
     case 'deck-skip': Deck.decide('skip'); return;
@@ -1509,6 +1606,7 @@ document.addEventListener('change', e => {
   else if (t.id === 'pNotify'){ prefs.notify = t.checked; savePrefs(); fx.select(); if (t.checked) askNotify(); scheduleReminders(); }
   else if (t.id === 'pSound'){ prefs.sound = t.checked; savePrefs(); fx.select(); }
   else if (t.id === 'file' && t.files[0]){ handleFile(t.files[0]); t.value = ''; }
+  else if (t.id === 'restoreFile' && t.files[0]){ restoreNotes(t.files[0]); t.value = ''; }
 });
 document.addEventListener('input', e => {
   const t = e.target;

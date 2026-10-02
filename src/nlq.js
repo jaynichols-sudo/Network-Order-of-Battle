@@ -45,6 +45,9 @@ const SIG = [
   [/\b(starred|favorites?|stars?|shortlist)\b/, 'star'],
   [/\b(cleared|clearances?|ts\/sci|top secret)\b/, 'clr'],
   [/\b(anniversar(?:y|ies))\b/, 'anniv'],
+  [/\b(waiting(?: on (?:me|my reply|a reply))?|unanswered|owe (?:a )?repl(?:y|ies)|need(?:s)? a reply)\b/, 'waiting'],
+  [/\b(going cold|gone cold|cold|lost touch|haven'?t talked|out of touch)\b/, 'cold'],
+  [/\b(never messaged|never talked|no messages)\b/, 'never'],
 ];
 const TIER = [
   [/\b(flag officers?|generals?|admirals?|flags?|stars? and up)\b/, 'Flag / General'],
@@ -97,7 +100,7 @@ const STOP = /\b(in|at|and|or|the|of|with|who|are|people|contacts?|connections?|
 
 export function parseQuery(text, agencies = []){
   let t = ' ' + text.toLowerCase().replace(/[“”"]/g, ' ') + ' ';
-  const nl = {branch: [], seg: [], func: [], status: [], sig: [], tier: [], sen: [], agency: [], ind: [], minGrade: 0, grades: []};
+  const nl = {rel: [], branch: [], seg: [], func: [], status: [], sig: [], tier: [], sen: [], agency: [], ind: [], minGrade: 0, grades: []};
   const chips = [];
   const take = (re, fn) => { t = t.replace(new RegExp(re.source, 'g'), (...m) => { fn(m); return ' '; }); };
   // grades first so "o-5+" is not split
@@ -114,8 +117,9 @@ export function parseQuery(text, agencies = []){
     const up = m[m.length - 3];
     if (up){ nl.minGrade = Math.max(nl.minGrade, gradeNum(g)); chips.push(`${g} and up`); } else { nl.grades.push(g); chips.push(g); }
   });
-  const sets = [[IND, 'ind'], [TIER, 'tier'], [SEN, 'sen'], [BRANCH, 'branch'], [STATUS, 'status'], [SIG, 'sig'], [FUNC, 'func'], [SEG, 'seg']];
-  const SIGLABEL = {new: 'New', jc: 'Moved jobs', star: 'Starred', clr: 'Clearance', anniv: 'Anniversaries'};
+  const REL = [[/\b(close(?:st)?|strong(?:est)? (?:ties|relationships?)|inner circle|best contacts)\b/, 'Close'], [/\b(warm(?: contacts| intros?)?)\b/, 'Warm']];
+  const sets = [[REL, 'rel'], [IND, 'ind'], [TIER, 'tier'], [SEN, 'sen'], [BRANCH, 'branch'], [STATUS, 'status'], [SIG, 'sig'], [FUNC, 'func'], [SEG, 'seg']];
+  const SIGLABEL = {new: 'New', jc: 'Moved jobs', star: 'Starred', clr: 'Clearance', anniv: 'Anniversaries', waiting: 'Waiting on you', cold: 'Going cold', never: 'Never messaged'};
   for (const [list, key] of sets){
     for (const [re, val] of list){
       let hit = false; take(re, () => { hit = true; });
@@ -141,6 +145,7 @@ export function matchNL(nl, r){
   if (nl.tier.length && !nl.tier.includes(c.tier)) return false;
   if (nl.sen.length && !nl.sen.includes(c.sen)) return false;
   if (nl.agency.length && !nl.agency.includes(c.agency)) return false;
+  if (nl.rel && nl.rel.length){ const b = r.wm && {strong: 'Close', warm: 'Warm'}[r.wm.band]; if (!b || !(nl.rel.includes(b) || (b === 'Close' && nl.rel.includes('Warm')))) return false; }
   if (nl.ind && nl.ind.length){
     const want = nl.ind.filter(x => x !== '__private');
     const priv = nl.ind.includes('__private') && c.ind !== 'Government & Military';

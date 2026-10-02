@@ -26,6 +26,7 @@ export const INDUSTRIES = [
   {id: 'Travel & Hospitality', short: 'Travel', color: '#F2C14E'},
   {id: 'Retail, Consumer & Food', short: 'Retail & Food', color: '#F28C9B'},
   {id: 'Media & Marketing', short: 'Media', color: '#E57CD8'},
+  {id: 'Sports & Entertainment', short: 'Sports & Ent', color: '#2FB7A8'},
   {id: 'Real Estate', short: 'Real Estate', color: '#B5C99A'},
   {id: 'Nonprofit & Associations', short: 'Nonprofit', color: '#9CCFD8'},
   {id: 'Self-Employed & Startups', short: 'Self-employed', color: '#FFB547'},
@@ -59,9 +60,22 @@ const COMPANY_RULES = [
   ['Transportation & Logistics', W(String.raw`logistics|freight|trucking|transport\w*|airlines?|airways|aviation|air lines|Delta Air|American Airlines|United Airlines|Southwest|JetBlue|Alaska Airlines|FedEx|UPS|United Parcel|DHL|Maersk|Norfolk Southern|CSX|Union Pacific|BNSF|Amtrak|railroad|railway|rail|shipping|maritime|port of|supply chain|moving company|XPO|J\.?B\.? Hunt|Old Dominion Freight|Ryder|Penske|Werner|Schneider National|C\.?H\.? Robinson|Landstar|Estes|Saia|courier|airport`)],
   ['Travel & Hospitality', W(String.raw`travel|hotels?|hospitality|resorts?|Marriott|Hilton|Hyatt|IHG|Wyndham|Choice Hotels|Best Western|Expedia|Booking\.com|Booking Holdings|Airbnb|Vrbo|cruises?|Carnival|Royal Caribbean|Norwegian Cruise|tourism|Destinara|vacations?|restaurants?|catering|dining|Disney Parks|theme parks?|golf club|country club`)],
   ['Retail, Consumer & Food', W(String.raw`retail\w*|Walmart|Target Corporation|Costco|Home Depot|Lowe.?s|Kroger|Publix|Food Lion|Harris Teeter|Amazon|Best Buy|Nike|Procter|P&G|PepsiCo|Coca-Cola|Coca Cola|Unilever|Kraft|Heinz|General Mills|Kellogg|Mars Wrigley|Nestl[eé]|Tyson|Smithfield|Cargill|ADM|Archer Daniels|Hanesbrands|VF Corporation|Ralph Lauren|Krispy Kreme|Bojangles|Cheerwine|Dollar General|Dollar Tree|Family Dollar|Sherwin-Williams|consumer|brands|apparel|stores|grocer\w*|foods?|beverages?|brewing|brewery|winery|distillery|bakery|farms?|agri\w*|e-?commerce|wholesale`)],
-  ['Media & Marketing', W(String.raw`media|marketing|advertising|creative|publishing|publications?|news|broadcast\w*|television|TV|radio|studios?|entertainment|public relations|PR firm|communications group|digital agency|branding|podcast\w*|magazine|Gannett|iHeart|Sinclair|Nexstar|Warner|Paramount|NBCUniversal|Fox|CNN|Omnicom|WPP|Publicis|Interpublic`)],
+  ['Media & Marketing', W(String.raw`media|marketing|advertising|creative|publishing|publications?|news|broadcast\w*|television|TV|radio|public relations|PR firm|communications group|digital agency|branding|podcast\w*|magazine|Gannett|iHeart|Sinclair|Nexstar|Warner|Paramount|NBCUniversal|Fox|CNN|Omnicom|WPP|Publicis|Interpublic`)],
   ['Real Estate', W(String.raw`real estate|realty|realtors?|properties|property management|homes|home builders?|Keller Williams|RE/MAX|Coldwell Banker|Century 21|Berkshire Hathaway HomeServices|eXp Realty|Compass Real Estate|CBRE|JLL|Cushman|Colliers|Lennar|D\.?R\.? Horton|Pulte|NVR|Toll Brothers|apartments|communities|land company|HOA|homeowners association`)],
+  ['Sports & Entertainment', W(String.raw`sports?|hockey|football|soccer|futbol|baseball|basketball|golf|racing|motorsports?|speedway|league|NHL|NFL|NBA|MLB|MLS|NASCAR|PGA|LPGA|WWE|UFC|athletics|arena|stadium|entertainment|studios?|records|music|productions?|films?|pictures|theat(?:er|re)|playhouse|gaming|esports|concerts?|Live Nation|Ticketmaster|Disney|Universal Music|Sony Music|Warner Music|Hurricanes|Blue Jackets|Panthers|Titans|Lightning|Maple Leafs|Roadrunners|Predators|Capitals|Bruins|Rangers|Islanders|Devils|Flyers|Penguins|Sabres|Red Wings|Blackhawks|Avalanche|Stars|Wild|Jets|Oilers|Flames|Canucks|Kraken|Golden Knights|Coyotes|Ducks|Kings|Sharks|Senators|Canadiens|Blues|Hornets|Charlotte FC|Bulls|Durham Bulls|Grasshoppers|Carolina Mudcats|Buccaneers|Rays|Magic|Dolphins|Jaguars|Falcons|Braves|Hawks|Saints|Pelicans|Cowboys|Mavericks|Texans|Astros|Rockets|Packers|Bears|Vikings|Lions|Browns|Bengals|Steelers|Ravens|Commanders|Eagles|Giants|Yankees|Mets|Red Sox|Celtics|Patriots|Seahawks|Mariners|49ers|Warriors|Lakers|Clippers|Chargers|Dodgers|Raiders|Broncos|Chiefs|Royals|Colts|Pacers|Reds|Cardinals|Cubs|Brewers|Twins|Tigers|Pistons|Cavaliers|Guardians|Thunder|Spurs|Suns|Diamondbacks|Nuggets|Rockies|Jazz|Trail Blazers|Timberwolves|Grizzlies|Heat|Marlins|Nationals|Orioles|Phillies|76ers|Sixers|Knicks|Nets|Raptors|Blue Jays|Athletics|Padres`)],
   ['Nonprofit & Associations', W(String.raw`foundation|non-?profit|association|society|council|church|ministr(?:y|ies)|charit\w*|Red Cross|USO|Wounded Warrior|VFW|American Legion|Fisher House|Habitat for Humanity|United Way|Salvation Army|YMCA|Boy Scouts|Girl Scouts|AFCEA|NDIA|AUSA|Navy League|Marine Corps Association|MOAA|ISA|ISC2|ISACA|InfraGard|Chamber of Commerce|Rotary|Kiwanis|Lions Club|fellowship|alliance for|coalition|institute for|volunteer\w*`)],
+];
+
+// Last-resort hints from common words in company names.
+const GENERIC_RULES = [
+  ['Cybersecurity', W(String.raw`security|secure|cyber\w*|infosec|privacy`)],
+  ['Software & Cloud', W(String.raw`software|soft|saas|cloud|apps?|labs?|digital|data|analytics|ai|a\.i\.|technolog(?:y|ies)|tech|\w+tech|\w+ware|\w+\.ai|\w+\.io|platforms?|systems,? inc|computing|automation|robotics|io`)],
+  ['Hardware, Telecom & Networking', W(String.raw`networks?|communications?|telecom\w*|wireless|connect\w*|electronics|semiconductors?|devices|mobile|cellular`)],
+  ['Financial Services', W(String.raw`capital|ventures?|holdings|investments?|equity|financial|finance|wealth|fund|bank|lending|credit`)],
+  ['IT Services & Consulting', W(String.raw`consult\w*|advisors?|advisory|strateg(?:y|ies)|solutions|partners|associates|coaching|training|leadership|services group|management group|business solutions|outsourcing|bpo|research`)],
+  ['Engineering & Construction', W(String.raw`engineering|engineers|builders?|construction|contractors?|design build|architects?`)],
+  ['Industrial & Manufacturing', W(String.raw`industries|industrial|manufactur\w*|machin\w*|products,? inc|equipment|supply|supplies|materials|chemicals?|plastics|packaging|metals?|tools`)],
+  ['Media & Marketing', W(String.raw`marketing|media|agency|advertising|design|creative|brand\w*|content|events?|pr`)],
 ];
 
 // Fallbacks from the title when the company didn't say enough.
@@ -76,6 +90,9 @@ const TITLE_RULES = [
   ['Nonprofit & Associations', /\b(pastor|chaplain|minister|volunteer|board member)\b/i],
   ['Travel & Hospitality', /\b(travel advisor|travel agent|hotel|hospitality|chef)\b/i],
   ['Media & Marketing', /\b(journalist|reporter|editor|producer|photographer|podcast\w*|author)\b/i],
+  ['Financial Services', /\b(financial advisor|wealth advisor|loan officer|mortgage|banker|investment|portfolio manager|underwriter)\b/i],
+  ['Software & Cloud', /\b(saas|software|cloud|platform|devops|developer|full[- ]stack|product manager)\b/i],
+  ['Cybersecurity', /\b(cyber\w*|security|ciso|infosec|soc analyst|penetration|threat)\b/i],
 ];
 
 const SEG_TO_IND = {
@@ -89,6 +106,15 @@ const SEG_TO_IND = {
 const GOV_SEGS = new Set(['DoD & Military', 'Federal Civilian', 'State & Local']);
 
 let companyMap = {};
+import { KNOWN } from './companies.js';
+const SUFFIX = /\s+(inc|llc|l l c|ltd|limited|corp|corporation|co|company|plc|gmbh|ag|sa|lp|llp|pllc|pc|group|holdings|international|intl|usa|us|na|america|americas|global|worldwide)$/;
+function knownIndustry(key){
+  let k = key;
+  for (let i = 0; i < 4 && k; i++){ if (Object.hasOwn(KNOWN, k)) return KNOWN[k]; const nk = k.replace(SUFFIX, ''); if (nk === k) break; k = nk; }
+  const first = key.split(' ').slice(0, 2).join(' ');
+  if (first !== key && Object.hasOwn(KNOWN, first)) return KNOWN[first];
+  return '';
+}
 export const companyKey = c => String(c || '').toLowerCase().replace(/[^a-z0-9&]+/g, ' ').trim();
 export function setIndustryOverrides(map){ companyMap = map || {}; }
 
@@ -96,11 +122,15 @@ export function setIndustryOverrides(map){ companyMap = map || {}; }
 export function inferIndustry({c, p, seg, status, vet}, personOverride){
   if (personOverride) return {ind: personOverride, how: 'you'};
   const co = c || '', key = companyKey(co);
-  if (key && companyMap[key]) return {ind: companyMap[key], how: 'you'};
+  if (key && Object.hasOwn(companyMap, key)) return {ind: companyMap[key], how: 'you'};
   if (GOV_SEGS.has(seg)) return {ind: GOV_IND, how: 'gov'};
+  const known = knownIndustry(key);
+  if (known) return {ind: known, how: 'company'};
   if (co) for (const [ind, rx] of COMPANY_RULES) if (rx.test(co)) return {ind, how: 'company'};
   if (SEG_TO_IND[seg]) return {ind: SEG_TO_IND[seg], how: 'segment'};
-  for (const [ind, rx] of TITLE_RULES) if (rx.test(p || '')) return {ind, how: 'title'};
+  for (const [ind, rx] of TITLE_RULES.slice(0, -3)) if (rx.test(p || '')) return {ind, how: 'title'};
+  if (co) for (const [ind, rx] of GENERIC_RULES) if (rx.test(co)) return {ind, how: 'guess'};
+  for (const [ind, rx] of TITLE_RULES.slice(-3)) if (rx.test(p || '')) return {ind, how: 'title'};
   if (!co && (vet || status === 'Veteran / Retired') && !p) return {ind: 'Retired or Between Roles', how: 'title'};
   return {ind: UNCLASSIFIED, how: ''};
 }

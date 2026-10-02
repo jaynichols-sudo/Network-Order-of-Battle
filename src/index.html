@@ -73,6 +73,7 @@
           <p id="peopleCount"></p>
           <div class="seg-ctl" id="sortCtl" role="radiogroup" aria-label="Sort people">
             <button type="button" data-sort="new">Recent</button>
+            <button type="button" data-sort="warm" class="rel-only">Closest</button>
             <button type="button" data-sort="level">Seniority</button>
             <button type="button" data-sort="rank" class="lens-fed">Rank</button>
             <button type="button" data-sort="name">A–Z</button>
@@ -177,6 +178,7 @@
 <div class="peek" id="peek" hidden></div>
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 <input type="file" id="file" accept=".csv,.zip,text/csv,application/zip" hidden>
+<input type="file" id="restoreFile" accept=".json,application/json" hidden>
 <script src="app.js"></script>
 </body>
 </html>
