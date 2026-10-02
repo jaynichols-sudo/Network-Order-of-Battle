@@ -8,6 +8,7 @@ struct IndustriesList: View {
 
     var body: some View {
         List {
+            CompaniesModePicker()
             if let d = data {
                 Section {
                     HStack {

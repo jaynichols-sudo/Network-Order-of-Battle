@@ -94,7 +94,7 @@ struct Avatar: View {
         ZStack {
             Circle().fill(person.tint.opacity(0.18))
             Text(person.initials)
-                .font(Theme.geist(.subheadline, .semibold))
+                .font(.custom("Geist-SemiBold", fixedSize: size * 0.36))
                 .foregroundStyle(person.tint)
                 .minimumScaleFactor(0.5)
         }

@@ -93,11 +93,31 @@ jobs:
             xcrun simctl ui $dev appearance dark
             shoot $dev $p-12-home-dark
             shoot $dev $p-13-people-dark -startTab people
+            xcrun simctl terminate $dev com.jaynichols.networkoob >/dev/null 2>&1 || true
             xcrun simctl launch $dev com.jaynichols.networkoob -onboarded NO >/dev/null; sleep 6
             xcrun simctl io $dev screenshot "shots/$p-00-welcome-dark.png" >/dev/null 2>&1
             xcrun simctl ui $dev appearance light
             xcrun simctl shutdown $dev || true
           done
+          # Apple Watch: install the watch app on its own and feed it the sample snapshot
+          WATCH=$(pick 'Apple Watch Series (1[0-9]) \(46mm\)|Apple Watch Ultra.*')
+          WAPP="$APP/Watch/Bearings.app"
+          if [ -n "$WATCH" ] && [ -d "$WAPP" ]; then
+            node scripts/watch-sample.mjs watch-sample.json
+            xcrun simctl boot $WATCH || true
+            xcrun simctl bootstatus $WATCH -b >/dev/null
+            xcrun simctl install $WATCH "$WAPP"
+            xcrun simctl launch $WATCH com.jaynichols.networkoob.watchkitapp >/dev/null; sleep 4
+            xcrun simctl terminate $WATCH com.jaynichols.networkoob.watchkitapp || true
+            C=$(xcrun simctl get_app_container $WATCH com.jaynichols.networkoob.watchkitapp data)
+            mkdir -p "$C/Documents" && cp watch-sample.json "$C/Documents/snapshot.json"
+            wshot() { xcrun simctl terminate $WATCH com.jaynichols.networkoob.watchkitapp >/dev/null 2>&1 || true; xcrun simctl launch $WATCH com.jaynichols.networkoob.watchkitapp "$@" >/dev/null; sleep 6; }
+            wshot; xcrun simctl io $WATCH screenshot shots/watch-01-home.png
+            wshot -watchOpen waiting; xcrun simctl io $WATCH screenshot shots/watch-02-waiting.png
+            wshot -watchOpen person; xcrun simctl io $WATCH screenshot shots/watch-03-person.png
+          else
+            echo "no watch simulator ($WATCH) or watch app ($WAPP)"; ls "$APP" || true
+          fi
           ls shots
       - name: Publish screenshots to the ci-screens branch
         continue-on-error: true

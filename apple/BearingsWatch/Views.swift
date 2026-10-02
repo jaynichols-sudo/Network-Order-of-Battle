@@ -2,11 +2,17 @@ import SwiftUI
 
 // MARK: home
 
+enum WatchRoute: Hashable {
+    case section(WatchSection)
+    case person(String)
+}
+
 struct RootView: View {
     @EnvironmentObject var store: WatchStore
+    @State private var path: [WatchRoute] = []
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             Group {
                 if store.snap == nil {
                     EmptyStateView()
@@ -15,13 +21,21 @@ struct RootView: View {
                 }
             }
             .navigationTitle("Bearings")
-            .navigationDestination(for: WatchSection.self) { s in
-                PeopleList(section: s)
-            }
-            .navigationDestination(for: WatchPerson.self) { p in
-                PersonView(k: p.k)
+            .navigationDestination(for: WatchRoute.self) { r in
+                switch r {
+                case .section(let s): PeopleList(section: s)
+                case .person(let k): PersonView(k: k)
+                }
             }
             .containerBackground(Palette.plum.gradient, for: .navigation)
+        }
+        .onAppear {
+            // used by CI screenshots: -watchOpen waiting | person
+            switch UserDefaults.standard.string(forKey: "watchOpen") ?? "" {
+            case "waiting": path = [.section(.waiting)]
+            case "person": if let p = store.waiting.first ?? store.people.first { path = [.section(.waiting), .person(p.k)] }
+            default: break
+            }
         }
     }
 }
@@ -190,7 +204,7 @@ struct SectionRow: View {
     let prominent: Bool
 
     var body: some View {
-        NavigationLink(value: section) {
+        NavigationLink(value: WatchRoute.section(section)) {
             HStack(spacing: 10) {
                 Image(systemName: section.icon)
                     .font(.system(size: 15, weight: .semibold))
@@ -223,7 +237,7 @@ struct PeopleList: View {
                     .listRowBackground(Color.clear)
             }
             ForEach(people) { p in
-                NavigationLink(value: p) {
+                NavigationLink(value: WatchRoute.person(p.k)) {
                     PersonRow(p: p, section: section)
                 }
             }

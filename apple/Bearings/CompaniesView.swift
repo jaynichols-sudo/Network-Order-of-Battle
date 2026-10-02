@@ -13,16 +13,23 @@ struct CompaniesView: View {
             }
         }
         .navigationTitle("Companies")
-        .safeAreaInset(edge: .top) {
+        .toolbar { MainToolbar() }
+    }
+}
+
+/// The Watchlist / Industries / All switch, shown at the top of each list.
+struct CompaniesModePicker: View {
+    @Environment(AppModel.self) private var model
+    var body: some View {
+        @Bindable var model = model
+        Section {
             Picker("View", selection: $model.companiesMode) {
                 ForEach(CompaniesMode.allCases) { Text($0.label).tag($0) }
             }
             .pickerStyle(.segmented)
-            .padding(.horizontal)
-            .padding(.bottom, 8)
-            .background(.bar)
+            .listRowBackground(Color.clear)
+            .listRowInsets(EdgeInsets())
         }
-        .toolbar { MainToolbar() }
     }
 }
 
@@ -31,6 +38,7 @@ struct WatchlistList: View {
 
     var body: some View {
         List {
+            CompaniesModePicker()
             Section {
                 ForEach(model.targets) { t in
                     NavigationLink(value: Route.unit(t.name)) {
@@ -135,6 +143,7 @@ struct AllCompaniesList: View {
 
     var body: some View {
         List {
+            CompaniesModePicker()
             if let o = orgs {
                 Section("Companies") { bars(o.companies) }
                 if !o.agencies.isEmpty { Section("Agencies and commands") { bars(o.agencies) } }
