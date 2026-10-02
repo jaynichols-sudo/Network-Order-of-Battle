@@ -50,7 +50,7 @@ struct Classification: Decodable, Hashable {
     var lv = 4
     var ind = "", indHow = ""
 
-    enum K: String, CodingKey { case seg, branch, status, rank, grade, tier, gn, sen, func, agency, certs, clr, lv, ind, indHow }
+    enum K: String, CodingKey { case seg, branch, status, rank, grade, tier, gn, sen, fn = "func", agency, certs, clr, lv, ind, indHow }
     init(from d: Decoder) throws {
         let c = try d.container(keyedBy: K.self)
         seg = c.lenient(String.self, .seg) ?? ""
@@ -61,7 +61,7 @@ struct Classification: Decodable, Hashable {
         tier = c.lenient(String.self, .tier) ?? ""
         gn = c.lenient(Double.self, .gn) ?? 0
         sen = c.lenient(String.self, .sen) ?? ""
-        fn = c.lenient(String.self, .func) ?? ""
+        fn = c.lenient(String.self, .fn) ?? ""
         agency = c.lenient(String.self, .agency) ?? ""
         certs = c.lenient([String].self, .certs) ?? []
         clr = c.lenientBool(.clr)
@@ -285,12 +285,12 @@ struct Facets: Decodable {
     var tier: [FacetItem]
     var agency: [FacetItem]
 
-    enum K: String, CodingKey { case total, sig, rel, ind, sen, func, cert, company, seg, branch, status, tier, agency }
+    enum K: String, CodingKey { case total, sig, rel, ind, sen, fn = "func", cert, company, seg, branch, status, tier, agency }
     init(from d: Decoder) throws {
         let c = try d.container(keyedBy: K.self)
         total = c.lenientInt(.total) ?? 0
         func list(_ k: K) -> [FacetItem] { c.lenient([FacetItem].self, k) ?? [] }
-        sig = list(.sig); rel = list(.rel); ind = list(.ind); sen = list(.sen); fn = list(.func); cert = list(.cert)
+        sig = list(.sig); rel = list(.rel); ind = list(.ind); sen = list(.sen); fn = list(.fn); cert = list(.cert)
         company = list(.company); seg = list(.seg); branch = list(.branch); status = list(.status); tier = list(.tier); agency = list(.agency)
     }
 }
