@@ -62,37 +62,56 @@ jobs:
           PY
           echo "ASC_KEY_PATH=$RUNNER_TEMP/keys/AuthKey_${ASC_KEY_ID}.p8" >> "$GITHUB_ENV"
 
+      - name: Create temporary App Store signing
+        env:
+          BUNDLE_ID: com.jaynichols.networkoob
+        run: |
+          python3 -m pip install --quiet --break-system-packages pyjwt cryptography 2>/dev/null || python3 -m pip install --quiet --user pyjwt cryptography
+          python3 ios/ci/asc_signing.py setup
+
       - name: Archive
         run: |
+          python3 ios/ci/asc_signing.py patch
           xcodebuild \
             -project ios/App/App.xcodeproj \
             -scheme App \
             -configuration Release \
             -destination 'generic/platform=iOS' \
             -archivePath "$RUNNER_TEMP/App.xcarchive" \
-            -allowProvisioningUpdates \
-            -authenticationKeyPath "$ASC_KEY_PATH" \
-            -authenticationKeyID "$ASC_KEY_ID" \
-            -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
-            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
-            CODE_SIGN_STYLE=Automatic \
-            CODE_SIGN_IDENTITY="Apple Distribution" \
+            OTHER_CODE_SIGN_FLAGS="--keychain $OOB_KEYCHAIN" \
             CURRENT_PROJECT_VERSION="${{ github.run_number }}" \
-            archive | tee "$RUNNER_TEMP/archive.log" | grep -E "error:|warning: .*entitlement|\*\* ARCHIVE" || true
+            archive | tee "$RUNNER_TEMP/archive.log" | grep -E "error:|\*\* ARCHIVE" || true
           test -d "$RUNNER_TEMP/App.xcarchive" || { tail -80 "$RUNNER_TEMP/archive.log"; exit 1; }
 
       - name: Export and upload to TestFlight
         run: |
-          sed "s/__TEAM_ID__/$APPLE_TEAM_ID/" ios/ci/ExportOptions.plist > "$RUNNER_TEMP/ExportOptions.plist"
+          python3 - <<'PY'
+          import os, plistlib
+          opts = {
+              "method": "app-store-connect",
+              "destination": "upload",
+              "teamID": os.environ["APPLE_TEAM_ID"],
+              "signingStyle": "manual",
+              "signingCertificate": "Apple Distribution",
+              "provisioningProfiles": {"com.jaynichols.networkoob": os.environ["OOB_PROFILE_NAME"]},
+              "uploadSymbols": True,
+              "manageAppVersionAndBuildNumber": False,
+          }
+          plistlib.dump(opts, open(os.path.join(os.environ["RUNNER_TEMP"], "ExportOptions.plist"), "wb"))
+          PY
           xcodebuild -exportArchive \
             -archivePath "$RUNNER_TEMP/App.xcarchive" \
             -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" \
             -exportPath "$RUNNER_TEMP/export" \
-            -allowProvisioningUpdates \
             -authenticationKeyPath "$ASC_KEY_PATH" \
             -authenticationKeyID "$ASC_KEY_ID" \
             -authenticationKeyIssuerID "$ASC_ISSUER_ID" 2>&1 | tee "$RUNNER_TEMP/export.log" | tail -40
           grep -q "EXPORT SUCCEEDED\|Upload succeeded\|Uploaded" "$RUNNER_TEMP/export.log" || exit 1
+
+      - name: Remove temporary signing
+        if: always()
+        run: |
+          if [ -f "$ASC_KEY_PATH" ]; then python3 ios/ci/asc_signing.py cleanup || true; fi
 
       - name: Upload logs
         if: always()
