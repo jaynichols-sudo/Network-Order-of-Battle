@@ -1,4 +1,6 @@
-# Network Order of Battle
+# Bearings
+
+Know where everyone in your network landed. (Repo name: Network Order of Battle.)
 
 A private app for mapping your LinkedIn connections. Import LinkedIn's Connections export once a week and the app tags everyone by segment, agency or command, military branch, service status, rank and grade, seniority, function, and certifications, then shows them on a range-ring map, a branch-by-rank matrix, org rankings, and a searchable directory.
 

@@ -1,6 +1,6 @@
 {
   "appId": "com.jaynichols.networkoob",
-  "appName": "Order of Battle",
+  "appName": "Bearings",
   "webDir": "www",
   "ios": { "contentInset": "never", "scheme": "OrderOfBattle" },
   "android": { "allowMixedContent": false },

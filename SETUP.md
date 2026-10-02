@@ -8,7 +8,7 @@ App identifiers used everywhere below:
 |---|---|
 | Bundle ID | `com.jaynichols.networkoob` |
 | iCloud container | `iCloud.com.jaynichols.networkoob` |
-| App name on device | Order of Battle |
+| App name on device | Bearings |
 
 ## 1. Apple Developer portal (developer.apple.com)
 

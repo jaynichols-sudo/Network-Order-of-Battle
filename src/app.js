@@ -1291,7 +1291,7 @@ function openLink(url){ if (NATIVE) Browser.open({url}); else window.open(url, '
 const importSteps = () => `<ol class="ob-list">
   <li><span class="n">1</span><div><b>Ask LinkedIn for your connections</b><span>On LinkedIn’s “Get a copy of your data” page, pick <b>Connections</b> and tap <b>Request archive</b>.</span></div></li>
   <li><span class="n">2</span><div><b>Wait for the email</b><span>LinkedIn usually sends a download link within about 10 minutes.</span></div></li>
-  <li><span class="n">3</span><div><b>Bring the file here</b><span>Download the zip and choose it below${NATIVE && PLATFORM === 'ios' ? ', or open it from Mail or Files and share it to Order of Battle' : ''}.</span></div></li>
+  <li><span class="n">3</span><div><b>Bring the file here</b><span>Download the zip and choose it below${NATIVE && PLATFORM === 'ios' ? ', or open it from Mail or Files and share it to Bearings' : ''}.</span></div></li>
 </ol>`;
 function showImport(){
   const live = S.mode === 'live';
@@ -1396,13 +1396,22 @@ function scheduleReminders(){
       const at9 = iso => { const [y, m, d] = iso.split('-').map(Number); return new Date(y, m - 1, d, 9, 0, 0); };
       const now = Date.now(), list = [];
       for (const r of S.all){ if (!r.ed || !r.ed.due || r.x) continue; const at = at9(r.ed.due); if (at.getTime() <= now) continue;
-        list.push({id: (hash(r.k) % 2000000000) + 10, title: `Follow up with ${r.f} ${r.l}`, body: [r.p, r.c].filter(Boolean).join(' at ') || 'You planned to reach out today.', schedule: {at}, extra: {k: r.k}}); }
+        list.push({id: (hash(r.k) % 2000000000) + 10, title: `Follow up with ${r.f} ${r.l}`, body: [r.p, r.c].filter(Boolean).join(' at ') || 'You planned to reach out today.', schedule: {at}, extra: {k: r.k}, actionTypeId: 'FOLLOW'}); }
       list.sort((a, b) => a.schedule.at - b.schedule.at);
       const last = S.meta && S.meta.lastImport;
       if (last){ let at = at9(isoDay(new Date(last).getTime() + 7 * 864e5)); at.setHours(10); if (at.getTime() <= now) at = new Date(now + 864e5); list.unshift({id: 1, title: 'Time to refresh your network', body: 'Grab a fresh LinkedIn export to catch job changes and new connections.', schedule: {at}}); }
       if (list.length) await LocalNotifications.schedule({notifications: list.slice(0, 60)});
     } catch {}
   }, 800);
+}
+
+async function onNotificationAction(a){
+  const n = a && a.notification, k = n && n.extra && n.extra.k, act = a && a.actionId;
+  if (k && (act === 'done' || act === 'snooze')){
+    if (S.mode === 'live'){ await setEdit(k, {due: act === 'snooze' ? addDays(7) : ''}, {quiet: true}); scheduleReminders(); render(); toast(act === 'snooze' ? 'Snoozed for a week' : 'Follow-up done'); }
+    return;
+  }
+  if (k){ setTab('people', {silent: true}); openProfile(k); } else if (n && n.id === 1) showImport();
 }
 
 /* ---------- onboarding ---------- */
@@ -1416,7 +1425,7 @@ const Onboard = (() => {
     const dots = `<div class="ob-dots">${[0, 1].map(i => `<i class="${i === step ? 'on' : ''}"></i>`).join('')}</div>`;
     el.innerHTML = step === 0 ? `<div class="ob enter">${dots}${art()}
       <h2>See who you know, and where they are now</h2>
-      <p class="lede">Order of Battle turns your LinkedIn connections into a map you can search, sort and act on. Spot job changes, find who you know at any company, and never lose track of a follow-up.</p>
+      <p class="lede">Bearings turns your LinkedIn connections into a map you can search, sort and act on. Spot job changes, find who you know at any company, and never lose track of a follow-up.</p>
       <div class="ob-actions"><button type="button" class="btn primary" data-ob="next">Get started</button><button type="button" class="btn ghost" data-ob="skip">Look around with sample data first</button></div></div>`
     : `<div class="ob enter">${dots}
       <h2>Bring in your connections</h2>
@@ -1447,7 +1456,7 @@ async function backupNotes(){
   const data = {app: 'order-of-battle', kind: 'notes-backup', version: 1, created: new Date().toISOString(), edits: S.edits, targets: S.targets, companies: S.coInd, links: S.coLink, review: S.review};
   const n = Object.keys(S.edits).length;
   try {
-    await saveFile(`order-of-battle-notes-${TODAY}.json`, JSON.stringify(data), 'application/json');
+    await saveFile(`bearings-notes-${TODAY}.json`, JSON.stringify(data), 'application/json');
     try { localStorage.setItem('oob.backup', TODAY); } catch {}
     fx.success(); toast(`Backed up notes for ${fmt(n)} ${n === 1 ? 'person' : 'people'}`);
   } catch (e) { if (!/cancel/i.test((e && e.message) || '')) toast('Backup failed: ' + ((e && e.message) || 'unknown error')); }
@@ -1455,7 +1464,7 @@ async function backupNotes(){
 async function restoreNotes(file){
   try {
     const data = JSON.parse(await file.text());
-    if (!data || data.kind !== 'notes-backup' || typeof data.edits !== 'object') throw new Error('That isn’t an Order of Battle backup file.');
+    if (!data || data.kind !== 'notes-backup' || typeof data.edits !== 'object') throw new Error('That isn’t a Bearings backup file.');
     let added = 0, kept = 0;
     for (const [k, e] of Object.entries(data.edits || {})){
       const cur = S.edits[k];
@@ -1481,9 +1490,9 @@ async function exportView(){
   const cols = ['First Name', 'Last Name', 'Company', 'Position', 'Segment', 'Industry', 'Agency / Command', 'Branch', 'Status', 'Rank', 'Grade', 'Rank Tier', 'Seniority', 'Function', 'Certifications', 'Clearance Mentioned', 'Connected On', 'First Seen', 'Job Change', 'LinkedIn URL', 'Email', 'Tags', 'Notes', 'Starred'];
   const q = v => { v = String(v ?? ''); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
   const csv = [cols.join(',')].concat(sorted().map(r => { const c = r.cl, e = r.ed || {}; return [r.f, r.l, r.c, r.p, c.seg, c.ind, c.agency, c.branch, c.status, c.rank, c.grade, c.tier, c.sen, c.func, c.certs.join('; '), c.clr ? 'Yes' : '', r.d, r.fs, r.jc || '', S.mode === 'sample' ? '' : r.u, r.e, (e.tags || []).join('; '), e.note, e.star ? 'Yes' : ''].map(q).join(','); })).join('\n');
-  const name = `order-of-battle-${TODAY}.csv`;
+  const name = `bearings-${TODAY}.csv`;
   try {
-    if (NATIVE){ const w = await Filesystem.writeFile({path: name, data: csv, directory: Directory.Cache, encoding: Encoding.UTF8}); await Share.share({title: 'Order of Battle export', files: [w.uri], dialogTitle: 'Export connections'}); }
+    if (NATIVE){ const w = await Filesystem.writeFile({path: name, data: csv, directory: Directory.Cache, encoding: Encoding.UTF8}); await Share.share({title: 'Bearings export', files: [w.uri], dialogTitle: 'Export connections'}); }
     else { const url = URL.createObjectURL(new Blob([csv], {type: 'text/csv'})); const a = document.createElement('a'); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 2000); }
   } catch (e) { if (!/cancel/i.test((e && e.message) || '')) toast('Export failed: ' + ((e && e.message) || 'unknown error')); }
 }
@@ -1695,7 +1704,8 @@ document.addEventListener('drop', e => { const d = e.target.closest && e.target.
     App.addListener('resume', () => { loadStore({onlyIfChanged: true}); if (S.tab === 'home') renderHome(); });
     App.addListener('appUrlOpen', ({url}) => openIncoming(url));
     if (PLATFORM === 'ios'){ let t; CloudStore.addListener('changed', () => { clearTimeout(t); t = setTimeout(() => loadStore({onlyIfChanged: true}), 1500); }); }
-    LocalNotifications.addListener('localNotificationActionPerformed', a => { const n = a && a.notification, k = n && n.extra && n.extra.k; if (k){ setTab('people', {silent: true}); openProfile(k); } else if (n && n.id === 1) showImport(); }).catch(() => {});
+    LocalNotifications.registerActionTypes({types: [{id: 'FOLLOW', actions: [{id: 'done', title: 'Done'}, {id: 'snooze', title: 'Snooze a week'}]}]}).catch(() => {});
+    LocalNotifications.addListener('localNotificationActionPerformed', a => { onNotificationAction(a); }).catch(() => {});
     try { const launch = await App.getLaunchUrl(); if (launch && launch.url) openIncoming(launch.url); } catch {}
   }
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { Radar.redraw(); Web.redraw(); });
