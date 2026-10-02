@@ -3,100 +3,123 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="color-scheme" content="light dark">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#08111F">
 <title>Network Order of Battle</title>
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-<div class="shell">
-  <header class="top">
-    <div>
-      <div class="eyebrow">Order of Battle · LinkedIn network</div>
-      <h1>Network Order of Battle</h1>
-      <div class="dtg" id="dtg"></div>
+<div class="app" id="app">
+  <div class="ptr" id="ptr" aria-hidden="true"><span class="ptr-ring"></span><span class="ptr-text">Pull to sync</span></div>
+
+  <header class="bar">
+    <svg class="mark" viewBox="0 0 32 32" aria-hidden="true">
+      <circle cx="16" cy="16" r="14" fill="none" stroke="currentColor" stroke-opacity=".35"/>
+      <circle cx="16" cy="16" r="8.5" fill="none" stroke="currentColor" stroke-opacity=".25" stroke-dasharray="2 2"/>
+      <path d="M16 16 L16 2 A14 14 0 0 1 28.1 9 Z" fill="var(--amber)" fill-opacity=".55"/>
+      <circle cx="16" cy="16" r="2.4" fill="var(--amber)"/>
+      <circle cx="23" cy="8.5" r="1.4" fill="var(--coral)"/>
+    </svg>
+    <div class="title">
+      <h1>Order of Battle</h1>
+      <p id="sub" class="sub"></p>
     </div>
-    <div class="actions">
-      <button class="btn primary" id="btnImport" type="button">
-        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M8 2v8M4.5 6.5 8 10l3.5-3.5M2.5 13.5h11"/></svg>
-        Import weekly export</button>
-      <button class="btn" id="btnExport" type="button">Export this view</button>
-      <button class="btn ghost" id="btnHelp" type="button">How to refresh</button>
-    </div>
+    <button class="sync" id="sync" type="button"></button>
+    <button class="icon-btn" id="btnImport" type="button" aria-label="Import weekly export" title="Import weekly export">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0-4.5-4.5M12 15l4.5-4.5M4 17v2.5A1.5 1.5 0 0 0 5.5 21h13a1.5 1.5 0 0 0 1.5-1.5V17"/></svg>
+    </button>
+    <button class="icon-btn" id="btnMenu" type="button" aria-label="Settings and help" title="Settings and help">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>
+    </button>
   </header>
 
   <div class="banner" id="banner" hidden></div>
-  <section class="kpis" id="kpis" aria-label="Summary"></section>
 
-  <div class="layout">
-    <aside class="filters collapsed" id="filters" aria-label="Filters">
-      <div class="fhead">
-        <h2>Filters</h2>
-        <div class="row">
-          <button class="btn sm ghost" id="btnClear" type="button">Clear all</button>
-          <button class="btn sm mfilter" id="btnFold" type="button">Show</button>
-        </div>
-      </div>
-      <div class="fbody" id="fbody"></div>
-    </aside>
+  <section class="stats" id="stats" aria-label="Summary"></section>
 
-    <main>
-      <div class="toolbar">
-        <div class="search">
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="7" cy="7" r="4.5"/><path d="m10.5 10.5 3.5 3.5"/></svg>
-          <input id="q" type="search" placeholder="Search name, title, company, command, tag, note" autocomplete="off" aria-label="Search connections">
-        </div>
-        <nav class="tabs" role="tablist" aria-label="Views">
-          <button class="tab on" data-tab="map" role="tab" type="button">Map</button>
-          <button class="tab" data-tab="oob" role="tab" type="button">Branch &amp; rank</button>
-          <button class="tab" data-tab="orgs" role="tab" type="button">Orgs</button>
-          <button class="tab" data-tab="dir" role="tab" type="button">Directory</button>
-        </nav>
-      </div>
-      <div class="active" id="active"></div>
-
-      <section class="card" id="tab-map">
-        <div class="card-h"><h3>Range-ring map</h3><span class="meta" id="mapMeta"></span></div>
-        <div class="mapwrap" id="mapWrap"><canvas id="map" aria-label="Map of connections by segment and seniority"></canvas><div class="tip" id="tip" hidden></div></div>
-        <div class="legend" id="legend"></div>
-        <div class="ringkey">Rings run from the center outward: 1 Exec, flag officer, SES, O-6 · 2 Director, O-4 to O-5, E-9, GS-15 · 3 Manager, O-1 to O-3, warrant, E-7 to E-8, GS-13 to 14 · 4 Staff and individual contributors. Tap a dot for the profile, tap a sector label to filter.</div>
-      </section>
-
-      <section class="card" id="tab-oob" hidden>
-        <div class="card-h"><h3>Branch &amp; rank matrix</h3><span class="meta" id="oobMeta"></span></div>
-        <div class="scrollx" id="oob"></div>
-        <div class="note">Counts everyone with a detected service tie: serving, reserve and guard, DoD civilians, and veterans. Use the Status filter to split them. Click a cell to open those people in the directory.</div>
-      </section>
-
-      <section id="tab-orgs" hidden>
-        <div class="cols2">
-          <div class="card"><div class="card-h"><h3>Top companies</h3><span class="meta">click to filter</span></div><ul class="bars" id="coList"></ul></div>
-          <div class="card"><div class="card-h"><h3>Agencies &amp; commands</h3><span class="meta">employer or supported customer</span></div><ul class="bars" id="agList"></ul></div>
-        </div>
-      </section>
-
-      <section class="card" id="tab-dir" hidden>
-        <div class="dirbar">
-          <span class="status" id="dirCount"></span>
-          <label for="sort">Sort
-            <select id="sort">
-              <option value="new">Recently connected</option>
-              <option value="old">Oldest connections</option>
-              <option value="name">Last name A–Z</option>
-              <option value="company">Company A–Z</option>
-              <option value="rank">Rank / grade, senior first</option>
-              <option value="level">Seniority, senior first</option>
-            </select>
-          </label>
-        </div>
-        <div id="dir"></div>
-      </section>
-    </main>
+  <div class="finder">
+    <label class="search">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 5 5"/></svg>
+      <input id="q" type="search" placeholder="Search people, units, titles, notes" autocomplete="off" enterkeyhint="search" aria-label="Search connections">
+    </label>
+    <button class="filter-btn" id="btnFilter" type="button">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M7 12h10M10 18h4"/></svg>
+      <span>Filters</span><b id="fcount" hidden></b>
+    </button>
   </div>
+  <div class="active" id="active"></div>
+
+  <nav class="tabs" id="tabs" role="tablist" aria-label="Views">
+    <button class="tab" data-tab="map" role="tab" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4.5"/><path d="M12 12 18.4 5.6"/></svg><span>Scope</span></button>
+    <button class="tab" data-tab="ranks" role="tab" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 9 7-4 7 4M5 14l7-4 7 4M5 19l7-4 7 4"/></svg><span>Ranks</span></button>
+    <button class="tab" data-tab="orgs" role="tab" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V9l5-3v14M9 20V4l7 4v12M16 20v-8l4 2v6M3 20h18"/></svg><span>Orgs</span></button>
+    <button class="tab" data-tab="people" role="tab" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><circle cx="17.5" cy="9" r="2.5"/><path d="M16 14.6A5 5 0 0 1 21.5 19"/></svg><span>People</span></button>
+    <button class="tab" data-tab="review" role="tab" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="4" width="12" height="16" rx="2.5"/><path d="M8 2.5h10.5A2.5 2.5 0 0 1 21 5v13"/></svg><span>Review</span><b class="tab-badge" id="reviewBadge" hidden></b></button>
+  </nav>
+
+  <main class="views" id="views">
+    <section class="view" data-view="map" hidden>
+      <div class="scope" id="scope">
+        <canvas id="radar" aria-label="Radar map of your connections by segment and seniority"></canvas>
+        <div class="tip" id="tip" hidden></div>
+        <button class="zoom-chip" id="zoomChip" type="button" hidden></button>
+      </div>
+      <div class="legend" id="legend"></div>
+      <p class="hint">Closer to the center means more senior. Tap a sector to zoom in, then tap a contact to open it. Tap the center to zoom back out.</p>
+    </section>
+
+    <section class="view" data-view="ranks" hidden>
+      <div class="panel">
+        <div class="panel-head"><h2>Branch and rank</h2><p id="ranksMeta"></p></div>
+        <div class="scrollx" id="ranks"></div>
+      </div>
+    </section>
+
+    <section class="view" data-view="orgs" hidden>
+      <div class="orgs">
+        <div class="panel"><div class="panel-head"><h2>Companies</h2><p>Tap one to see its people</p></div><ol class="bars" id="coList"></ol></div>
+        <div class="panel"><div class="panel-head"><h2>Agencies and commands</h2><p>Employer or supported customer</p></div><ol class="bars" id="agList"></ol></div>
+      </div>
+    </section>
+
+    <section class="view" data-view="people" hidden>
+      <div class="people-bar">
+        <p id="peopleCount"></p>
+        <div class="seg-ctl" id="sortCtl" role="radiogroup" aria-label="Sort people">
+          <button type="button" data-sort="new">Recent</button>
+          <button type="button" data-sort="rank">Rank</button>
+          <button type="button" data-sort="level">Seniority</button>
+          <button type="button" data-sort="name">A–Z</button>
+        </div>
+      </div>
+      <ul class="people" id="people"></ul>
+      <div class="sentinel" id="sentinel"></div>
+    </section>
+
+    <section class="view" data-view="review" hidden>
+      <div class="review-head">
+        <div class="seg-ctl" id="deckCtl" role="radiogroup" aria-label="What to review">
+          <button type="button" data-deck="week">This week</button>
+          <button type="button" data-deck="all">Whole network</button>
+        </div>
+        <p id="deckMeta"></p>
+      </div>
+      <div class="deck" id="deck"></div>
+      <div class="deck-actions" id="deckActions">
+        <button type="button" class="round skip" data-act="deck-skip" aria-label="Skip"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+        <button type="button" class="round open" data-act="deck-open" aria-label="Open profile"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4.5 21a7.5 7.5 0 0 1 15 0"/></svg></button>
+        <button type="button" class="round star" data-act="deck-star" aria-label="Star"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3.5 2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"/></svg></button>
+      </div>
+    </section>
+  </main>
 </div>
 
-<div id="scrim" class="scrim" hidden></div>
-<aside id="drawer" class="drawer" hidden aria-label="Connection detail"></aside>
-<div id="modal" class="modal" hidden><div class="scrim" data-close></div><div class="box" id="mbox"></div></div>
+<div class="scrim" id="scrim" hidden></div>
+<div class="sheet" id="sheet" role="dialog" aria-modal="true" hidden>
+  <div class="sheet-grip" id="sheetGrip"><span></span></div>
+  <div class="sheet-body" id="sheetBody"></div>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 <input type="file" id="file" accept=".csv,.zip,text/csv,application/zip" hidden>
 <script src="app.js"></script>
 </body>

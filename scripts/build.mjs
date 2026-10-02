@@ -5,9 +5,9 @@ mkdirSync('www/fonts', { recursive: true });
 copyFileSync('src/index.html', 'www/index.html');
 copyFileSync('src/styles.css', 'www/styles.css');
 const fonts = [
-  ['barlow-condensed', [500, 600, 700]],
+  ['chakra-petch', [500, 600, 700]],
   ['ibm-plex-sans', [400, 500, 600]],
-  ['ibm-plex-mono', [400, 500]],
+  ['ibm-plex-mono', [500]],
 ];
 for (const [fam, ws] of fonts) for (const w of ws) {
   const f = `${fam}-latin-${w}-normal.woff2`;
