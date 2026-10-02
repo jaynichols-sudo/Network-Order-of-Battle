@@ -75,58 +75,72 @@ struct RadarView: View {
     var body: some View {
         GeometryReader { g in
             let size = min(g.size.width, g.size.height)
-            let r = size / 2 - 8
+            let r: CGFloat = size / 2 - 8
             let center = CGPoint(x: g.size.width / 2, y: g.size.height / 2)
             let dotPaths = paths(center: center, r: r)
             TimelineView(.animation(paused: reduceMotion)) { tl in
-                let t = tl.date.timeIntervalSinceReferenceDate
-                let sweep = reduceMotion ? -Double.pi / 2 : (t.truncatingRemainder(dividingBy: 6) / 6) * 2 * .pi - .pi / 2
+                let sweep = sweepAngle(tl.date)
                 Canvas { ctx, _ in
-                    let line = Color.secondary.opacity(0.25)
-                    // rings
-                    for (i, b) in data.bands.enumerated() where i > 0 {
-                        let rr = r * b
-                        let path = Path(ellipseIn: CGRect(x: center.x - rr, y: center.y - rr, width: rr * 2, height: rr * 2))
-                        ctx.stroke(path, with: .color(i == data.bands.count - 1 ? line.opacity(1.6) : line), style: StrokeStyle(lineWidth: 1, dash: i == data.bands.count - 1 ? [] : [2, 5]))
-                    }
-                    // wedge spokes
-                    for w in data.wedges {
-                        var p = Path()
-                        p.move(to: CGPoint(x: center.x + cos(w.a0) * r * 0.15, y: center.y + sin(w.a0) * r * 0.15))
-                        p.addLine(to: CGPoint(x: center.x + cos(w.a0) * r, y: center.y + sin(w.a0) * r))
-                        ctx.stroke(p, with: .color(line), lineWidth: 1)
-                    }
-                    // sweep
-                    if !reduceMotion {
-                        var wedge = Path()
-                        wedge.move(to: center)
-                        wedge.addArc(center: center, radius: r, startAngle: .radians(sweep - 0.8), endAngle: .radians(sweep), clockwise: false)
-                        wedge.closeSubpath()
-                        ctx.fill(wedge, with: .linearGradient(Gradient(colors: [Theme.amber.opacity(0), Theme.amber.opacity(scheme == .dark ? 0.16 : 0.2)]),
-                                                              startPoint: CGPoint(x: center.x + cos(sweep - 0.8) * r, y: center.y + sin(sweep - 0.8) * r),
-                                                              endPoint: CGPoint(x: center.x + cos(sweep) * r, y: center.y + sin(sweep) * r)))
-                        var arm = Path()
-                        arm.move(to: center)
-                        arm.addLine(to: CGPoint(x: center.x + cos(sweep) * r, y: center.y + sin(sweep) * r))
-                        ctx.stroke(arm, with: .color(Theme.amber.opacity(0.85)), lineWidth: 1.5)
-                    }
-                    // people, one path per color
-                    for (color, path) in dotPaths { ctx.fill(path, with: .color(color)) }
+                    draw(&ctx, center: center, r: r, sweep: sweep, dots: dotPaths)
                 }
             }
             .contentShape(Rectangle())
-            .onTapGesture { loc in
-                var best: (String, CGFloat)?
-                for d in data.dots {
-                    let pt = CGPoint(x: center.x + d.x * r, y: center.y + d.y * r)
-                    let dist = hypot(pt.x - loc.x, pt.y - loc.y)
-                    if dist < 18 && dist < (best?.1 ?? .infinity) { best = (d.k, dist) }
-                }
-                if let b = best { Haptic.tap(); onTap(b.0) }
-            }
+            .onTapGesture { loc in tap(loc, center: center, r: r) }
         }
         .accessibilityElement()
         .accessibilityLabel("Scope of \(data.dots.count) people in \(data.wedges.count) groups")
+    }
+
+    private func sweepAngle(_ date: Date) -> Double {
+        if reduceMotion { return -Double.pi / 2 }
+        let t = date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 6) / 6
+        return t * 2 * Double.pi - Double.pi / 2
+    }
+
+    private func point(_ center: CGPoint, _ angle: Double, _ radius: CGFloat) -> CGPoint {
+        CGPoint(x: center.x + CGFloat(cos(angle)) * radius, y: center.y + CGFloat(sin(angle)) * radius)
+    }
+
+    private func draw(_ ctx: inout GraphicsContext, center: CGPoint, r: CGFloat, sweep: Double, dots: [(Color, Path)]) {
+        let line = Color.secondary.opacity(0.25)
+        let last = data.bands.count - 1
+        for (i, b) in data.bands.enumerated() where i > 0 {
+            let rr = r * CGFloat(b)
+            let path = Path(ellipseIn: CGRect(x: center.x - rr, y: center.y - rr, width: rr * 2, height: rr * 2))
+            let dash: [CGFloat] = i == last ? [] : [2, 5]
+            ctx.stroke(path, with: .color(i == last ? Color.secondary.opacity(0.4) : line), style: StrokeStyle(lineWidth: 1, dash: dash))
+        }
+        for w in data.wedges {
+            var p = Path()
+            p.move(to: point(center, w.a0, r * 0.15))
+            p.addLine(to: point(center, w.a0, r))
+            ctx.stroke(p, with: .color(line), lineWidth: 1)
+        }
+        if !reduceMotion {
+            var wedge = Path()
+            wedge.move(to: center)
+            wedge.addArc(center: center, radius: r, startAngle: .radians(sweep - 0.8), endAngle: .radians(sweep), clockwise: false)
+            wedge.closeSubpath()
+            let strength: Double = scheme == .dark ? 0.16 : 0.2
+            let gradient = Gradient(colors: [Theme.amber.opacity(0), Theme.amber.opacity(strength)])
+            ctx.fill(wedge, with: .linearGradient(gradient, startPoint: point(center, sweep - 0.8, r), endPoint: point(center, sweep, r)))
+            var arm = Path()
+            arm.move(to: center)
+            arm.addLine(to: point(center, sweep, r))
+            ctx.stroke(arm, with: .color(Theme.amber.opacity(0.85)), lineWidth: 1.5)
+        }
+        for (color, path) in dots { ctx.fill(path, with: .color(color)) }
+    }
+
+    private func tap(_ loc: CGPoint, center: CGPoint, r: CGFloat) {
+        var best: String?
+        var bestDist: CGFloat = 18
+        for d in data.dots {
+            let pt = CGPoint(x: center.x + CGFloat(d.x) * r, y: center.y + CGFloat(d.y) * r)
+            let dist = hypot(pt.x - loc.x, pt.y - loc.y)
+            if dist < bestDist { bestDist = dist; best = d.k }
+        }
+        if let k = best { Haptic.tap(); onTap(k) }
     }
 }
 
@@ -135,7 +149,7 @@ extension RadarView {
         let base: CGFloat = data.dots.count > 2500 ? 2.2 : data.dots.count > 900 ? 2.8 : 3.5
         var byColor: [String: Path] = [:]
         for d in data.dots {
-            let pt = CGPoint(x: center.x + d.x * r, y: center.y + d.y * r)
+            let pt = CGPoint(x: center.x + CGFloat(d.x) * r, y: center.y + CGFloat(d.y) * r)
             let s = d.big ? base * 1.6 : base
             byColor[d.c, default: Path()].addEllipse(in: CGRect(x: pt.x - s, y: pt.y - s, width: s * 2, height: s * 2))
         }
