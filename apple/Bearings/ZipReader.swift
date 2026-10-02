@@ -127,12 +127,18 @@ struct ZipReader {
     }
 }
 
+private func byte(_ d: Data, _ o: Int) -> UInt64 {
+    UInt64(d[d.startIndex + o])
+}
 private func u16(_ d: Data, _ o: Int) -> UInt16 {
-    d.withUnsafeBytes { UInt16($0[o]) | UInt16($0[o + 1]) << 8 }
+    let a = byte(d, o), b = byte(d, o + 1)
+    return UInt16(a | (b << 8))
 }
 private func u32(_ d: Data, _ o: Int) -> UInt32 {
-    d.withUnsafeBytes { UInt32($0[o]) | UInt32($0[o + 1]) << 8 | UInt32($0[o + 2]) << 16 | UInt32($0[o + 3]) << 24 }
+    let a = byte(d, o), b = byte(d, o + 1), c = byte(d, o + 2), e = byte(d, o + 3)
+    return UInt32(a | (b << 8) | (c << 16) | (e << 24))
 }
 private func u64(_ d: Data, _ o: Int) -> UInt64 {
-    UInt64(u32(d, o)) | UInt64(u32(d, o + 4)) << 32
+    let lo = UInt64(u32(d, o)), hi = UInt64(u32(d, o + 4))
+    return lo | (hi << 32)
 }
