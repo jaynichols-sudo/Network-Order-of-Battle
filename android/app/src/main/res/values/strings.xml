@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Order of Battle</string>
+    <string name="title_activity_main">Order of Battle</string>
+    <string name="package_name">com.jaynichols.networkoob</string>
+    <string name="custom_url_scheme">com.jaynichols.networkoob</string>
+</resources>

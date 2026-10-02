@@ -1,0 +1,11 @@
+{
+  "appId": "com.jaynichols.networkoob",
+  "appName": "Order of Battle",
+  "webDir": "www",
+  "ios": { "contentInset": "never", "scheme": "OrderOfBattle" },
+  "android": { "allowMixedContent": false },
+  "plugins": {
+    "SystemBars": { "insetsHandling": "css", "initialViewportFitValueHint": "cover" },
+    "SplashScreen": { "launchShowDuration": 400, "backgroundColor": "#0D1416", "showSpinner": false }
+  }
+}
