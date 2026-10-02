@@ -5,8 +5,7 @@ mkdirSync('www/fonts', { recursive: true });
 copyFileSync('src/index.html', 'www/index.html');
 copyFileSync('src/styles.css', 'www/styles.css');
 const fonts = [
-  ['bricolage-grotesque', [600, 700, 800]],
-  ['figtree', [400, 500, 600, 700]],
+
 ];
 for (const [fam, ws] of fonts) for (const w of ws) {
   const f = `${fam}-latin-${w}-normal.woff2`;

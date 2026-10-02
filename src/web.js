@@ -225,18 +225,18 @@ export function createWeb(opts){
       const dim = burst && burst !== h.name;
       const name = h.name.length > 26 ? h.name.slice(0, 25) + '…' : h.name;
       const ly = hy + rr + (h.name === burst ? 9 * Math.ceil(h.vis / 10) * cam.s + 12 : 8) + Math.min(28, (h.ps.length > 6 ? 18 : 10) * cam.s);
-      ctx.font = `700 ${Math.round(Math.max(12, Math.min(16, 10 + rr / 10)))}px "Bricolage Grotesque", sans-serif`;
+      ctx.font = `700 ${Math.round(Math.max(12, Math.min(16, 10 + rr / 10)))}px -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif`;
       const lw = ctx.measureText(name).width / 2 + 4, box = [hx - lw, ly - 2, hx + lw, ly + 30];
       if (placed.some(q => box[0] < q[2] && box[2] > q[0] && box[1] < q[3] && box[3] > q[1])) continue;
       placed.push(box);
       ctx.globalAlpha = dim ? 0.3 : 1;
       ctx.lineWidth = 4; ctx.lineJoin = 'round'; ctx.strokeStyle = TH.surface; ctx.strokeText(name, hx, ly); ctx.fillStyle = TH.ink; ctx.fillText(name, hx, ly);
-      ctx.font = '700 12px "Figtree", sans-serif'; ctx.fillStyle = h.color; ctx.strokeText(fmt(h.vis), hx, ly + 17); ctx.fillText(fmt(h.vis), hx, ly + 17);
+      ctx.font = '700 12px -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif'; ctx.fillStyle = h.color; ctx.strokeText(fmt(h.vis), hx, ly + 17); ctx.fillText(fmt(h.vis), hx, ly + 17);
     }
     ctx.globalAlpha = 1;
     // names inside an opened cluster
     if (burst){
-      ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.font = '600 12.5px "Figtree", sans-serif';
+      ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.font = '600 12.5px -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif';
       const list = (byHub.get(burst) || []).filter(p => p.a > 0.5).slice(0, cam.s > 1.6 ? 40 : 18);
       for (const p of list){
         const sub = subLabel ? subLabel(p.r) : '', label = `${p.r.f} ${p.r.l}${sub ? ', ' + sub : ''}`;
@@ -247,7 +247,7 @@ export function createWeb(opts){
     const yr = Math.max(14, 30 * Math.min(1.4, cam.s));
     ctx.fillStyle = TH.accent; ctx.beginPath(); ctx.arc(cx, cy, yr, 0, TAU); ctx.fill();
     ctx.strokeStyle = TH.surface; ctx.lineWidth = 3; ctx.stroke(); ctx.lineWidth = 1;
-    ctx.fillStyle = '#2B2140'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.font = `800 ${Math.round(yr * 0.48)}px "Bricolage Grotesque", sans-serif`;
+    ctx.fillStyle = '#2B2140'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.font = `800 ${Math.round(yr * 0.48)}px -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif`;
     ctx.fillText('You', cx, cy + 1);
   }
 

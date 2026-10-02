@@ -457,9 +457,9 @@ const Radar = (() => {
     ctx.fillStyle = TH.accent; ctx.beginPath(); ctx.arc(cx, cy, cr, 0, Math.PI * 2); ctx.fill();
     ctx.strokeStyle = TH.surface; ctx.lineWidth = 3; ctx.stroke(); ctx.lineWidth = 1;
     ctx.fillStyle = '#2B2140'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.font = `800 ${Math.round(Math.min(22, cr * 0.42))}px "Bricolage Grotesque", sans-serif`;
+    ctx.font = `800 ${Math.round(Math.min(22, cr * 0.42))}px -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif`;
     ctx.fillText('You', cx, cy - cr * 0.16);
-    ctx.font = `700 ${Math.round(Math.min(13, cr * 0.24))}px "Figtree", sans-serif`; ctx.fillStyle = 'rgba(43,33,64,.7)';
+    ctx.font = `700 ${Math.round(Math.min(13, cr * 0.24))}px -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif`; ctx.fillStyle = 'rgba(43,33,64,.7)';
     ctx.fillText(fmt(VIEW.filter(r => F.removed || !r.x).length), cx, cy + cr * 0.3);
     // sector labels (wide screens, full view)
     if (W >= 640 && view.s < 1.05){
@@ -470,9 +470,9 @@ const Radar = (() => {
         const c = Math.cos(mid), s = Math.sin(mid);
         ctx.textAlign = Math.abs(c) < 0.2 ? 'center' : c > 0 ? 'left' : 'right';
         ctx.textBaseline = s > 0.5 ? 'top' : s < -0.5 ? 'bottom' : 'middle';
-        ctx.font = '700 14px "Bricolage Grotesque", sans-serif'; ctx.fillStyle = F[groupKeyOf(w.seg)].has(w.seg) ? TH.accentInk : TH.ink;
+        ctx.font = '700 14px -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif'; ctx.fillStyle = F[groupKeyOf(w.seg)].has(w.seg) ? TH.accentInk : TH.ink;
         ctx.fillText(G[w.i].short, lx, ly);
-        ctx.font = '700 12px "Figtree", sans-serif'; ctx.fillStyle = dotColor(G[w.i].color);
+        ctx.font = '700 12px -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif'; ctx.fillStyle = dotColor(G[w.i].color);
         const off = ctx.textBaseline === 'top' ? 16 : ctx.textBaseline === 'bottom' ? -16 : 15;
         ctx.fillText(fmt(w.n), lx, ly + off);
       }
