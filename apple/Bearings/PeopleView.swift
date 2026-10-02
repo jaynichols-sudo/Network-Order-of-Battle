@@ -212,7 +212,7 @@ struct ActiveFilters: View {
         }
         if !f.company.isEmpty { out.append(Token(group: "company", value: f.company, label: f.company)) }
         if !f.agency.isEmpty { out.append(Token(group: "agency", value: f.agency, label: f.agency)) }
-        if !f.since.isEmpty { out.append(Token(group: "since", value: f.since, label: model.constants.since.first(where: { $0.first == f.since })?.last ?? "Connected") }
+        if !f.since.isEmpty { out.append(Token(group: "since", value: f.since, label: model.constants.since.first(where: { $0.first == f.since })?.last ?? "Connected")) }
         if f.removed { out.append(Token(group: "removed", value: "", label: "Including removed")) }
         return out
     }
