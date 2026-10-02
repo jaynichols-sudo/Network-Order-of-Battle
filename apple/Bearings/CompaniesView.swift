@@ -177,106 +177,165 @@ struct UnitView: View {
     var body: some View {
         List {
             if let u {
-                Section {
-                    HStack(spacing: 16) {
-                        CoverageRing(score: u.score, size: 72)
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(u.name).geist(.title2, .bold)
-                            Text("You know \(u.count.formatted()) \(u.count == 1 ? "person" : "people") here. Coverage \(u.score)%.")
-                                .font(Theme.geist(.subheadline)).foregroundStyle(.secondary)
-                        }
-                    }
-                    .listRowBackground(Color.clear)
-                }
-                Section {
-                    Button {
-                        Task { await model.toggleTarget(name); await load() }
-                    } label: {
-                        Label(u.isTarget ? "Remove from watchlist" : "Add to watchlist", systemImage: u.isTarget ? "minus.circle" : "plus.circle.fill")
-                    }
-                    Button {
-                        var f = Filters()
-                        if model.info.lens && !u.isCompany { f.agency = name } else { f.company = name }
-                        model.searchText = ""
-                        model.filters = f
-                        model.paths[.people] = []
-                        model.tab = .people
-                    } label: { Label("Show in People", systemImage: "person.2") }
-                    if u.isCompany {
-                        Picker("Industry", selection: Binding(get: { u.industry.set }, set: { v in Task { await model.setCompanyIndustry(name, v); await load() } })) {
-                            Text("Automatic: \(u.industry.auto)").tag("")
-                            ForEach(model.constants.industries.filter { $0.id != model.constants.unclassified }) { i in Text(i.id).tag(i.id) }
-                        }
-                    }
-                }
-                Section {
-                    LinkButton(title: u.links.companyExact ? "Company page" : "Find company page", url: u.links.company)
-                    LinkButton(title: "Your connections there", url: u.links.peopleAt)
-                    if model.salesNav { LinkButton(title: "Sales Navigator", url: u.links.salesNav, icon: "safari") }
-                    if editingLink {
-                        TextField("https://www.linkedin.com/company/…", text: $linkText)
-                            .keyboardType(.URL).textInputAutocapitalization(.never).autocorrectionDisabled()
-                        HStack {
-                            Button("Save") { Task { if await model.setCompanyLink(name, linkText) { editingLink = false; await load() } } }
-                                .buttonStyle(.borderedProminent)
-                            Button("Cancel") { editingLink = false }.buttonStyle(.bordered)
-                        }
-                    } else {
-                        Button(u.links.companyExact ? "Change page link" : "Save the exact page") {
-                            linkText = u.links.companyExact ? u.links.company : ""
-                            editingLink = true
-                        }
-                        .font(Theme.geist(.subheadline))
-                    }
-                } header: { Text("On LinkedIn") }
-                Section {
-                    if u.gaps.isEmpty {
-                        Label("Covered at every level", systemImage: "checkmark.circle.fill").foregroundStyle(Theme.good)
-                    } else {
-                        ForEach(u.gaps, id: \.self) { g in
-                            Label(g, systemImage: "exclamationmark.circle.fill").foregroundStyle(Theme.bad)
-                        }
-                    }
-                }
-                ForEach(u.rungs) { r in
-                    Section {
-                        let ps = model.persons(r.keys)
-                        if ps.isEmpty {
-                            Text("Nobody yet").foregroundStyle(.secondary)
-                        }
-                        ForEach(ps.prefix(40)) { p in
-                            NavigationLink(value: Route.person(p.k)) { PersonRow(person: p, lens: model.info.lens) }
-                        }
-                        if ps.count > 40 { Text("and \(ps.count - 40) more").foregroundStyle(.secondary) }
-                    } header: {
-                        HStack {
-                            Text(r.label)
-                            Spacer()
-                            Text("\(r.keys.count)")
-                        }
-                    }
-                }
-                if u.isTarget {
-                    Section("Notes") {
-                        TextField("What you’re working on here, who to meet next", text: $note, axis: .vertical)
-                            .lineLimit(3...10)
-                            .onSubmit { Task { await model.setTargetNote(name, note) } }
-                            .onChange(of: note) { _, v in
-                                Task {
-                                    try? await Task.sleep(nanoseconds: 600_000_000)
-                                    if v == note { await model.setTargetNote(name, v) }
-                                }
-                            }
-                    }
-                }
+                headerSection(u)
+                actionSection(u)
+                linkSection(u)
+                gapSection(u)
+                ForEach(u.rungs) { r in rungSection(r) }
+                if u.isTarget { noteSection }
             }
         }
         .listStyle(.insetGrouped)
         .navigationTitle(name)
         .navigationBarTitleDisplayMode(.inline)
-        .task(id: name) { await load(); note = u?.note ?? "" }
+        .task(id: name) {
+            await load()
+            note = u?.note ?? ""
+        }
         .overlay { if u == nil { ProgressView() } }
     }
 
     private func load() async { u = await model.unit(name) }
+
+    private func headerSection(_ u: UnitDetail) -> some View {
+        Section {
+            HStack(spacing: 16) {
+                CoverageRing(score: u.score, size: 72)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(u.name).geist(.title2, .bold)
+                    Text(summary(u)).font(Theme.geist(.subheadline)).foregroundStyle(.secondary)
+                }
+            }
+            .listRowBackground(Color.clear)
+        }
+    }
+
+    private func summary(_ u: UnitDetail) -> String {
+        let who = u.count == 1 ? "person" : "people"
+        return "You know \(u.count.formatted()) \(who) here. Coverage \(u.score)%."
+    }
+
+    private func industryBinding(_ u: UnitDetail) -> Binding<String> {
+        Binding(get: { u.industry.set }, set: { v in
+            Task {
+                await model.setCompanyIndustry(name, v)
+                await load()
+            }
+        })
+    }
+
+    private func actionSection(_ u: UnitDetail) -> some View {
+        Section {
+            Button {
+                Task {
+                    await model.toggleTarget(name)
+                    await load()
+                }
+            } label: {
+                Label(u.isTarget ? "Remove from watchlist" : "Add to watchlist", systemImage: u.isTarget ? "minus.circle" : "plus.circle.fill")
+            }
+            Button { showInPeople(u) } label: { Label("Show in People", systemImage: "person.2") }
+            if u.isCompany {
+                Picker("Industry", selection: industryBinding(u)) {
+                    Text("Automatic: \(u.industry.auto)").tag("")
+                    ForEach(model.constants.industries.filter { $0.id != model.constants.unclassified }) { i in
+                        Text(i.id).tag(i.id)
+                    }
+                }
+            }
+        }
+    }
+
+    private func showInPeople(_ u: UnitDetail) {
+        var f = Filters()
+        if model.info.lens && !u.isCompany { f.agency = name } else { f.company = name }
+        model.searchText = ""
+        model.filters = f
+        model.paths[.people] = []
+        model.tab = .people
+    }
+
+    private func linkSection(_ u: UnitDetail) -> some View {
+        Section {
+            LinkButton(title: u.links.companyExact ? "Company page" : "Find company page", url: u.links.company)
+            LinkButton(title: "Your connections there", url: u.links.peopleAt)
+            if model.salesNav {
+                LinkButton(title: "Sales Navigator", url: u.links.salesNav, icon: "safari")
+            }
+            if editingLink {
+                TextField("https://www.linkedin.com/company/…", text: $linkText)
+                    .keyboardType(.URL)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                HStack {
+                    Button("Save") { saveLink() }.buttonStyle(.borderedProminent)
+                    Button("Cancel") { editingLink = false }.buttonStyle(.bordered)
+                }
+            } else {
+                Button(u.links.companyExact ? "Change page link" : "Save the exact page") {
+                    linkText = u.links.companyExact ? u.links.company : ""
+                    editingLink = true
+                }
+            }
+        } header: {
+            Text("On LinkedIn")
+        }
+    }
+
+    private func saveLink() {
+        Task {
+            if await model.setCompanyLink(name, linkText) {
+                editingLink = false
+                await load()
+            }
+        }
+    }
+
+    private func gapSection(_ u: UnitDetail) -> some View {
+        Section {
+            if u.gaps.isEmpty {
+                Label("Covered at every level", systemImage: "checkmark.circle.fill").foregroundStyle(Theme.good)
+            } else {
+                ForEach(u.gaps, id: \.self) { g in
+                    Label(g, systemImage: "exclamationmark.circle.fill").foregroundStyle(Theme.bad)
+                }
+            }
+        }
+    }
+
+    private func rungSection(_ r: UnitDetail.Rung) -> some View {
+        let ps = model.persons(r.keys)
+        return Section {
+            if ps.isEmpty {
+                Text("Nobody yet").foregroundStyle(.secondary)
+            }
+            ForEach(ps.prefix(40)) { p in
+                NavigationLink(value: Route.person(p.k)) { PersonRow(person: p, lens: model.info.lens) }
+            }
+            if ps.count > 40 {
+                Text("and \(ps.count - 40) more").foregroundStyle(.secondary)
+            }
+        } header: {
+            HStack {
+                Text(r.label)
+                Spacer()
+                Text("\(r.keys.count)")
+            }
+        }
+    }
+
+    private var noteSection: some View {
+        Section("Notes") {
+            TextField("What you’re working on here, who to meet next", text: $note, axis: .vertical)
+                .lineLimit(3...10)
+                .onChange(of: note) { _, v in saveNote(v) }
+        }
+    }
+
+    private func saveNote(_ v: String) {
+        Task {
+            try? await Task.sleep(nanoseconds: 600_000_000)
+            if v == note { await model.setTargetNote(name, v) }
+        }
+    }
 }

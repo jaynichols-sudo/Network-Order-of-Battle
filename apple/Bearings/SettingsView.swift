@@ -15,69 +15,10 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section {
-                    Picker("Appearance", selection: $appearance) {
-                        Text("Automatic").tag("system")
-                        Text("Light").tag("light")
-                        Text("Dark").tag("dark")
-                    }
-                    TextField("Your first name (for the greeting)", text: $name)
-                        .textContentType(.givenName)
-                }
-                Section {
-                    Picker("Federal and military view", selection: Binding(
-                        get: { model.lensPref.map { $0 ? "on" : "off" } ?? "auto" },
-                        set: { v in Task { await model.setLens(v == "auto" ? nil : v == "on") } })) {
-                        Text("Automatic\(model.info.lensAuto ? " (on)" : " (off)")").tag("auto")
-                        Text("On").tag("on")
-                        Text("Off").tag("off")
-                    }
-                    Toggle("I use Sales Navigator", isOn: $salesNav)
-                    Toggle("Reminders", isOn: $notify)
-                        .onChange(of: notify) { _, on in
-                            Task {
-                                if on { await Notifications.shared.requestPermission() }
-                                Notifications.shared.schedule(model: model)
-                            }
-                        }
-                    Toggle("Haptics", isOn: $haptics)
-                } header: {
-                    Text("Your network")
-                } footer: {
-                    Text("The federal view adds branch, rank, agency and federal segments. Reminders cover follow-ups you set, plus a weekly nudge to refresh.")
-                }
-                Section {
-                    Button(model.info.isSample ? "Import connections" : "Refresh connections") {
-                        dismiss()
-                        model.showImport = true
-                    }
-                    Button("Export everyone as a spreadsheet") { Task { await model.exportCSV(keys: nil) } }
-                    Button("Back up your notes") { Task { await model.backup() } }
-                    Button("Restore from a backup") { restoring = true }
-                    LabeledContent("Saved to", value: model.isCloud ? "iCloud, synced across your Apple devices" : "This device")
-                    if !model.lastBackup.isEmpty { LabeledContent("Last backup", value: Day.nice(model.lastBackup)) }
-                } header: {
-                    Text("Your data")
-                } footer: {
-                    Text("A backup holds your stars, notes, follow-ups, corrections and watchlist. Restoring adds back anything missing and keeps your newer changes.")
-                }
-                Section {
-                    Button("Show the welcome tour") {
-                        dismiss()
-                        model.showOnboarding = true
-                    }
-                    Button("Contact support") {
-                        let v = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? ""
-                        let b = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? ""
-                        let device = UIDevice.current.model + " " + UIDevice.current.systemVersion
-                        let body = "\n\n—\nBearings \(v) (\(b)), \(device)"
-                        var c = URLComponents(string: "mailto:" + AppInfo.supportEmail)!
-                        c.queryItems = [URLQueryItem(name: "subject", value: "Bearings support"), URLQueryItem(name: "body", value: body)]
-                        if let u = c.url { openURL(u) }
-                    }
-                } footer: {
-                    Text("Private by design: no account and no server. Your network lives on your devices and in your own iCloud. Industry, seniority, branch and rank are worked out from each person’s title and company. Fix anything that’s off from their profile.")
-                }
+                generalSection
+                networkSection
+                dataSection
+                aboutSection
             }
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
@@ -87,6 +28,92 @@ struct SettingsView: View {
             }
             .onChange(of: name) { _, _ in Task { await model.refreshAll() } }
         }
+    }
+
+    private var lensChoice: Binding<String> {
+        Binding(
+            get: { model.lensPref.map { $0 ? "on" : "off" } ?? "auto" },
+            set: { v in Task { await model.setLens(v == "auto" ? nil : v == "on") } })
+    }
+
+    private var generalSection: some View {
+        Section {
+            Picker("Appearance", selection: $appearance) {
+                Text("Automatic").tag("system")
+                Text("Light").tag("light")
+                Text("Dark").tag("dark")
+            }
+            TextField("Your first name (for the greeting)", text: $name)
+                .textContentType(.givenName)
+        }
+    }
+
+    private var networkSection: some View {
+        Section {
+            Picker("Federal and military view", selection: lensChoice) {
+                Text(model.info.lensAuto ? "Automatic (on)" : "Automatic (off)").tag("auto")
+                Text("On").tag("on")
+                Text("Off").tag("off")
+            }
+            Toggle("I use Sales Navigator", isOn: $salesNav)
+            Toggle("Reminders", isOn: $notify)
+                .onChange(of: notify) { _, on in reschedule(on) }
+            Toggle("Haptics", isOn: $haptics)
+        } header: {
+            Text("Your network")
+        } footer: {
+            Text("The federal view adds branch, rank, agency and federal segments. Reminders cover follow-ups you set, plus a weekly nudge to refresh.")
+        }
+    }
+
+    private func reschedule(_ on: Bool) {
+        Task {
+            if on { await Notifications.shared.requestPermission() }
+            Notifications.shared.schedule(model: model)
+        }
+    }
+
+    private var dataSection: some View {
+        Section {
+            Button(model.info.isSample ? "Import connections" : "Refresh connections") {
+                dismiss()
+                model.showImport = true
+            }
+            Button("Export everyone as a spreadsheet") { Task { await model.exportCSV(keys: nil) } }
+            Button("Back up your notes") { Task { await model.backup() } }
+            Button("Restore from a backup") { restoring = true }
+            LabeledContent("Saved to", value: model.isCloud ? "iCloud, synced across your Apple devices" : "This device")
+            if !model.lastBackup.isEmpty {
+                LabeledContent("Last backup", value: Day.nice(model.lastBackup))
+            }
+        } header: {
+            Text("Your data")
+        } footer: {
+            Text("A backup holds your stars, notes, follow-ups, corrections and watchlist. Restoring adds back anything missing and keeps your newer changes.")
+        }
+    }
+
+    private var aboutSection: some View {
+        Section {
+            Button("Show the welcome tour") {
+                dismiss()
+                model.showOnboarding = true
+            }
+            Button("Contact support") { contactSupport() }
+        } footer: {
+            Text("Private by design: no account and no server. Your network lives on your devices and in your own iCloud. Industry, seniority, branch and rank are worked out from each person’s title and company. Fix anything that’s off from their profile.")
+        }
+    }
+
+    private func contactSupport() {
+        let info = Bundle.main.infoDictionary ?? [:]
+        let v = info["CFBundleShortVersionString"] as? String ?? ""
+        let b = info["CFBundleVersion"] as? String ?? ""
+        let device = UIDevice.current.model + " " + UIDevice.current.systemVersion
+        let body = "\n\n—\nBearings \(v) (\(b)), \(device)"
+        guard var c = URLComponents(string: "mailto:" + AppInfo.supportEmail) else { return }
+        c.queryItems = [URLQueryItem(name: "subject", value: "Bearings support"), URLQueryItem(name: "body", value: body)]
+        if let u = c.url { openURL(u) }
     }
 }
 
