@@ -1,0 +1,262 @@
+import SwiftUI
+
+struct ProfileView: View {
+    @Environment(AppModel.self) private var model
+    let k: String
+    @State private var links: PersonLinks?
+    @State private var note = ""
+    @State private var tags = ""
+    @State private var industry = ""
+    @State private var forCompany = true
+    @State private var seg = ""
+    @State private var branch = ""
+    @State private var status = ""
+    @State private var grade = ""
+    @State private var rank = ""
+    @State private var loadedFor = ""
+    @FocusState private var noteFocused: Bool
+
+    var body: some View {
+        if let p = model.person(k) {
+            List {
+                header(p)
+                actions(p)
+                if model.info.hasRel { relationship(p) }
+                followUp(p)
+                details(p)
+                if let pv = p.pv, !pv.isEmpty {
+                    Section("Earlier roles") {
+                        ForEach(Array(pv.enumerated()), id: \.offset) { _, r in
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(r.p.isEmpty ? "Unknown title" : r.p)
+                                Text("\(r.c.isEmpty ? "Unknown company" : r.c), until \(Day.nice(r.until))")
+                                    .font(Theme.geist(.footnote)).foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                }
+                notes(p)
+            }
+            .listStyle(.insetGrouped)
+            .navigationTitle(p.f)
+            .navigationBarTitleDisplayMode(.inline)
+            .task(id: k) {
+                links = await model.links(k)
+                fill(p)
+            }
+        } else {
+            ContentUnavailableView("Not found", systemImage: "person.crop.circle.badge.xmark", description: Text("This person isn’t in your network anymore."))
+        }
+    }
+
+    private func fill(_ p: Person) {
+        guard loadedFor != p.k else { return }
+        loadedFor = p.k
+        let ed = p.ed ?? Edit()
+        note = ed.note
+        tags = ed.tags.joined(separator: ", ")
+        industry = ed.ind
+        forCompany = ed.ind.isEmpty
+        seg = ed.seg; branch = ed.branch; status = ed.status; grade = ed.grade; rank = ed.rank
+    }
+
+    private func header(_ p: Person) -> some View {
+        Section {
+            HStack(spacing: 14) {
+                Avatar(person: p, size: 64)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(p.fullName).geist(.title2, .bold)
+                    if !p.p.isEmpty { Text(p.p).font(Theme.geist(.subheadline)).foregroundStyle(.secondary) }
+                    if !p.c.isEmpty { Text(p.c).font(Theme.geist(.subheadline, .semibold)) }
+                }
+            }
+            .padding(.vertical, 4)
+            .listRowBackground(Color.clear)
+            .listRowInsets(EdgeInsets(top: 0, leading: 4, bottom: 0, trailing: 4))
+        }
+    }
+
+    private func actions(_ p: Person) -> some View {
+        Section {
+            Button {
+                Task { await model.toggleStar(p.k) }
+            } label: {
+                Label(p.starred ? "Starred" : "Star", systemImage: p.starred ? "star.fill" : "star")
+            }
+            .tint(Theme.amber)
+            if let l = links, !l.profile.isEmpty {
+                LinkButton(title: p.u.isEmpty ? "Find on LinkedIn" : "LinkedIn profile", url: l.profile)
+                if model.salesNav { LinkButton(title: "Sales Navigator", url: l.salesNav, icon: "safari") }
+            }
+            if !p.e.isEmpty {
+                Button {
+                    UIPasteboard.general.string = p.e
+                    model.show("Email copied")
+                } label: { Label("Copy email", systemImage: "doc.on.doc") }
+            }
+            if !p.c.isEmpty {
+                NavigationLink(value: Route.unit(p.c)) { Label("More at \(p.c)", systemImage: "building.2") }
+            }
+        }
+    }
+
+    @ViewBuilder private func relationship(_ p: Person) -> some View {
+        Section("Relationship") {
+            if let x = p.rx {
+                HStack {
+                    Text(Band.label(p.band))
+                        .font(Theme.geist(.subheadline, .semibold))
+                        .foregroundStyle(Band.color(p.band))
+                    Spacer()
+                    Gauge(value: Double(p.score), in: 0...100) { EmptyView() }
+                        .gaugeStyle(.accessoryLinearCapacity)
+                        .tint(Band.color(p.band))
+                        .frame(width: 120)
+                }
+                if !x.t.isEmpty {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(x.dir == "i" ? "\(p.f) wrote you \(Day.ago(x.t))" : "You wrote \(Day.ago(x.t))")
+                            .font(Theme.geist(.subheadline, .semibold))
+                        if !x.s.isEmpty {
+                            Text("“\(x.s)”").font(Theme.geist(.subheadline)).foregroundStyle(.secondary)
+                        }
+                    }
+                }
+                let summary = relSummary(x)
+                if !summary.isEmpty { Text(summary).font(Theme.geist(.footnote)).foregroundStyle(.secondary) }
+                if !x.invn.isEmpty { Text("Invite note: “\(x.invn)”").font(Theme.geist(.footnote)).foregroundStyle(.secondary) }
+                if p.waiting {
+                    Button {
+                        Task { await model.markReplied(p.k) }
+                    } label: {
+                        Label("Waiting on your reply. I replied", systemImage: "arrowshape.turn.up.left.fill")
+                    }
+                    .tint(Theme.bad)
+                }
+            } else {
+                Text("You haven’t messaged \(p.f) on LinkedIn. A short hello is an easy start.")
+                    .font(Theme.geist(.subheadline)).foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private func relSummary(_ x: Relationship) -> String {
+        var parts: [String] = []
+        if x.m > 0 { parts.append("\(x.m.formatted()) \(x.m == 1 ? "message" : "messages") since \(Day.nice(x.f))") }
+        if x.eg > 0 || x.er > 0 { parts.append(x.eg > 0 && x.er > 0 ? "you endorsed each other" : x.eg > 0 ? "you endorsed them" : "they endorsed you") }
+        if x.rg > 0 || x.rr > 0 { parts.append(x.rg > 0 && x.rr > 0 ? "you recommended each other" : x.rg > 0 ? "you wrote them a recommendation" : "they wrote you a recommendation") }
+        if !x.inv.isEmpty { parts.append(x.inv == "o" ? "you invited them\(x.invd.isEmpty ? "" : " on \(Day.nice(x.invd))")" : "they invited you") }
+        guard !parts.isEmpty else { return "" }
+        let s = parts.joined(separator: ", ")
+        return s.prefix(1).uppercased() + s.dropFirst() + "."
+    }
+
+    @ViewBuilder private func followUp(_ p: Person) -> some View {
+        Section("Follow up") {
+            if let due = p.ed?.due, !due.isEmpty {
+                HStack {
+                    VStack(alignment: .leading) {
+                        if due <= Day.today { Text("Follow up now").font(Theme.geist(.subheadline, .semibold)).foregroundStyle(Theme.violet) }
+                        Text("You planned to follow up on \(Day.nice(due)).").font(Theme.geist(.subheadline))
+                    }
+                    Spacer()
+                    Button("Done") { Task { await model.followUp(p.k, days: 0) } }
+                        .buttonStyle(.bordered)
+                }
+            } else {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack {
+                        ForEach([(7, "In a week"), (14, "In 2 weeks"), (30, "In a month"), (90, "In 3 months")], id: \.0) { d, l in
+                            Button(l) { Task { await model.followUp(p.k, days: d) } }
+                                .buttonStyle(.bordered)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func details(_ p: Person) -> some View {
+        let c = p.cl
+        let lens = model.info.lens
+        return Section("Details") {
+            LabeledContent("Industry") {
+                HStack(spacing: 6) {
+                    Circle().fill(Color(hex: p.indColor)).frame(width: 8, height: 8)
+                    Text(c.ind + (c.indHow == "you" ? " (set by you)" : c.indHow == "guess" ? " (best guess)" : ""))
+                }
+            }
+            LabeledContent("Seniority", value: c.sen)
+            LabeledContent("Role", value: c.fn)
+            if lens && c.seg != "Other Commercial" { LabeledContent("Segment", value: c.seg) }
+            if lens && (!c.branch.isEmpty || !c.status.isEmpty) { LabeledContent("Service", value: [c.branch, c.status].filter { !$0.isEmpty }.joined(separator: ", ")) }
+            else if !lens && c.status == "Veteran / Retired" { LabeledContent("Service", value: [c.branch, "Veteran"].filter { !$0.isEmpty }.joined(separator: " ")) }
+            if lens && !c.grade.isEmpty { LabeledContent("Rank", value: (c.rank.isEmpty || c.rank == c.grade ? "" : c.rank + " ") + c.grade) }
+            if lens && !c.agency.isEmpty { LabeledContent("Agency or command", value: c.agency) }
+            if !c.certs.isEmpty || (lens && c.clr) { LabeledContent("Certifications", value: (c.certs.isEmpty ? "None listed" : c.certs.joined(separator: ", ")) + (lens && c.clr ? ", clearance mentioned" : "")) }
+            LabeledContent("Connected", value: Day.nice(p.d))
+            if let x = p.x { LabeledContent("Status", value: "Not in your export since \(Day.nice(x))") }
+            if !p.e.isEmpty { LabeledContent("Email", value: p.e).textSelection(.enabled) }
+        }
+        .font(Theme.geist(.subheadline))
+    }
+
+    @ViewBuilder private func notes(_ p: Person) -> some View {
+        Section {
+            TextField("How you know them, last conversation, next step", text: $note, axis: .vertical)
+                .lineLimit(3...12)
+                .focused($noteFocused)
+            TextField("Tags, separated by commas", text: $tags)
+                .textInputAutocapitalization(.never)
+            Picker("Industry", selection: $industry) {
+                Text("Automatic: \(p.cl.ind)").tag("")
+                ForEach(model.constants.industries.filter { $0.id != model.constants.unclassified }) { i in
+                    Text(i.id).tag(i.id)
+                }
+            }
+            if !p.c.isEmpty { Toggle("Use this for everyone at \(p.c)", isOn: $forCompany) }
+            if model.info.lens {
+                Picker("Segment", selection: $seg) {
+                    Text("Automatic").tag("")
+                    ForEach(model.constants.segs, id: \.id) { s in Text(s.id).tag(s.id) }
+                }
+                Picker("Branch", selection: $branch) {
+                    Text("Automatic").tag("")
+                    ForEach(model.constants.branches, id: \.self) { Text($0).tag($0) }
+                    Text("None").tag("__none")
+                }
+                Picker("Status", selection: $status) {
+                    Text("Automatic").tag("")
+                    ForEach(model.constants.statuses, id: \.self) { Text($0).tag($0) }
+                    Text("None").tag("__none")
+                }
+                Picker("Grade", selection: $grade) {
+                    Text("Automatic").tag("")
+                    ForEach(model.constants.grades, id: \.self) { Text($0).tag($0) }
+                    Text("None").tag("__none")
+                }
+                TextField("Rank title, like Colonel, USMC (Ret.)", text: $rank)
+            }
+            Button {
+                noteFocused = false
+                save(p)
+            } label: {
+                Text("Save").frame(maxWidth: .infinity).fontWeight(.semibold)
+            }
+        } header: {
+            Text("Notes and corrections")
+        } footer: {
+            if model.info.isSample { Text("Sample data: changes aren’t saved.") }
+        }
+    }
+
+    private func save(_ p: Person) {
+        let tagList = tags.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }.prefix(20)
+        var patch: [String: Any] = ["note": String(note.prefix(4000)), "tags": Array(tagList), "rank": String(rank.trimmingCharacters(in: .whitespaces).prefix(80))]
+        if model.info.lens { patch["seg"] = seg; patch["branch"] = branch; patch["status"] = status; patch["grade"] = grade }
+        var co: (company: String, ind: String)?
+        if forCompany && !p.c.isEmpty { co = (p.c, industry) } else { patch["ind"] = industry }
+        loadedFor = ""
+        Task { await model.saveProfile(p.k, patch: patch, companyIndustry: co) }
+    }
+}

@@ -13,3 +13,7 @@ for (const [fam, ws] of fonts) for (const w of ws) {
 }
 await build({ entryPoints: ['src/app.js'], bundle: true, minify: true, format: 'iife', target: ['safari15', 'chrome100'], outfile: 'www/app.js', logLevel: 'warning' });
 console.log('built www:', readdirSync('www').join(', '));
+// Headless engine for the native Apple apps (runs in JavaScriptCore).
+mkdirSync('apple/Bearings/Resources', { recursive: true });
+await build({ entryPoints: ['src/engine.js'], bundle: true, minify: true, format: 'iife', target: ['safari17'], outfile: 'apple/Bearings/Resources/engine.js', alias: { jszip: './src/stub-jszip.js' }, logLevel: 'warning' });
+console.log('built apple engine');

@@ -92,30 +92,43 @@ def setup():
     sh("security", "list-keychains", "-d", "user", "-s", kc, *chains)
     env_out(OOB_KEYCHAIN=kc)
 
-    # 3. App Store profile for the bundle id
-    bid = os.environ["BUNDLE_ID"]
-    found = call("GET", f"/bundleIds?filter[identifier]={bid}&limit=200")["data"]
-    found = [b for b in found if b["attributes"]["identifier"] == bid]
-    if not found:
-        sys.exit(f"Bundle ID {bid} is not registered in the developer account")
-    name = f"OOB CI AppStore {run}"
-    prof = call("POST", "/profiles", {"data": {"type": "profiles",
-        "attributes": {"name": name, "profileType": "IOS_APP_STORE"},
-        "relationships": {"bundleId": {"data": {"type": "bundleIds", "id": found[0]["id"]}},
-                          "certificates": {"data": [{"type": "certificates", "id": cert_id}]}}}})["data"]
-    env_out(OOB_PROFILE_ID=prof["id"], OOB_PROFILE_NAME=name)
-    content = base64.b64decode(prof["attributes"]["profileContent"])
-    uuid = prof["attributes"]["uuid"]
-    for d in ["~/Library/MobileDevice/Provisioning Profiles", "~/Library/Developer/Xcode/UserData/Provisioning Profiles"]:
-        d = os.path.expanduser(d)
-        os.makedirs(d, exist_ok=True)
-        open(os.path.join(d, uuid + ".mobileprovision"), "wb").write(content)
-    print("Created and installed profile", name, uuid)
+    # 3. App Store profiles. BUNDLE_IDS is "APP=com.x,WATCH=com.x.watchkitapp,..."; plain BUNDLE_ID still works.
+    spec = os.environ.get("BUNDLE_IDS") or ("APP=" + os.environ["BUNDLE_ID"])
+    pairs = [p.split("=", 1) for p in spec.split(",") if "=" in p]
+    ids, names, mapping = [], {}, {}
+    for role, bid in pairs:
+        found = call("GET", f"/bundleIds?filter[identifier]={bid}&limit=200")["data"]
+        found = [b for b in found if b["attributes"]["identifier"] == bid]
+        if found:
+            bundle = found[0]
+        else:
+            bundle = call("POST", "/bundleIds", {"data": {"type": "bundleIds", "attributes": {
+                "identifier": bid, "name": "Bearings " + role.title(), "platform": "IOS"}}})["data"]
+            print("Registered bundle ID", bid)
+        name = f"OOB CI {role} {run}"
+        prof = call("POST", "/profiles", {"data": {"type": "profiles",
+            "attributes": {"name": name, "profileType": "IOS_APP_STORE"},
+            "relationships": {"bundleId": {"data": {"type": "bundleIds", "id": bundle["id"]}},
+                              "certificates": {"data": [{"type": "certificates", "id": cert_id}]}}}})["data"]
+        ids.append(prof["id"])
+        names[role] = name
+        mapping[bid] = name
+        content = base64.b64decode(prof["attributes"]["profileContent"])
+        uuid = prof["attributes"]["uuid"]
+        for d in ["~/Library/MobileDevice/Provisioning Profiles", "~/Library/Developer/Xcode/UserData/Provisioning Profiles"]:
+            d = os.path.expanduser(d)
+            os.makedirs(d, exist_ok=True)
+            open(os.path.join(d, uuid + ".mobileprovision"), "wb").write(content)
+        print("Created and installed profile", name, uuid)
+    env_out(OOB_PROFILE_IDS=",".join(ids), OOB_PROFILE_MAP=json.dumps(mapping),
+            **{"OOB_PROFILE_" + r: n for r, n in names.items()},
+            OOB_PROFILE_NAME=names.get("APP", ""))
 
 
 def cleanup():
-    pid, cid = os.environ.get("OOB_PROFILE_ID"), os.environ.get("OOB_CERT_ID")
-    if pid:
+    pids = [p for p in (os.environ.get("OOB_PROFILE_IDS") or os.environ.get("OOB_PROFILE_ID") or "").split(",") if p]
+    cid = os.environ.get("OOB_CERT_ID")
+    for pid in pids:
         call("DELETE", f"/profiles/{pid}")
         print("Deleted profile", pid)
     if cid:
