@@ -7,7 +7,9 @@ const ease = p => 1 - Math.pow(1 - p, 3);
 const h01 = (s, salt) => (hash(salt + s) % 100000) / 100000;
 
 export function createWeb(opts){
-  const {canvas: cv, wrap, tip, chip, yearEl, segColor, segShort, onOpen, onPeek, onTap, reduced, esc, fmt} = opts;
+  const {canvas: cv, wrap, tip, chip, yearEl, gColor, gShort, gOf, theme: TH, onOpen, onPeek, onTap, reduced, esc, fmt, subLabel} = opts;
+  const segColor = g => tone(gColor(g)), segShort = gShort;
+  const tone = c => TH.dark ? c : mixHex(c, '#26213F', 0.22);
   const ctx = cv.getContext('2d');
   let W = 0, H = 0, dpr = 1, active = false, raf = 0;
   let hubs = [], people = [], byHub = new Map();
@@ -16,12 +18,14 @@ export function createWeb(opts){
   const sprites = {};
 
   function sprite(color){
-    if (sprites[color]) return sprites[color];
+    const key = color + (TH.dark ? 'd' : 'l');
+    if (sprites[key]) return sprites[key];
     const c = document.createElement('canvas'); c.width = c.height = 32;
     const g = c.getContext('2d'), gr = g.createRadialGradient(16, 16, 0, 16, 16, 16);
-    gr.addColorStop(0, '#fff'); gr.addColorStop(0.15, color); gr.addColorStop(0.45, color + '55'); gr.addColorStop(1, color + '00');
+    if (TH.dark){ gr.addColorStop(0, '#fff'); gr.addColorStop(0.15, color); gr.addColorStop(0.45, color + '55'); gr.addColorStop(1, color + '00'); }
+    else { gr.addColorStop(0, color); gr.addColorStop(0.36, color); gr.addColorStop(0.46, color + '00'); }
     g.fillStyle = gr; g.fillRect(0, 0, 32, 32);
-    return (sprites[color] = c);
+    return (sprites[key] = c);
   }
   function resize(){
     const w = wrap.clientWidth, h = w < 640 ? Math.round(w * 1.15) : Math.round(Math.min(Math.max(w * 0.62, 460), 680));
@@ -45,11 +49,11 @@ export function createWeb(opts){
     const MAX = W < 640 ? 26 : 40;
     const keep = list.slice(0, MAX), rest = list.slice(MAX);
     const other = new Map();
-    for (const g of rest) for (const r of g.ps){ const sh = segShort(r.cl.seg), k = sh === 'Other' ? 'Other orgs' : 'Other ' + sh; if (!other.has(k)) other.set(k, []); other.get(k).push(r); }
+    for (const g of rest) for (const r of g.ps){ const sh = segShort(gOf(r)), k = sh === 'Other' ? 'Other orgs' : 'Other ' + sh; if (!other.has(k)) other.set(k, []); other.get(k).push(r); }
     list = keep.concat([...other.entries()].map(([name, ps]) => ({name, ps, other: true})));
     // majority segment for color and placement
     for (const h of list){
-      const cnt = {}; for (const r of h.ps) cnt[r.cl.seg] = (cnt[r.cl.seg] || 0) + 1;
+      const cnt = {}; for (const r of h.ps){ const g = gOf(r); cnt[g] = (cnt[g] || 0) + 1; }
       h.seg = Object.entries(cnt).sort((a, b) => b[1] - a[1])[0][0];
       h.ps.sort((a, b) => a.cl.lv - b.cl.lv || b.cl.gn - a.cl.gn);
     }
@@ -98,7 +102,7 @@ export function createWeb(opts){
         if (idx >= cap){ ring++; idx = 0; cap = Math.max(6, Math.floor(TAU * (h.R + 4 + ring * 9) / 9)); }
         const ang = start + idx / cap * TAU + ring * 0.37; idx++;
         const o = prevP.get(r.k);
-        const p = {r, h, ang, ring, a: o ? o.a : 0, at: 1, af: o ? o.a : 0, t0: now + (reduced ? 0 : h01(r.k, 'w') * 260), color: segColor(r.cl.seg), sx: 0, sy: 0};
+        const p = {r, h, ang, ring, a: o ? o.a : 0, at: 1, af: o ? o.a : 0, t0: now + (reduced ? 0 : h01(r.k, 'w') * 260), color: segColor(gOf(r)), sx: 0, sy: 0};
         arr.push(p); people.push(p);
       }
       byHub.set(h.name, arr);
@@ -170,7 +174,7 @@ export function createWeb(opts){
       if (h.r < 0.5) continue;
       const [hx, hy] = toScreen(h.x, h.y);
       const mx = (cx + hx) / 2, my = (cy + hy) / 2, nx = -(hy - cy) * 0.12, ny = (hx - cx) * 0.12;
-      ctx.strokeStyle = h.color; ctx.globalAlpha = burst && burst !== h.name ? 0.05 : 0.16; ctx.lineWidth = Math.max(1, Math.log2(h.vis + 1) * 0.8);
+      ctx.strokeStyle = h.color; ctx.globalAlpha = (burst && burst !== h.name ? 0.05 : 0.16) * (TH.dark ? 1 : 1.4); ctx.lineWidth = Math.max(1, Math.log2(h.vis + 1) * 0.8);
       ctx.beginPath(); ctx.moveTo(cx, cy); ctx.quadraticCurveTo(mx + nx, my + ny, hx, hy); ctx.stroke();
     }
     ctx.globalAlpha = 1; ctx.lineWidth = 1;
@@ -179,7 +183,7 @@ export function createWeb(opts){
       if (h.r < 0.5) continue;
       const [hx, hy] = toScreen(h.x, h.y), rr = h.r * cam.s, dim = burst && burst !== h.name;
       ctx.globalAlpha = dim ? 0.25 : 1;
-      ctx.fillStyle = h.color + '22'; ctx.strokeStyle = h.color + (h.name === burst ? 'ee' : '88');
+      ctx.fillStyle = h.color + (TH.dark ? '22' : '1c'); ctx.strokeStyle = h.color + (h.name === burst ? 'ee' : TH.dark ? '88' : '99');
       ctx.lineWidth = h.name === burst ? 2 : 1;
       ctx.beginPath(); ctx.arc(hx, hy, rr, 0, TAU); ctx.fill(); ctx.stroke();
       ctx.lineWidth = 1;
@@ -187,7 +191,7 @@ export function createWeb(opts){
     ctx.globalAlpha = 1;
     // people
     const dot = Math.max(1.4, Math.min(4.2, 2.6 * Math.sqrt(cam.s)));
-    ctx.globalCompositeOperation = 'lighter';
+    ctx.globalCompositeOperation = TH.dark ? 'lighter' : 'source-over';
     for (const p of people){
       if (p.a < 0.02) continue;
       const h = p.h, spread = h.name === burst ? 1.9 : 1;
@@ -207,7 +211,7 @@ export function createWeb(opts){
       if (p.a < 0.5 || (burst && burst !== p.h.name)) continue;
       const star = p.r.ed && p.r.ed.star;
       if (!star && !p.r.isNew) continue;
-      ctx.strokeStyle = p.r.isNew ? 'rgba(255,107,91,.9)' : 'rgba(255,181,71,.9)';
+      ctx.strokeStyle = p.r.isNew ? TH.bad : TH.accent;
       ctx.beginPath(); ctx.arc(p.sx, p.sy, dot * 2.2, 0, TAU); ctx.stroke();
     }
     // labels
@@ -221,30 +225,30 @@ export function createWeb(opts){
       const dim = burst && burst !== h.name;
       const name = h.name.length > 26 ? h.name.slice(0, 25) + '…' : h.name;
       const ly = hy + rr + (h.name === burst ? 9 * Math.ceil(h.vis / 10) * cam.s + 12 : 8) + Math.min(28, (h.ps.length > 6 ? 18 : 10) * cam.s);
-      ctx.font = `600 ${Math.round(Math.max(11, Math.min(15, 10 + rr / 10)))}px "Chakra Petch", sans-serif`;
+      ctx.font = `700 ${Math.round(Math.max(12, Math.min(16, 10 + rr / 10)))}px "Bricolage Grotesque", sans-serif`;
       const lw = ctx.measureText(name).width / 2 + 4, box = [hx - lw, ly - 2, hx + lw, ly + 30];
       if (placed.some(q => box[0] < q[2] && box[2] > q[0] && box[1] < q[3] && box[3] > q[1])) continue;
       placed.push(box);
       ctx.globalAlpha = dim ? 0.3 : 1;
-      ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(8,17,31,.85)'; ctx.strokeText(name, hx, ly); ctx.fillStyle = '#E8EEF8'; ctx.fillText(name, hx, ly);
-      ctx.font = '500 11px "IBM Plex Sans", sans-serif'; ctx.fillStyle = h.color; ctx.fillText(fmt(h.vis), hx, ly + 16);
+      ctx.lineWidth = 4; ctx.lineJoin = 'round'; ctx.strokeStyle = TH.surface; ctx.strokeText(name, hx, ly); ctx.fillStyle = TH.ink; ctx.fillText(name, hx, ly);
+      ctx.font = '700 12px "Figtree", sans-serif'; ctx.fillStyle = h.color; ctx.strokeText(fmt(h.vis), hx, ly + 17); ctx.fillText(fmt(h.vis), hx, ly + 17);
     }
     ctx.globalAlpha = 1;
     // names inside an opened cluster
     if (burst){
-      ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.font = '500 12px "IBM Plex Sans", sans-serif';
+      ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.font = '600 12.5px "Figtree", sans-serif';
       const list = (byHub.get(burst) || []).filter(p => p.a > 0.5).slice(0, cam.s > 1.6 ? 40 : 18);
       for (const p of list){
-        const label = `${p.r.f} ${p.r.l}${p.r.cl.grade ? ' · ' + p.r.cl.grade : ''}`;
-        ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(8,17,31,.9)'; ctx.strokeText(label, p.sx + 8, p.sy); ctx.fillStyle = '#C9D6E8'; ctx.fillText(label, p.sx + 8, p.sy);
+        const sub = subLabel ? subLabel(p.r) : '', label = `${p.r.f} ${p.r.l}${sub ? ', ' + sub : ''}`;
+        ctx.lineWidth = 4; ctx.lineJoin = 'round'; ctx.strokeStyle = TH.surface; ctx.strokeText(label, p.sx + 8, p.sy); ctx.fillStyle = TH.ink2; ctx.fillText(label, p.sx + 8, p.sy);
       }
     }
     // you
     const yr = Math.max(14, 30 * Math.min(1.4, cam.s));
-    ctx.fillStyle = '#0B1729'; ctx.beginPath(); ctx.arc(cx, cy, yr, 0, TAU); ctx.fill();
-    ctx.strokeStyle = 'rgba(255,181,71,.85)'; ctx.lineWidth = 1.5; ctx.stroke(); ctx.lineWidth = 1;
-    ctx.fillStyle = '#E8EEF8'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.font = `700 ${Math.round(yr * 0.5)}px "Chakra Petch", sans-serif`;
-    ctx.fillText('YOU', cx, cy + 1);
+    ctx.fillStyle = TH.accent; ctx.beginPath(); ctx.arc(cx, cy, yr, 0, TAU); ctx.fill();
+    ctx.strokeStyle = TH.surface; ctx.lineWidth = 3; ctx.stroke(); ctx.lineWidth = 1;
+    ctx.fillStyle = '#2B2140'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.font = `800 ${Math.round(yr * 0.48)}px "Bricolage Grotesque", sans-serif`;
+    ctx.fillText('You', cx, cy + 1);
   }
 
   /* ----- input: pan, pinch, wheel, tap, long-press ----- */
@@ -339,5 +343,13 @@ export function createWeb(opts){
     setYear(y){ year = y; yearEl.textContent = y ? String(y) : ''; yearEl.classList.toggle('show', !!y); applyYear(); },
     years(rows){ const ys = rows.map(r => +(r.d || '').slice(0, 4)).filter(Boolean); return ys.length ? [Math.min(...ys), Math.max(...ys)] : null; },
     redraw(){ dirty = true; kick(); },
+    retheme(){ if (lastData && active) build(...lastData); dirty = true; kick(); },
   };
+}
+
+function mixHex(a, b, t){
+  const p = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+  if (!/^#[0-9a-f]{6}$/i.test(a)) return a;
+  const x = p(a), y = p(b);
+  return '#' + x.map((v, i) => Math.round(v + (y[i] - v) * t).toString(16).padStart(2, '0')).join('');
 }
