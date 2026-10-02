@@ -114,17 +114,24 @@ struct ClustersView: View {
         ctx.fill(Path(ellipseIn: CGRect(x: center.x - 7, y: center.y - 7, width: 14, height: 14)), with: .color(Theme.amber))
         ctx.stroke(Path(ellipseIn: CGRect(x: center.x - 11, y: center.y - 11, width: 22, height: 22)), with: .color(Theme.amber.opacity(0.5)), lineWidth: 2)
         // labels for groups big enough to read
-        let biggest = Set(d.hubs.indices.sorted { d.hubs[$0].n > d.hubs[$1].n }.prefix(8))
-        for (i, h) in d.hubs.enumerated() {
+        // labels: biggest groups first, skipping any that would overlap one already placed
+        var placed: [CGRect] = []
+        let order = d.hubs.indices.sorted { d.hubs[$0].n > d.hubs[$1].n }
+        for (rank, i) in order.enumerated() {
+            let h = d.hubs[i]
             let r = CGFloat(h.R) * scale
-            guard r > 16 || focus == i || scale > 1.6 || biggest.contains(i) else { continue }
+            guard rank < 8 || r > 16 || focus == i || scale > 1.6 else { continue }
             let n = visibleCount(d, hub: i)
             guard n > 0 else { continue }
             let p = screen(h.x, h.y, size: size, scale: scale, offset: offset)
-            let label = Text("\(h.name.count > 26 ? String(h.name.prefix(25)) + "…" : h.name)  \(n)")
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(.primary)
-            ctx.draw(label, at: CGPoint(x: p.x, y: p.y - r - 9 * scale - 8), anchor: .bottom)
+            let name = h.name.count > 24 ? String(h.name.prefix(23)) + "…" : h.name
+            let w = CGFloat(name.count + 4) * 6.2
+            let anchor = CGPoint(x: p.x, y: p.y - r - 6)
+            let rect = CGRect(x: anchor.x - w / 2, y: anchor.y - 15, width: w, height: 15)
+            if focus != i && placed.contains(where: { $0.intersects(rect) }) { continue }
+            placed.append(rect)
+            let label = Text("\(name)  \(n)").font(.system(size: 11, weight: .semibold)).foregroundStyle(.primary)
+            ctx.draw(label, at: anchor, anchor: .bottom)
         }
     }
 
