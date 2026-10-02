@@ -573,3 +573,15 @@ body:not(.has-rel) .rel-only{display:none!important}
 .rel blockquote{margin:0;padding:8px 12px;border-left:3px solid var(--violet);background:var(--violet-soft);border-radius:0 10px 10px 0;font-size:14px;color:var(--ink)}
 .mini.w-strong .av,.mini.w-warm .av{box-shadow:0 0 0 2.5px var(--good)}
 .mini.w-warm .av{box-shadow:0 0 0 2.5px var(--accent)}
+
+/* LinkedIn links */
+.btn.li{color:var(--info);border-color:color-mix(in srgb,var(--info) 35%,var(--line-2))}
+.btn.li svg{width:16px;height:16px}
+.li-row{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:12px 14px;border-radius:var(--r-lg);background:var(--info-soft)}
+.li-label{font-weight:700;font-size:14px;margin-right:4px;flex-basis:100%}
+.li-row .btn{padding:8px 13px;font-size:14px;background:var(--surface)}
+.linkish{border:0;background:none;padding:6px 4px;color:var(--info);font-weight:600;font-size:13.5px;text-decoration:underline;text-underline-offset:3px}
+.li-edit{display:flex;flex-direction:column;gap:6px;width:100%;font-size:14px;font-weight:600}
+.li-edit input{border:1px solid var(--line-2);background:var(--surface);border-radius:12px;padding:10px 11px;font-size:15px;color:var(--ink)}
+.li-row .row{width:100%}
+.peek-actions .btn.li{flex:0 0 auto}

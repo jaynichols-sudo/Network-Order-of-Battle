@@ -82,7 +82,7 @@ function readTheme(){
 readTheme();
 
 /* ---------- state ---------- */
-const S = {all: [], edits: {}, review: {}, targets: [], meta: null, mode: 'sample', rev: null, tab: 'home', mapMode: 'scope', unitsMode: 'targets', sort: 'new', shown: 60, sel: null, deck: 'week', pending: null, syncNote: '', nl: null, nlChips: [], cards: [], coInd: Object.create(null), uncShown: 25};
+const S = {all: [], edits: {}, review: {}, targets: [], meta: null, mode: 'sample', rev: null, tab: 'home', mapMode: 'scope', unitsMode: 'targets', sort: 'new', shown: 60, sel: null, deck: 'week', pending: null, syncNote: '', nl: null, nlChips: [], cards: [], coInd: Object.create(null), coLink: Object.create(null), uncShown: 25};
 const F = {q: '', rel: new Set, seg: new Set, branch: new Set, status: new Set, tier: new Set, sen: new Set, func: new Set, ind: new Set, cert: new Set, sig: new Set, agency: '', company: '', since: '', removed: false};
 let VIEW = [];
 
@@ -612,7 +612,7 @@ const Peek = (() => {
     const c = r.cl, star = r.ed && r.ed.star;
     const chips = (LENS_FED ? [c.grade ? `${c.branch || ''} ${c.grade}`.trim() : c.branch, c.agency, c.ind !== GOV_IND && c.ind !== UNCLASSIFIED ? c.ind : '', c.status, c.func] : [c.ind !== UNCLASSIFIED ? c.ind : '', c.sen, c.func, c.status === 'Veteran / Retired' ? 'Veteran' : '']).filter(Boolean).slice(0, 4);
     el.innerHTML = `<div class="peek-card">${avatar(r)}<div class="peek-main"><b>${esc(r.f)} ${esc(r.l)}</b><span>${esc(r.p || '')}</span><span class="dim">${esc(r.c || '')}</span><div class="chips">${chips.map(x => `<span class="chip">${esc(x)}</span>`).join('')}</div></div></div>
-      <div class="peek-actions"><button type="button" class="btn" data-peek-star="${esc(k)}">${star ? '★ Starred' : '☆ Star'}</button><button type="button" class="btn primary" data-peek-open="${esc(k)}">Open profile</button></div>`;
+      <div class="peek-actions"><button type="button" class="btn" data-peek-star="${esc(k)}">${star ? '★ Starred' : '☆ Star'}</button>${liPerson(r) ? `<button type="button" class="btn li" data-link="${esc(liPerson(r))}" aria-label="Open on LinkedIn">${ICON.ext}LinkedIn</button>` : ''}<button type="button" class="btn primary" data-peek-open="${esc(k)}">Open profile</button></div>`;
     el.hidden = false; el.classList.remove('show'); void el.offsetWidth; el.classList.add('show');
   }
   function hide(){ el.hidden = true; el.classList.remove('show'); }
@@ -718,6 +718,7 @@ function openUnit(name){
     <div class="sh-head"><div class="unit-top">${ringSVG(cov.score, 84)}<div><h2>${esc(name)}</h2><p>You know ${fmt(ps.length)} ${ps.length === 1 ? 'person' : 'people'} here. Coverage ${cov.score}%.</p></div></div><button type="button" class="x" data-act="close" aria-label="Close">${ICON.x}</button></div>
     ${isCo ? `<label class="unit-ind">Industry<select class="fsel sm" data-co-ind="${esc(name)}">${indOpts(S.coInd[companyKey(name)] || '', 'Auto: ' + autoInd)}</select></label>` : `<p class="unit-ind muted">${esc(autoInd)}</p>`}
     <div class="row"><button type="button" class="btn${target ? '' : ' primary'}" data-toggle-target="${esc(name)}">${target ? 'Remove from watchlist' : 'Add to watchlist'}</button><button type="button" class="btn" data-unit-people="${esc(name)}">Show in People</button></div>
+    <div class="li-row" id="liRow"><span class="li-label">On LinkedIn</span><button type="button" class="btn li" data-link="${esc(liCompany(name))}">${ICON.ext}${liExact(name) ? 'Company page' : 'Find company page'}</button><button type="button" class="btn li" data-link="${esc(liPeopleAt(name))}">${ICON.ext}Your connections there</button><button type="button" class="linkish" data-set-li-page="${esc(name)}">${liExact(name) ? 'Change page link' : 'Save the exact page'}</button></div>
     ${gaps.length ? `<div class="gaps">${gaps.map(g => `<p><span>!</span>${esc(g)}</p>`).join('')}</div>` : '<div class="gaps ok"><p><span>✓</span>Covered at every level</p></div>'}
     <div class="ladder">${rows}</div>
     ${target ? `<label class="form full" style="display:flex;flex-direction:column;gap:6px;font-size:14px;font-weight:600;color:var(--ink-2)">Notes<textarea id="unitNote" data-unit-note="${esc(name)}" placeholder="What you’re working on here, who to meet next">${esc(target.note || '')}</textarea></label>` : ''}`);
@@ -744,7 +745,32 @@ function toggleTarget(name){
 
 /* ---------- industries ---------- */
 let coIndT = 0;
-function saveIndustries(){ if (S.mode !== 'live') return; clearTimeout(coIndT); coIndT = setTimeout(() => Store.write('industries.json', {companies: S.coInd}).catch(() => {}), 400); }
+function saveIndustries(){ if (S.mode !== 'live') return; clearTimeout(coIndT); coIndT = setTimeout(() => Store.write('industries.json', {companies: S.coInd, links: S.coLink}).catch(() => {}), 400); }
+/* ---------- LinkedIn links ---------- */
+function editCompanyPage(name){
+  const row = $('#liRow'); if (!row) return;
+  const cur = liExact(name) ? S.coLink[companyKey(name)] : '';
+  row.innerHTML = `<label class="li-edit"><span>Paste the company’s LinkedIn page address</span><input type="url" id="liPageIn" value="${esc(cur)}" placeholder="https://www.linkedin.com/company/…" autocomplete="off"></label><div class="row"><button type="button" class="btn primary" data-save-li-page="${esc(name)}">Save</button><button type="button" class="btn ghost" data-unit="${esc(name)}">Cancel</button></div>`;
+  setTimeout(() => $('#liPageIn') && $('#liPageIn').focus(), 50);
+}
+function saveCompanyPage(name){
+  const v = ($('#liPageIn').value || '').trim(), key = companyKey(name);
+  if (v && !/^https?:\/\/([a-z]+\.)?linkedin\.com\/(company|school|showcase)\/[^\s]+/i.test(v)){ toast('That doesn’t look like a LinkedIn company page address'); return; }
+  if (v) S.coLink[key] = v.split('?')[0]; else delete S.coLink[key];
+  saveIndustries(); fx.success(); toast(v ? 'Saved. That link opens the exact page now.' : 'Removed the saved page');
+  openUnit(name);
+}
+const LI = 'https://www.linkedin.com';
+const liPerson = r => r.u ? r.u : S.mode === 'sample' ? '' : `${LI}/search/results/people/?keywords=${encodeURIComponent(`${r.f} ${r.l} ${r.c || ''}`.trim())}`;
+const liCompany = name => (Object.hasOwn(S.coLink, companyKey(name)) && S.coLink[companyKey(name)]) || `${LI}/search/results/companies/?keywords=${encodeURIComponent(name)}`;
+const liPeopleAt = name => `${LI}/search/results/people/?keywords=${encodeURIComponent(name)}&network=%5B%22F%22%5D`;
+const liExact = name => Object.hasOwn(S.coLink, companyKey(name)) && !!S.coLink[companyKey(name)];
+function openLinkedIn(url){
+  if (!url) return;
+  fx.tap();
+  // On phones this hands off to the LinkedIn app when it's installed, otherwise the browser
+  if (PLATFORM === 'ios') window.open(url, '_blank'); else if (NATIVE) Browser.open({url}); else window.open(url, '_blank', 'noopener');
+}
 function setCompanyIndustry(company, ind){
   const key = companyKey(company); if (!key) return;
   if (ind) S.coInd[key] = ind; else delete S.coInd[key];
@@ -1164,7 +1190,7 @@ function openProfile(k, {focusNotes, back} = {}){
   S.sel = k; Radar.redraw();
   const c = r.cl, ed = r.ed || {};
   const opt = (vals, cur, auto) => `<option value="">${auto}</option>` + vals.map(v => { const [val, lab] = Array.isArray(v) ? v : [v, v]; return `<option value="${esc(val)}"${cur === val ? ' selected' : ''}>${esc(lab)}</option>`; }).join('');
-  const link = S.mode === 'sample' ? '' : r.u ? `<button type="button" class="btn" data-link="${esc(r.u)}">${ICON.ext}LinkedIn</button>` : '';
+  const li = liPerson(r), link = li ? `<button type="button" class="btn li" data-link="${esc(li)}" title="${r.u ? 'Open their LinkedIn profile' : 'Search LinkedIn for them'}">${ICON.ext}${r.u ? 'LinkedIn profile' : 'Find on LinkedIn'}</button>` : '';
   const hist = (r.pv || []).map(h => `<li>${esc(h.p || '—')}<br><small>${esc(h.c || '—')}, until ${niceDate(h.until)}</small></li>`).join('');
   const due = ed.due;
   const follow = due
@@ -1244,7 +1270,7 @@ async function commitImport(){
   try {
     const wasSample = S.mode === 'sample';
     await persist(plan); S.mode = 'live';
-    if (wasSample){ S.edits = {}; S.review = {}; S.targets = []; S.coInd = Object.create(null); await saveEdits(); await saveReview(); }
+    if (wasSample){ S.edits = {}; S.review = {}; S.targets = []; S.coInd = Object.create(null); S.coLink = Object.create(null); await saveEdits(); await saveReview(); }
     S.meta = plan.meta; hydrate(plan.rows); S.pending = null; Deck.reset();
     Onboard.done(); applyLens(); render(); fx.success(); scheduleReminders();
     const st = plan.stats;
@@ -1412,7 +1438,7 @@ async function saveFile(name, text, type){
 }
 const lastBackup = () => { try { return localStorage.getItem('oob.backup') || ''; } catch { return ''; } };
 async function backupNotes(){
-  const data = {app: 'order-of-battle', kind: 'notes-backup', version: 1, created: new Date().toISOString(), edits: S.edits, targets: S.targets, companies: S.coInd, review: S.review};
+  const data = {app: 'order-of-battle', kind: 'notes-backup', version: 1, created: new Date().toISOString(), edits: S.edits, targets: S.targets, companies: S.coInd, links: S.coLink, review: S.review};
   const n = Object.keys(S.edits).length;
   try {
     await saveFile(`order-of-battle-notes-${TODAY}.json`, JSON.stringify(data), 'application/json');
@@ -1433,6 +1459,7 @@ async function restoreNotes(file){
     }
     for (const t of data.targets || []) if (t && t.name && !S.targets.some(x => x.name === t.name)) S.targets.push(t);
     for (const [k, v] of Object.entries(data.companies || {})) if (!Object.hasOwn(S.coInd, k)) S.coInd[k] = v;
+    for (const [k, v] of Object.entries(data.links || {})) if (!Object.hasOwn(S.coLink, k)) S.coLink[k] = v;
     for (const [k, v] of Object.entries(data.review || {})) if (!Object.hasOwn(S.review, k)) S.review[k] = v;
     hydrate(S.all.map(stripRow));
     if (S.mode === 'live'){ await saveEdits(); saveReview(); saveTargets(); saveIndustries(); }
@@ -1492,6 +1519,7 @@ async function loadStore(opts = {}){
     const [e, rv, tg, ci] = await Promise.all([Store.read('edits.json'), Store.read('review.json'), Store.read('targets.json').catch(() => ({})), Store.read('industries.json').catch(() => ({}))]);
     S.targets = (tg && tg.data && tg.data.targets) || [];
     S.coInd = Object.assign(Object.create(null), (ci && ci.data && ci.data.companies) || {});
+    S.coLink = Object.assign(Object.create(null), (ci && ci.data && ci.data.links) || {});
     const nextEdits = (e.data && e.data.edits) || {}, nextReview = (rv.data && rv.data.review) || {};
     if (opts.onlyIfChanged && S.mode === 'live' && n.data.meta && n.data.meta.rev === S.rev && JSON.stringify(nextEdits) === JSON.stringify(S.edits)){ S.review = nextReview; return; }
     S.edits = nextEdits; S.review = nextReview;
@@ -1566,7 +1594,9 @@ document.addEventListener('click', async e => {
   if (d.tab){ setTab(d.tab); return; }
   if (d.sort){ S.sort = d.sort; fx.select(); renderPeople(true); return; }
   if (d.deck){ S.deck = d.deck; Deck.reset(); fx.select(); Deck.render(); return; }
-  if (d.link){ if (NATIVE) Browser.open({url: d.link}); else window.open(d.link, '_blank', 'noopener'); return; }
+  if (d.link){ openLinkedIn(d.link); return; }
+  if (d.setLiPage){ editCompanyPage(d.setLiPage); return; }
+  if (d.saveLiPage){ saveCompanyPage(d.saveLiPage); return; }
   if (d.copy){ try { await navigator.clipboard.writeText(d.copy); toast('Email copied'); } catch { toast(d.copy); } return; }
   switch (d.act){
     case 'close': Sheet.close(); return;
@@ -1585,6 +1615,7 @@ document.addEventListener('click', async e => {
     case 'guess-more': S.guessShown = (S.guessShown || 15) + 25; renderIndustries(); return;
     case 'unc-more': S.uncShown = (S.uncShown || 25) + 25; renderIndustries(); return;
     case 'deck-star': Deck.decide('star'); return;
+    case 'deck-li': { const r = Deck.current(); if (r && liPerson(r)) openLinkedIn(liPerson(r)); else toast('No LinkedIn profile for this sample contact'); return; }
     case 'deck-skip': Deck.decide('skip'); return;
     case 'deck-open': { const r = Deck.current(); if (r) openProfile(r.k); return; }
     case 'toggle-star': { const k = d.k, on = !(S.edits[k] && S.edits[k].star); on ? fx.star() : fx.unstar(); await setEdit(k, {star: on}); openProfile(k); return; }
@@ -1617,7 +1648,10 @@ document.addEventListener('input', e => {
 document.addEventListener('submit', e => { if (e.target.id === 'edForm'){ e.preventDefault(); saveProfileForm(e.target); } });
 function applySearch(text){
   const agencies = [...new Set(S.all.map(r => r.cl.agency).filter(Boolean))];
-  const {nl, rest, chips} = parseQuery(text || '', agencies);
+  const t = (text || '').trim().toLowerCase();
+  // a company or person name typed as-is is a plain search, not a phrase to interpret
+  const literal = t.length >= 4 && S.all.some(r => (r.c || '').toLowerCase().includes(t) || `${r.f} ${r.l}`.toLowerCase().includes(t));
+  const {nl, rest, chips} = literal ? {nl: null, rest: t, chips: []} : parseQuery(text || '', agencies);
   S.nl = nl; S.nlChips = chips; F.q = nl ? rest : (text || '').trim();
   render();
 }
