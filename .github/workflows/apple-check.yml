@@ -32,4 +32,18 @@ jobs:
           xcodebuild -project apple/Bearings.xcodeproj -scheme Bearings -configuration Debug \
             -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build 2>&1 \
             | tee build.log | grep -E "error:|\*\* BUILD" || true
-          grep -q "\*\* BUILD SUCCEEDED" build.log || { grep -E "error:" -A4 build.log | head -200; exit 1; }
+          if ! grep -q "\*\* BUILD SUCCEEDED" build.log; then
+            python3 - <<'PY'
+          import re
+          log = open("build.log", errors="replace").read().splitlines()
+          errs = [l for l in log if "error:" in l]
+          if not errs: errs = log[-60:]
+          seen, out = set(), []
+          for l in errs:
+              l = re.sub(r"^/Users/runner/work/[^/]+/[^/]+/", "", l.strip())
+              if l not in seen: seen.add(l); out.append(l)
+          msg = "%0A".join(x.replace("%", "%25").replace("\r", "") for x in out[:80])
+          print("::error title=Build errors::" + msg)
+          PY
+            exit 1
+          fi

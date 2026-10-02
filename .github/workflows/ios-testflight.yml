@@ -86,7 +86,11 @@ jobs:
             OTHER_CODE_SIGN_FLAGS="--keychain $OOB_KEYCHAIN" \
             CURRENT_PROJECT_VERSION="${{ github.run_number }}" \
             archive | tee "$RUNNER_TEMP/archive.log" | grep -E "error:|\*\* ARCHIVE" || true
-          test -d "$RUNNER_TEMP/App.xcarchive" || { grep -E "error:|warning: .*(unable|failed)" -A3 "$RUNNER_TEMP/archive.log" | head -150; tail -40 "$RUNNER_TEMP/archive.log"; exit 1; }
+          if [ ! -d "$RUNNER_TEMP/App.xcarchive" ]; then
+            msg=$( (grep -E "error:" "$RUNNER_TEMP/archive.log" || tail -40 "$RUNNER_TEMP/archive.log") | sed -E 's#/Users/runner/work/[^/]+/[^/]+/##' | awk '!s[$0]++' | head -60 | sed 's/%/%25/g' | awk 'BEGIN{ORS="%0A"}{print}')
+            echo "::error title=Archive errors::$msg"
+            exit 1
+          fi
 
       - name: Export and upload to TestFlight
         run: |
