@@ -166,5 +166,21 @@ def patch_project():
     print(f"Patched {n} App target configurations for manual signing")
 
 
+def status():
+    """Waits for App Store Connect to finish processing this build and reports the result."""
+    bid, build = os.environ.get("APP_BUNDLE_ID", "com.jaynichols.networkoob"), os.environ["BUILD_NUMBER"]
+    app = call("GET", f"/apps?filter[bundleId]={bid}")["data"][0]["id"]
+    state = "NOT FOUND"
+    for _ in range(40):
+        data = call("GET", f"/builds?filter[app]={app}&filter[version]={build}&limit=5")["data"]
+        if data:
+            state = data[0]["attributes"].get("processingState", "?")
+            if state in ("VALID", "INVALID", "FAILED"):
+                break
+        time.sleep(20)
+    kind = "notice" if state == "VALID" else "warning"
+    print(f"::{kind} title=TestFlight processing::Build {build} is {state}")
+
+
 if __name__ == "__main__":
-    {"setup": setup, "cleanup": cleanup, "patch": patch_project}[sys.argv[1]]()
+    {"setup": setup, "cleanup": cleanup, "patch": patch_project, "status": status}[sys.argv[1]]()

@@ -6,10 +6,13 @@ on:
     paths: ['apple/**', 'src/**', '.github/workflows/apple-check.yml']
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: macos-15
-    timeout-minutes: 30
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
       - uses: maxim-lobanov/setup-xcode@v1
@@ -28,10 +31,9 @@ jobs:
       - name: Compile for the simulator (no signing)
         run: |
           xcodebuild -version
-          set -o pipefail
           xcodebuild -project apple/Bearings.xcodeproj -scheme Bearings -configuration Debug \
-            -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build 2>&1 \
-            | tee build.log | grep -E "error:|\*\* BUILD" || true
+            -destination 'generic/platform=iOS Simulator' -derivedDataPath build/dd CODE_SIGNING_ALLOWED=NO build > build.log 2>&1 || true
+          grep -E "\*\* BUILD" build.log || true
           if ! grep -q "\*\* BUILD SUCCEEDED" build.log; then
             python3 - <<'PY'
           import re
@@ -47,3 +49,63 @@ jobs:
           PY
             exit 1
           fi
+      - name: Screenshots
+        continue-on-error: true
+        run: |
+          APP=$(find build/dd/Build/Products -maxdepth 2 -name "Bearings.app" -path "*iphonesimulator*" | head -1)
+          echo "app: $APP"
+          pick() { xcrun simctl list devices available -j | python3 -c "
+          import json,sys,re
+          d=json.load(sys.stdin)['devices']; want=sys.argv[1]
+          for rt in sorted(d, reverse=True):
+              for x in d[rt]:
+                  if re.fullmatch(want, x['name']): print(x['udid']); sys.exit()
+          " "$1"; }
+          PHONE=$(pick 'iPhone 1[6-9] Pro')
+          PAD=$(pick 'iPad Pro 11-inch.*|iPad Air 11-inch.*')
+          mkdir -p shots
+          shoot() { # device name args...
+            dev=$1; name=$2; shift 2
+            xcrun simctl terminate $dev com.jaynichols.networkoob >/dev/null 2>&1 || true
+            xcrun simctl launch $dev com.jaynichols.networkoob -onboarded YES "$@" >/dev/null
+            sleep 7
+            xcrun simctl io $dev screenshot "shots/$name.png" >/dev/null 2>&1
+          }
+          for dev in $PHONE $PAD; do
+            [ -z "$dev" ] && continue
+            xcrun simctl boot $dev || true
+            xcrun simctl bootstatus $dev -b >/dev/null
+            xcrun simctl status_bar $dev override --time 9:41 --batteryState charged --batteryLevel 100 --cellularBars 4 || true
+            xcrun simctl install $dev "$APP"
+            p=$([ "$dev" = "$PHONE" ] && echo phone || echo pad)
+            xcrun simctl ui $dev appearance light
+            shoot $dev $p-01-home
+            shoot $dev $p-02-people -startTab people
+            shoot $dev $p-03-profile -startTab people -demoOpen person
+            shoot $dev $p-04-companies -startTab companies
+            shoot $dev $p-05-unit -startTab companies -demoOpen unit
+            shoot $dev $p-06-industries -startTab companies -startCompanies industries
+            shoot $dev $p-07-explore -startTab explore
+            shoot $dev $p-08-catchup -startTab catchup
+            shoot $dev $p-09-filters -startTab people -demoOpen filters
+            shoot $dev $p-10-settings -demoOpen settings
+            shoot $dev $p-11-import -demoOpen import
+            xcrun simctl ui $dev appearance dark
+            shoot $dev $p-12-home-dark
+            shoot $dev $p-13-people-dark -startTab people
+            xcrun simctl launch $dev com.jaynichols.networkoob -onboarded NO >/dev/null; sleep 6
+            xcrun simctl io $dev screenshot "shots/$p-00-welcome-dark.png" >/dev/null 2>&1
+            xcrun simctl ui $dev appearance light
+            xcrun simctl shutdown $dev || true
+          done
+          ls shots
+      - name: Publish screenshots to the ci-screens branch
+        continue-on-error: true
+        run: |
+          cd shots
+          git init -q -b ci-screens
+          git config user.name "ci"
+          git config user.email "ci@users.noreply.github.com"
+          echo "${{ github.sha }}" > SHA
+          git add -A && git commit -qm "screens ${{ github.sha }}"
+          git push -qf "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" ci-screens

@@ -124,7 +124,26 @@ final class AppModel {
         Notifications.shared.onAction = { [weak self] k, action in Task { @MainActor in await self?.handleNotification(k: k, action: action) } }
         Notifications.shared.deliverPending()
         if info.isSample && !prefs.bool(forKey: "onboarded") { showOnboarding = true }
+        applyDemoArguments()
     }
+
+    /// Launch arguments used by CI to capture screenshots, e.g. -startTab people -demoOpen person.
+    private func applyDemoArguments() {
+        if let t = prefs.string(forKey: "startTab"), let tab = AppTab(rawValue: t) { self.tab = tab }
+        if let m = prefs.string(forKey: "startCompanies"), let mode = CompaniesMode(rawValue: m) { companiesMode = mode }
+        switch prefs.string(forKey: "demoOpen") ?? "" {
+        case "person":
+            let k = (people.filter { !$0.waiting && $0.rx != nil }.max { $0.score < $1.score } ?? people.first)?.k
+            if let k { paths[tab, default: []].append(.person(k)) }
+        case "unit":
+            if let t = targets.first { paths[tab, default: []].append(.unit(t.name)) }
+        case "settings": showSettings = true
+        case "import": showImport = true
+        case "filters": showFiltersOnLaunch = true
+        default: break
+        }
+    }
+    var showFiltersOnLaunch = false
 
     func scheduleReload() {
         reloadTask?.cancel()

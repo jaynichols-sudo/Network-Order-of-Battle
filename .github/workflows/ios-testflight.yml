@@ -117,6 +117,13 @@ jobs:
             -authenticationKeyIssuerID "$ASC_ISSUER_ID" 2>&1 | tee "$RUNNER_TEMP/export.log" | tail -40
           grep -q "EXPORT SUCCEEDED\|Upload succeeded\|Uploaded" "$RUNNER_TEMP/export.log" || exit 1
 
+      - name: Wait for TestFlight processing
+        continue-on-error: true
+        timeout-minutes: 15
+        env:
+          BUILD_NUMBER: ${{ github.run_number }}
+        run: python3 ios/ci/asc_signing.py status
+
       - name: Remove temporary signing
         if: always()
         run: |

@@ -75,6 +75,7 @@ struct PeopleView: View {
             }
         }
         .sheet(isPresented: $showFilters) { FilterSheet() }
+        .onAppear { if model.showFiltersOnLaunch { model.showFiltersOnLaunch = false; showFilters = true } }
     }
 }
 
