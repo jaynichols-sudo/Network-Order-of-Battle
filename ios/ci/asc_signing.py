@@ -70,8 +70,13 @@ def setup():
 
     # 2. Import into a temporary keychain
     p12_pass = "ci-" + str(int(time.time()))
-    p12 = pkcs12.serialize_key_and_certificates(b"oob", key, certobj, None,
-                                                serialization.BestAvailableEncryption(p12_pass.encode()))
+    # macOS `security import` only understands the legacy PKCS#12 encryption (3DES + SHA1 MAC)
+    enc = (serialization.PrivateFormat.PKCS12.encryption_builder()
+           .kdf_rounds(50000)
+           .key_cert_algorithm(pkcs12.PBES.PBESv1SHA1And3KeyTripleDESCBC)
+           .hmac_hash(hashes.SHA1())
+           .build(p12_pass.encode()))
+    p12 = pkcs12.serialize_key_and_certificates(b"oob", key, certobj, None, enc)
     p12_path = os.path.join(tmp, "dist.p12")
     open(p12_path, "wb").write(p12)
     kc = os.path.join(tmp, "oob-ci.keychain-db")
