@@ -29,29 +29,8 @@ struct CatchUpView: View {
                 Text("\((queue.count - index).formatted()) to go")
                     .font(Theme.geist(.subheadline, .medium)).foregroundStyle(.secondary)
                 ZStack {
-                    ForEach(Array(queue[index..<min(queue.count, index + 3)].enumerated()).reversed(), id: \.element) { i, k in
-                        if let p = model.person(k) {
-                            DeckCard(person: p, lens: model.info.lens)
-                                .offset(i == 0 ? drag : CGSize(width: 0, height: CGFloat(i) * 10))
-                                .scaleEffect(i == 0 ? 1 : 1 - CGFloat(i) * 0.04)
-                                .rotationEffect(.degrees(i == 0 ? Double(drag.width / 18) : 0))
-                                .overlay(alignment: .topLeading) { if i == 0 { stamp("Star", Theme.amber, drag.width / 90).padding(20) } }
-                                .overlay(alignment: .topTrailing) { if i == 0 { stamp("Skip", .secondary, -drag.width / 90).padding(20) } }
-                                .gesture(DragGesture()
-                                    .onChanged { drag = $0.translation }
-                                    .onEnded { v in
-                                        if v.translation.width > 110 { decide(star: true) }
-                                        else if v.translation.width < -110 { decide(star: false) }
-                                        else { withAnimation(.spring) { drag = .zero } }
-                                    }, isEnabled: i == 0)
-                                .onTapGesture { if i == 0 { model.open(.person(k)) } }
-                                .accessibilityElement(children: .combine)
-                                .accessibilityHint(i == 0 ? "Swipe right to star, left to skip" : "")
-                                .accessibilityAction(named: "Star") { if i == 0 { decide(star: true) } }
-                                .accessibilityAction(named: "Skip") { if i == 0 { decide(star: false) } }
-                                .accessibilityHidden(i != 0)
-                                .allowsHitTesting(i == 0)
-                        }
+                    ForEach(Array(visible.enumerated()).reversed(), id: \.element) { i, k in
+                        card(k, depth: i)
                     }
                 }
                 .padding(.horizontal, 24)
@@ -78,6 +57,38 @@ struct CatchUpView: View {
         .navigationTitle("Catch Up")
         .toolbar { MainToolbar() }
         .task(id: "\(mode)-\(model.info.lastImport)-\(model.info.mode)") { await build() }
+    }
+
+    private var visible: [String] { Array(queue[index..<min(queue.count, index + 3)]) }
+
+    @ViewBuilder private func card(_ k: String, depth i: Int) -> some View {
+        if let p = model.person(k) {
+            let top = i == 0
+            DeckCard(person: p, lens: model.info.lens)
+                .offset(top ? drag : CGSize(width: 0, height: CGFloat(i) * 10))
+                .scaleEffect(top ? 1 : 1 - CGFloat(i) * 0.04)
+                .rotationEffect(.degrees(top ? Double(drag.width / 18) : 0))
+                .overlay(alignment: .topLeading) { if top { stamp("Star", Theme.amber, drag.width / 90).padding(20) } }
+                .overlay(alignment: .topTrailing) { if top { stamp("Skip", .secondary, -drag.width / 90).padding(20) } }
+                .gesture(swipe, isEnabled: top)
+                .onTapGesture { if top { model.open(.person(k)) } }
+                .accessibilityElement(children: .combine)
+                .accessibilityHint(top ? "Swipe right to star, left to skip" : "")
+                .accessibilityAction(named: "Star") { if top { decide(star: true) } }
+                .accessibilityAction(named: "Skip") { if top { decide(star: false) } }
+                .accessibilityHidden(!top)
+                .allowsHitTesting(top)
+        }
+    }
+
+    private var swipe: some Gesture {
+        DragGesture()
+            .onChanged { drag = $0.translation }
+            .onEnded { v in
+                if v.translation.width > 110 { decide(star: true) }
+                else if v.translation.width < -110 { decide(star: false) }
+                else { withAnimation(.spring) { drag = .zero } }
+            }
     }
 
     private func build() async {
