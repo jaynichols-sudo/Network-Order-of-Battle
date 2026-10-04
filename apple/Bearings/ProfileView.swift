@@ -16,6 +16,7 @@ struct ProfileView: View {
     @State private var loadedFor = ""
     @State private var placeQuery = ""
     @State private var editingPlace = false
+    @State private var writing = false
     @FocusState private var noteFocused: Bool
 
     var body: some View {
@@ -41,9 +42,11 @@ struct ProfileView: View {
                 notes(p)
             }
             .listStyle(.insetGrouped)
+            .sheet(isPresented: $writing) { MessageSheet(k: p.k) }
             .navigationTitle(p.f)
             .navigationBarTitleDisplayMode(.inline)
             .task(id: k) {
+                await model.loadFull(k)
                 links = await model.links(k)
                 fill(p)
             }
@@ -87,6 +90,7 @@ struct ProfileView: View {
                 Label(p.starred ? "Starred" : "Star", systemImage: p.starred ? "star.fill" : "star")
             }
             .tint(Theme.amber)
+            Button { writing = true } label: { Label("Write a message", systemImage: "square.and.pencil") }
             if let l = links, !l.profile.isEmpty {
                 LinkButton(title: p.u.isEmpty ? "Find on LinkedIn" : "LinkedIn profile", url: l.profile)
                 if model.salesNav { LinkButton(title: "Sales Navigator", url: l.salesNav, icon: "safari") }

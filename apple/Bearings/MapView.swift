@@ -113,6 +113,11 @@ struct PeopleMapView: View {
             .padding(.leading, 12)
             .padding(4)
             .background(Color(.secondarySystemGroupedBackground), in: Capsule())
+            NavigationLink(value: Route.trips) {
+                Label("Trips: see who’s near where you’re going", systemImage: "airplane")
+                    .font(Theme.geist(.subheadline, .semibold))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
             if center != nil {
                 Picker("Distance", selection: $radius) {
                     Text("25 mi").tag(25.0)

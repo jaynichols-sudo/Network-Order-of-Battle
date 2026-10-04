@@ -34,7 +34,8 @@ final class Notifications: NSObject, UNUserNotificationCenterDelegate, @unchecke
             try? await Task.sleep(nanoseconds: 800_000_000)
             if Task.isCancelled { return }
             let center = UNUserNotificationCenter.current()
-            center.removeAllPendingNotificationRequests()
+            let pending = await center.pendingNotificationRequests()
+            center.removePendingNotificationRequests(withIdentifiers: pending.map(\.identifier).filter { $0.hasPrefix("f-") || $0 == "refresh" })
             guard UserDefaults.standard.object(forKey: "notify") as? Bool ?? true, !model.info.isSample else { return }
             let settings = await center.notificationSettings()
             guard settings.authorizationStatus == .authorized || settings.authorizationStatus == .provisional else { return }
@@ -87,7 +88,11 @@ final class Notifications: NSObject, UNUserNotificationCenterDelegate, @unchecke
         let info = response.notification.request.content.userInfo
         let k = info["k"] as? String
         var action = response.actionIdentifier
-        if action == UNNotificationDefaultActionIdentifier { action = info["refresh"] != nil ? "refresh" : "open" }
+        if action == UNNotificationDefaultActionIdentifier {
+            if let m = info["meeting"] as? String { action = "meeting:" + m }
+            else if let t = info["trip"] as? String { action = "trip:" + t }
+            else { action = info["refresh"] != nil ? "refresh" : "open" }
+        }
         await MainActor.run {
             if let handler = self.onAction { handler(k, action) } else { self.pendingAction = (k, action) }
         }

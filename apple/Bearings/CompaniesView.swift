@@ -194,6 +194,7 @@ struct UnitView: View {
                 locationSection(u)
                 gapSection(u)
                 ForEach(u.rungs) { r in rungSection(r) }
+                alumniSection(u)
                 if u.isTarget { noteSection }
             }
         }
@@ -375,6 +376,30 @@ struct UnitView: View {
                 Text(r.label)
                 Spacer()
                 Text("\(r.keys.count)")
+            }
+        }
+    }
+
+    @ViewBuilder private func alumniSection(_ u: UnitDetail) -> some View {
+        let list = u.alumni ?? []
+        if !list.isEmpty {
+            Section {
+                ForEach(list.prefix(25)) { a in
+                    if let p = model.person(a.k) {
+                        NavigationLink(value: Route.person(p.k)) {
+                            VStack(alignment: .leading, spacing: 4) {
+                                PersonRow(person: p, lens: model.info.lens)
+                                Text("Was \(a.was.isEmpty ? "here" : a.was), until \(Day.nice(a.until))")
+                                    .font(Theme.geist(.footnote)).foregroundStyle(.secondary)
+                                    .padding(.leading, 54)
+                            }
+                        }
+                    }
+                }
+            } header: {
+                Text("Used to work here")
+            } footer: {
+                Text("People who were here at an earlier refresh and have since moved on. Often the best way in.")
             }
         }
     }

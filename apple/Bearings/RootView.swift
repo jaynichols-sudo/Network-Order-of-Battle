@@ -42,6 +42,9 @@ struct RootView: View {
                     case .person(let k): ProfileView(k: k)
                     case .unit(let name): UnitView(name: name)
                     case .industry(let id): IndustryView(id: id)
+                    case .meeting(let id): MeetingView(id: id)
+                    case .trip(let id): TripView(id: id)
+                    case .trips: TripsView()
                     }
                 }
         }

@@ -31,6 +31,9 @@ enum Route: Hashable {
     case person(String)
     case unit(String)
     case industry(String)
+    case meeting(String)
+    case trip(String)
+    case trips
 }
 
 enum CompaniesMode: String, CaseIterable, Identifiable {
@@ -55,6 +58,9 @@ struct ShareFile: Identifiable {
 @MainActor
 @Observable
 final class AppModel {
+    /// The one model, shared with Siri, Shortcuts and Spotlight.
+    static let shared = AppModel()
+
     private(set) var engine = Engine()
     let store = CloudStore()
 
@@ -117,7 +123,17 @@ final class AppModel {
 
     // MARK: loading
 
+    @ObservationIgnored private var startTask: Task<Void, Never>?
+
+    /// Safe to call from anywhere (Siri, widgets, the app); the first caller does the work, others wait.
     func start() async {
+        if let t = startTask { await t.value; return }
+        let t = Task { @MainActor in await self.doStart() }
+        startTask = t
+        await t.value
+    }
+
+    private func doStart() async {
         guard !loaded else { return }
         Theme.configureAppearance()
         constants = (try? await engine.call("constants", as: Constants.self)) ?? .empty
@@ -218,6 +234,8 @@ final class AppModel {
         await runSearch()
         await refreshCompanyPlaces()
         mergePlaces()
+        Task { await CalendarService.shared.scan(model: self) }
+        SpotlightIndex.update(people, sample: info.isSample)
         Notifications.shared.schedule(model: self)
         pushWatch()
     }
@@ -470,6 +488,33 @@ final class AppModel {
     func ranks() async -> RanksData? { try? await engine.call("ranks", [queryArgs], as: RanksData.self) }
     func clusters() async -> ClustersData? { try? await engine.call("clusters", [queryArgs, ["max": 40]], as: ClustersData.self) }
     func payoff() async -> Payoff? { try? await engine.call("payoff", as: Payoff.self) }
+    /// Swaps in the full record (message snippet, full notes) for a profile.
+    func loadFull(_ k: String) async {
+        guard var p = try? await engine.call("person", [k], as: Person?.self) else { return }
+        p.links = nil
+        byKey[k] = p
+        if let i = people.firstIndex(where: { $0.k == k }) { people[i] = p }
+    }
+
+    func messages(_ k: String, trip: (city: String, when: String)? = nil, meeting: String? = nil) async -> [DraftMessage] {
+        var ctx: [String: Any] = [:]
+        let me = (prefs.string(forKey: "name") ?? "").trimmingCharacters(in: .whitespaces)
+        if !me.isEmpty { ctx["me"] = me }
+        if let t = trip { ctx["trip"] = ["city": t.city, "when": t.when] }
+        if let m = meeting { ctx["meeting"] = m }
+        return (try? await engine.call("messages", [k, ctx], as: [DraftMessage].self)) ?? []
+    }
+
+    /// Calendar attendees to people in the network (nil where nobody matches).
+    func matchAttendees(_ list: [(email: String, name: String)]) async -> [String?] {
+        let arg = list.map { ["email": $0.email, "name": $0.name] }
+        return (try? await engine.call("matchAttendees", [arg], as: [String?].self)) ?? Array(repeating: nil, count: list.count)
+    }
+
+    func alsoAt(_ keys: [String]) async -> [String: [String]] {
+        (try? await engine.call("alsoAt", [keys], as: [String: [String]].self)) ?? [:]
+    }
+
     func links(_ k: String) async -> PersonLinks? {
         guard let p = try? await engine.call("person", [k], as: Person?.self) else { return nil }
         return p.links
@@ -547,6 +592,10 @@ final class AppModel {
             }
         case "tab":
             if let t = parts.first, let at = AppTab(rawValue: t) { tab = at }
+        case "meeting":
+            if let id = parts.first?.removingPercentEncoding { tab = .home; paths[.home] = [.meeting(id)] }
+        case "trip":
+            if let id = parts.first?.removingPercentEncoding { tab = .home; paths[.home] = [.trip(id)] }
         case "filter":
             if let sig = parts.first { perform(CardAction(kind: "filter", tab: nil, name: nil, sig: [sig], seg: nil, status: nil)) }
         default:
@@ -641,6 +690,8 @@ final class AppModel {
     func reminders() async -> [Reminder] { (try? await engine.call("reminders", as: [Reminder].self)) ?? [] }
 
     func handleNotification(k: String?, action: String) async {
+        if action.hasPrefix("meeting:") { tab = .home; paths[.home] = [.meeting(String(action.dropFirst(8)))]; return }
+        if action.hasPrefix("trip:") { tab = .home; paths[.home] = [.trip(String(action.dropFirst(5)))]; return }
         guard let k else { if action == "refresh" { showImport = true }; return }
         switch action {
         case "done": await followUp(k, days: 0)

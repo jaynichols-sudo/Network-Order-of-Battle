@@ -365,6 +365,8 @@ struct UnitDetail: Decodable {
     struct Links: Decodable { var company: String; var companyExact: Bool; var peopleAt: String; var salesNav: String }
     struct Location: Decodable { var name: String; var lat: Double; var lon: Double }
     var location: Location?
+    struct Alumnus: Decodable, Identifiable { var k: String; var was: String; var until: String; var id: String { k } }
+    var alumni: [Alumnus]?
     var name: String
     var count: Int
     var score: Int
@@ -514,4 +516,10 @@ struct ClustersData: Decodable {
     var people: [Dot]
     var minYear: Int
     var maxYear: Int
+}
+
+struct DraftMessage: Decodable, Identifiable, Hashable {
+    var id: String
+    var label: String
+    var text: String
 }

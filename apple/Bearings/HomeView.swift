@@ -8,6 +8,7 @@ struct HomeView: View {
             VStack(alignment: .leading, spacing: 18) {
                 header
                 banner
+                ComingUp()
                 StatsStrip()
                 LazyVStack(spacing: 12) {
                     ForEach(model.home.cards) { card in

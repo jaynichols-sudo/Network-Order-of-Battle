@@ -1,10 +1,11 @@
 import SwiftUI
+import CoreSpotlight
 import UIKit
 
 @main
 struct BearingsApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
-    @State private var model = AppModel()
+    @State private var model = AppModel.shared
     @Environment(\.scenePhase) private var phase
     @AppStorage("appearance") private var appearance = "system"
 
@@ -30,11 +31,18 @@ struct BearingsApp: App {
                         model.showImport = true
                     }
                 }
+                .onContinueUserActivity(CSSearchableItemActionType) { a in
+                    if let k = a.userInfo?[CSSearchableItemActivityIdentifier] as? String {
+                        model.tab = .people
+                        model.paths[.people] = [.person(k)]
+                    }
+                }
                 .onChange(of: phase) { _, p in
                     if p == .active, model.loaded {
                         Task {
                             await model.reload()
                             await model.drainWatch()
+                            await CalendarService.shared.scan(model: model, force: true)
                         }
                     }
                 }

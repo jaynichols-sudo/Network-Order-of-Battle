@@ -12,6 +12,7 @@ struct SettingsView: View {
     @AppStorage("haptics") private var haptics = true
     @AppStorage("contactPhotos") private var contactPhotos = true
     @State private var restoring = false
+    @State private var homeText = UserDefaults.standard.string(forKey: "homeName") ?? ""
 
     var body: some View {
         NavigationStack {
@@ -19,6 +20,7 @@ struct SettingsView: View {
                 generalSection
                 networkSection
                 contactsSection
+                calendarSection
                 dataSection
                 aboutSection
             }
@@ -81,6 +83,33 @@ struct SettingsView: View {
             Text("iPhone Contacts")
         } footer: {
             Text("Matching connections to your Contacts, by email or name, gives Bearings their photo and a rough location for the Map. It all happens on this device. It runs again after each LinkedIn refresh.")
+        }
+    }
+
+    private var calendarSection: some View {
+        Section {
+            Toggle("Meeting prep and trips", isOn: Binding(
+                get: { CalendarService.shared.enabled && CalendarService.shared.authorized },
+                set: { on in
+                    Task {
+                        if on { _ = await CalendarService.shared.requestAccess() } else { CalendarService.shared.enabled = false }
+                        await CalendarService.shared.scan(model: model, force: true)
+                    }
+                }))
+            TextField("Home city, like Greensboro, NC", text: $homeText)
+                .submitLabel(.done)
+                .onSubmit {
+                    Task {
+                        if await CalendarService.shared.setHome(homeText) {
+                            homeText = CalendarService.shared.homeName
+                            await CalendarService.shared.scan(model: model, force: true)
+                        } else { model.show("Couldn’t find “\(homeText)”") }
+                    }
+                }
+        } header: {
+            Text("Calendar")
+        } footer: {
+            Text("Bearings reads your calendar on this device to brief you 30 minutes before meetings with people you know, and to spot trips more than 75 miles from home. Nothing is uploaded.")
         }
     }
 

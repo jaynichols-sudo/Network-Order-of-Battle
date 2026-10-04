@@ -69,7 +69,7 @@ function applyLens(){ S.lens = S.lensPref == null ? autoLens() : !!S.lensPref; }
 const rehydrate = () => hydrate(S.all.map(stripRow));
 
 /* ---------- people as JSON for the UI ---------- */
-function vm(r){
+function vm(r, full){
   const c = r.cl;
   const o = {k: r.k, f: r.f || '', l: r.l || '', name: fullName(r), u: r.u || '', e: r.e || '', c: r.c || '', p: r.p || '', d: r.d || '',
     cl: {seg: c.seg, branch: c.branch, status: c.status, rank: c.rank, grade: c.grade, tier: c.tier, gn: c.gn, sen: c.sen, func: c.func, agency: c.agency, certs: c.certs, clr: !!c.clr, lv: c.lv, ind: c.ind, indHow: c.indHow || ''},
@@ -80,8 +80,9 @@ function vm(r){
   if (r.jc) o.jc = r.jc;
   if (r.fs) o.fs = r.fs;
   if (r.pv) o.pv = r.pv;
-  if (r.rx) o.rx = r.rx;
-  if (r.ed) o.ed = r.ed;
+  // the list view gets a slim copy; the profile asks for the full person
+  if (r.rx) o.rx = full ? r.rx : Object.fromEntries(Object.entries(r.rx).filter(([k]) => k !== 's' && k !== 'invn'));
+  if (r.ed) o.ed = full || !r.ed.note || r.ed.note.length <= 80 ? r.ed : Object.assign({}, r.ed, {note: r.ed.note.slice(0, 80)});
   return o;
 }
 
@@ -235,8 +236,67 @@ function unit(name){
     industry: {auto: autoInd, set: S.coInd[companyKey(name)] || ''},
     rungs: ladder().map(([lv, label]) => ({lv, label, keys: ps.filter(r => Math.min(4, Math.max(1, r.cl.lv)) === lv).map(r => r.k)})),
     links: {company: links.company(name), companyExact: liExact(name), peopleAt: links.peopleAt(name), salesNav: links.snCompany(name)},
-    location: loc};
+    location: loc, alumni: alumniOf(name).map(a => ({k: a.r.k, was: a.was, until: a.until}))};
 }
+// People who used to be at a company or command (seen in an earlier refresh) and have since moved on.
+function alumniOf(name){
+  const n = name.toLowerCase(), out = [];
+  for (const r of S.all){
+    if (r.x || !r.pv || !r.pv.length) continue;
+    if ((r.c || '').toLowerCase() === n || r.cl.agency === name) continue;
+    const hit = r.pv.find(v => { const c = (v.c || '').toLowerCase(); return c && (c === n || (n.length > 3 && c.includes(n))); });
+    if (hit) out.push({r, was: hit.p || '', until: hit.until || ''});
+  }
+  return out.sort((a, b) => bySenior(a.r, b.r));
+}
+
+/* ---------- ready-made messages ---------- */
+// Short, friendly starting points. The person edits before sending; nothing is sent from here.
+function messages(k, ctx){
+  const r = S.byK.get(k); if (!r) return [];
+  ctx = ctx || {};
+  const first = r.f || 'there', me = ctx.me ? `\n\n${ctx.me}` : '';
+  const co = r.c || '', title = r.p || '';
+  const out = [];
+  const add = (id, label, text) => out.push({id, label, text: text + me});
+  if (ctx.trip) add('trip', `Visiting ${ctx.trip.city}`, `Hi ${first}, I’ll be in ${ctx.trip.city} ${ctx.trip.when}. Any chance you have time for a coffee while I’m in town? It would be great to catch up.`);
+  if (ctx.meeting) add('after', 'After our meeting', `Hi ${first}, thanks for the time today. I appreciated the conversation about ${ctx.meeting}. I’ll follow up on what we discussed and keep you posted.`);
+  if (r.movedNow || r.jc) add('congrats', 'Congratulations on the new role', `Hi ${first}, congratulations on the new role${title ? ` as ${title}` : ''}${co ? ` at ${co}` : ''}! Well deserved. I’d love to hear how it’s going once you’ve settled in.`);
+  if (isAnniversary(r.d)){ const y = new Date().getFullYear() - +r.d.slice(0, 4); add('anniv', `${y} ${y === 1 ? 'year' : 'years'} connected`, `Hi ${first}, LinkedIn tells me we’ve been connected for ${y} ${y === 1 ? 'year' : 'years'} now. Hope all is well${co ? ` at ${co}` : ''}. What are you working on these days?`); }
+  if (isCooling(r)) add('cold', 'It’s been a while', `Hi ${first}, it’s been a while since we last talked and I wanted to check in. How are things${co ? ` at ${co}` : ''}? Would be good to catch up soon.`);
+  if (r.isNew) add('new', 'Thanks for connecting', `Hi ${first}, thanks for connecting. I’d welcome the chance to learn more about your work${co ? ` at ${co}` : ''}. Open to a quick call sometime in the next few weeks?`);
+  add('checkin', 'Just checking in', `Hi ${first}, hope you’re doing well. I was thinking about our last conversation and wanted to see how things are going${co ? ` at ${co}` : ''}.`);
+  add('intro', 'Ask for an introduction', `Hi ${first}, I’m hoping to connect with the right person${co ? ` at ${co}` : ''} about a project I’m working on. Would you be open to pointing me in the right direction or making a quick introduction?`);
+  return out;
+}
+
+/* ---------- calendar matching ---------- */
+// Matches meeting attendees ({email, name}) to people in the network. Email first, then a unique full name.
+function matchAttendees(list){
+  const byEmail = new Map(), byName = new Map();
+  for (const r of S.all){
+    if (r.x) continue;
+    if (r.e) byEmail.set(r.e.toLowerCase(), r.k);
+    const n = `${r.f} ${r.l}`.toLowerCase().replace(/[^a-z ]/g, '').replace(/\s+/g, ' ').trim();
+    if (n) byName.set(n, byName.has(n) ? null : r.k);
+  }
+  return (list || []).map(a => {
+    const e = (a.email || '').toLowerCase();
+    if (e && byEmail.has(e)) return byEmail.get(e);
+    let n = (a.name || '').replace(/\(.*?\)/g, '');
+    if (n.includes(',')){ const [l, f] = n.split(','); n = `${f} ${l}`; }
+    n = n.toLowerCase().replace(/[^a-z ]/g, '').replace(/\s+/g, ' ').trim();
+    return (n && byName.get(n)) || null;
+  });
+}
+// Everyone at the companies of the given people, for "who else do you know there".
+function alsoAt(keys){
+  const cos = new Set(keys.map(k => S.byK.get(k)).filter(Boolean).map(r => r.cl.agency || r.c).filter(Boolean));
+  const out = {};
+  for (const c of cos) out[c] = unitPeople(c).filter(r => !keys.includes(r.k)).sort(bySenior).slice(0, 6).map(r => r.k);
+  return out;
+}
+
 function addTargetCandidates(q){
   const counts = new Map();
   for (const r of S.all){ if (r.x) continue; if (r.cl.agency) counts.set(r.cl.agency, (counts.get(r.cl.agency) || 0) + 1); if (r.c) counts.set(r.c, (counts.get(r.c) || 0) + 1); }
@@ -661,13 +721,13 @@ function fileData(name){
 function clearNotes(){ S.edits = {}; S.review = {}; S.targets = []; S.coInd = Object.create(null); S.coLink = Object.create(null); S.coLoc = Object.create(null); return true; }
 function setLens(pref){ S.lensPref = pref == null ? null : !!pref; applyLens(); return info(); }
 function people(){ return S.all.map(vm); }
-function person(k){ const r = S.byK.get(k); if (!r) return null; return Object.assign(vm(r), {links: {profile: links.person(r), salesNav: links.snPerson(r)}}); }
+function person(k){ const r = S.byK.get(k); if (!r) return null; return Object.assign(vm(r, true), {links: {profile: links.person(r), salesNav: links.snPerson(r)}}); }
 function constants(){
   return {industries: INDUSTRIES.map(i => ({id: i.id, short: i.short, color: i.color})), seniority: SENIORITY, funcs: FUNCS, segs: SEGS.map(s => ({id: s.id, short: s.short, color: segColor(s.id)})),
     branches: BRANCHES, statuses: STATUSES, tiers: TIERS, certs: CERTS.map(c => c[0]), since: SINCE, signals: SIGNALS_UI, grades: GRADE_OPTS, bands: BAND_LABEL, unclassified: UNCLASSIFIED, gov: GOV_IND};
 }
 
-const api = {load, loadSample, loadFiles, clearNotes, clusters, placeClues, setCompanyLocation, companyPlaces, setLens, info, people, person, search, facets, home, payoff, targets, unit, addTargetCandidates, toggleTarget, setTargetNote, orgs,
+const api = {load, loadSample, loadFiles, clearNotes, clusters, placeClues, setCompanyLocation, companyPlaces, messages, matchAttendees, alsoAt, setLens, info, people, person, search, facets, home, payoff, targets, unit, addTargetCandidates, toggleTarget, setTargetNote, orgs,
   industries, industry, setCompanyIndustry, setCompanyLink, ranks, deck, deckCount, reviewed, radar, setEdit, followUp, markReplied, addNote,
   importTexts, backup, restore, exportCSV, reminders, watch, constants};
 // Every call goes through here: JSON string in, JSON string out, errors as {error}.
