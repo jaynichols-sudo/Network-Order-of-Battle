@@ -35,7 +35,7 @@ struct HomeView: View {
         VStack(alignment: .leading, spacing: 4) {
             Text(greeting)
                 .geist(.title2, .bold)
-            Text(model.info.isSample
+            Text(model.info.isSample && !UserDefaults.standard.bool(forKey: "storeMode")
                  ? "You’re looking around a sample network."
                  : "\(model.info.count.formatted()) people in your network\(model.info.lastImport.isEmpty ? "" : ", refreshed \(Day.nice(model.info.lastImport))").")
                 .foregroundStyle(.secondary)
@@ -49,7 +49,7 @@ struct HomeView: View {
             Callout(icon: "exclamationmark.triangle.fill", tint: Theme.bad, title: "Couldn’t load", text: model.errorNote)
         } else if !model.syncNote.isEmpty {
             Callout(icon: "icloud.and.arrow.down", tint: Theme.info, title: "Syncing", text: model.syncNote)
-        } else if model.info.isSample {
+        } else if model.info.isSample && !UserDefaults.standard.bool(forKey: "storeMode") {
             Callout(icon: "square.and.arrow.down", tint: Theme.accent, title: "See your own network",
                     text: "Import your LinkedIn connections. It takes about three minutes and stays private to you.",
                     button: "Import connections") { model.showImport = true }

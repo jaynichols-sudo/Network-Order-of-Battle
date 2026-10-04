@@ -70,7 +70,7 @@ jobs:
             xcrun simctl install $dev "$APP"
             python3 -c "import json; [print(n + ' ' + ' '.join(a)) for n, a, _ in json.load(open('store/listing.json'))['screens']]" | while read name args; do
               xcrun simctl terminate $dev com.jaynichols.networkoob >/dev/null 2>&1 || true
-              xcrun simctl launch $dev com.jaynichols.networkoob -onboarded YES $args >/dev/null
+              xcrun simctl launch $dev com.jaynichols.networkoob -onboarded YES -storeMode YES $args >/dev/null
               sleep 8
               xcrun simctl io $dev screenshot "raw/$p-$name.png" >/dev/null 2>&1
             done

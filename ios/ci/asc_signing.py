@@ -107,7 +107,7 @@ def setup():
             print("Registered bundle ID", bid)
         name = f"Bearings CI {role} {run}"
         prof = call("POST", "/profiles", {"data": {"type": "profiles",
-            "attributes": {"name": name, "profileType": "IOS_APP_STORE"},
+            "attributes": {"name": name, "profileType": os.environ.get("PROFILE_TYPE", "IOS_APP_STORE")},
             "relationships": {"bundleId": {"data": {"type": "bundleIds", "id": bundle["id"]}},
                               "certificates": {"data": [{"type": "certificates", "id": cert_id}]}}}})["data"]
         ids.append(prof["id"])
@@ -120,14 +120,40 @@ def setup():
             os.makedirs(d, exist_ok=True)
             open(os.path.join(d, uuid + ".mobileprovision"), "wb").write(content)
         print("Created and installed profile", name, uuid)
+    if os.environ.get("INSTALLER_CERT"):
+        installer(kc, kc_pass, tmp, run)
     env_out(OOB_PROFILE_IDS=",".join(ids), OOB_PROFILE_MAP=json.dumps(mapping),
             **{"OOB_PROFILE_" + r: n for r, n in names.items()},
             OOB_PROFILE_NAME=names.get("APP", ""))
 
 
+def installer(kc, kc_pass, tmp, run):
+    """A Mac Installer Distribution certificate, for signing the Mac app's upload package."""
+    key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    csr = (x509.CertificateSigningRequestBuilder()
+           .subject_name(x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, f"Bearings CI installer {run}")]))
+           .sign(key, hashes.SHA256()))
+    cert = call("POST", "/certificates", {"data": {"type": "certificates", "attributes": {
+        "certificateType": "MAC_INSTALLER_DISTRIBUTION", "csrContent": csr.public_bytes(serialization.Encoding.PEM).decode()}}})["data"]
+    env_out(OOB_INSTALLER_CERT_ID=cert["id"])
+    certobj = x509.load_der_x509_certificate(base64.b64decode(cert["attributes"]["certificateContent"]))
+    p12_pass = "ci-inst-" + str(int(time.time()))
+    enc = (serialization.PrivateFormat.PKCS12.encryption_builder().kdf_rounds(50000)
+           .key_cert_algorithm(pkcs12.PBES.PBESv1SHA1And3KeyTripleDESCBC).hmac_hash(hashes.SHA1()).build(p12_pass.encode()))
+    path = os.path.join(tmp, "installer.p12")
+    open(path, "wb").write(pkcs12.serialize_key_and_certificates(b"installer", key, certobj, None, enc))
+    subprocess.run(["security", "import", path, "-k", kc, "-P", p12_pass, "-T", "/usr/bin/productbuild", "-T", "/usr/bin/codesign", "-T", "/usr/bin/security"], check=True)
+    subprocess.run(["security", "set-key-partition-list", "-S", "apple-tool:,apple:,codesign:,productbuild:", "-s", "-k", kc_pass, kc], check=True)
+    print("Created installer certificate", cert["id"])
+
+
 def cleanup():
     pids = [p for p in (os.environ.get("OOB_PROFILE_IDS") or os.environ.get("OOB_PROFILE_ID") or "").split(",") if p]
     cid = os.environ.get("OOB_CERT_ID")
+    icid = os.environ.get("OOB_INSTALLER_CERT_ID")
+    if icid:
+        call_soft("DELETE", f"/certificates/{icid}")
+        print("Revoked installer certificate", icid)
     for pid in pids:
         call("DELETE", f"/profiles/{pid}")
         print("Deleted profile", pid)
