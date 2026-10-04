@@ -4,6 +4,9 @@ rmSync('www', { recursive: true, force: true });
 mkdirSync('www/fonts', { recursive: true });
 copyFileSync('src/index.html', 'www/index.html');
 copyFileSync('src/styles.css', 'www/styles.css');
+copyFileSync('node_modules/leaflet/dist/leaflet.css', 'www/leaflet.css');
+mkdirSync('www/geo', { recursive: true });
+for (const f of ['geo-phone.json', 'geo-cities.json']) copyFileSync(`apple/Bearings/Resources/${f}`, `www/geo/${f}`);
 const fonts = [
   ['geist', [400, 500, 600, 700, 800]],
 ];

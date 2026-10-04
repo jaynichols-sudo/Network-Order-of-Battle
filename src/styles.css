@@ -586,3 +586,15 @@ body:not(.has-rel) .rel-only{display:none!important}
 
 .btn.li.sn{color:#0A66C2;border-color:color-mix(in srgb,#0A66C2 35%,var(--line-2))}
 :root[data-theme="dark"] .btn.li.sn{color:#70B5F9}
+
+/* map */
+.geo-ctl{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:4px 0 12px}
+.geo-ctl input{flex:1;min-width:180px;height:42px;border-radius:12px;border:1px solid var(--line);background:var(--surface);color:var(--ink);padding:0 14px;font:500 15px var(--f-body)}
+.geo-map{height:380px;border-radius:18px;overflow:hidden;border:1px solid var(--line);background:var(--bg-2);z-index:0}
+.geo-count{background:transparent;border:0;box-shadow:none;color:#fff;font:700 12px var(--f-display);padding:0}
+.geo-count::before{display:none}
+.geo-group{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:12px 14px;margin:10px 0}
+.geo-group p{margin:0 0 6px}
+.loc-row p{margin:4px 0 8px}
+.loc-row input,#coLocIn{flex:1;min-width:160px;height:40px;border-radius:10px;border:1px solid var(--line);background:var(--surface);color:var(--ink);padding:0 12px;font:500 15px var(--f-body)}
+.msg-text{width:100%;border-radius:14px;border:1px solid var(--line);background:var(--surface);color:var(--ink);padding:12px 14px;font:400 16px/1.5 var(--f-body);margin:12px 0}

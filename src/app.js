@@ -12,6 +12,9 @@ import {
   classify, keyOf, stripRow, readFile, mergeImport, sampleNetwork, warmth,
 } from './core.js';
 import { parseQuery, matchNL } from './nlq.js';
+import { loadGeo, lookup, placesFromContacts, miles } from './geo.js';
+import { Contacts } from '@capacitor-community/contacts';
+import L from 'leaflet';
 import { createWeb } from './web.js';
 import { INDUSTRIES, indColor, indShort, setIndustryOverrides, companyKey, UNCLASSIFIED, GOV_IND } from './industry.js';
 
@@ -82,7 +85,7 @@ function readTheme(){
 readTheme();
 
 /* ---------- state ---------- */
-const S = {all: [], edits: {}, review: {}, targets: [], meta: null, mode: 'sample', rev: null, tab: 'home', mapMode: 'scope', unitsMode: 'targets', sort: 'new', shown: 60, sel: null, deck: 'week', pending: null, syncNote: '', nl: null, nlChips: [], cards: [], coInd: Object.create(null), coLink: Object.create(null), uncShown: 25};
+const S = {all: [], edits: {}, review: {}, targets: [], meta: null, mode: 'sample', rev: null, tab: 'home', mapMode: 'scope', unitsMode: 'targets', sort: 'new', shown: 60, sel: null, deck: 'week', pending: null, syncNote: '', nl: null, nlChips: [], cards: [], coInd: Object.create(null), coLink: Object.create(null), coLoc: {}, places: {}, found: {}, placesMatched: 0, uncShown: 25};
 const F = {q: '', rel: new Set, seg: new Set, branch: new Set, status: new Set, tier: new Set, sen: new Set, func: new Set, ind: new Set, cert: new Set, sig: new Set, agency: '', company: '', since: '', removed: false};
 let VIEW = [];
 
@@ -102,6 +105,7 @@ function hydrate(rows){
     return Object.assign({}, r, {k, cl, ed: ed || null, isNew, movedNow, hay, wm});
   });
   S.hasRel = anyRel; document.body.classList.toggle('has-rel', anyRel);
+  mergePlaces();
 }
 
 /* ---------- filtering ---------- */
@@ -182,6 +186,7 @@ function renderTab(){
     renderMapCtl();
     if (S.mapMode === 'scope') Radar.update();
     else if (S.mapMode === 'web'){ Web.update(VIEW.filter(r => F.removed || !r.x), groupList().map(g => g.id)); Replay.bounds(); }
+    else if (S.mapMode === 'geo') renderGeo();
     else renderRanks();
   }
   if (S.tab === 'companies') renderUnits();
@@ -193,7 +198,8 @@ function renderMapCtl(){
   if (S.mapMode === 'ranks' && !LENS_FED) S.mapMode = 'scope';
   $$('#mapCtl button').forEach(b => b.setAttribute('aria-checked', String(b.dataset.map === S.mapMode)));
   $$('[data-sub]').forEach(el => { el.hidden = el.dataset.sub !== S.mapMode; });
-  $('#mapHint').textContent = S.mapMode === 'scope' ? 'More senior people sit closer to the middle. Tap a slice to zoom in.'
+  $('#mapHint').textContent = S.mapMode === 'geo' ? 'Where your people are. Search a city or tap Near me to see who’s nearby.'
+    : S.mapMode === 'scope' ? 'More senior people sit closer to the middle. Tap a slice to zoom in.'
     : S.mapMode === 'web' ? 'Pinch or scroll to zoom. Tap a cluster to open it, press and hold a person for a preview.'
     : 'Tap a number to see those people.';
 }
@@ -720,6 +726,8 @@ function openUnit(name){
     <div class="row"><button type="button" class="btn${target ? '' : ' primary'}" data-toggle-target="${esc(name)}">${target ? 'Remove from watchlist' : 'Add to watchlist'}</button><button type="button" class="btn" data-unit-people="${esc(name)}">Show in People</button></div>
     <div class="li-row" id="liRow"><span class="li-label">On LinkedIn</span><button type="button" class="btn li" data-link="${esc(liCompany(name))}">${ICON.ext}${liExact(name) ? 'Company page' : 'Find company page'}</button><button type="button" class="btn li" data-link="${esc(liPeopleAt(name))}">${ICON.ext}Your connections there</button>${snButton(snCompany(name))}<button type="button" class="linkish" data-set-li-page="${esc(name)}">${liExact(name) ? 'Change page link' : 'Save the exact page'}</button></div>
     ${gaps.length ? `<div class="gaps">${gaps.map(g => `<p><span>!</span>${esc(g)}</p>`).join('')}</div>` : '<div class="gaps ok"><p><span>✓</span>Covered at every level</p></div>'}
+    ${companyLocationRow(name)}
+    ${alumniHTML(name)}
     <div class="ladder">${rows}</div>
     ${target ? `<label class="form full" style="display:flex;flex-direction:column;gap:6px;font-size:14px;font-weight:600;color:var(--ink-2)">Notes<textarea id="unitNote" data-unit-note="${esc(name)}" placeholder="What you’re working on here, who to meet next">${esc(target.note || '')}</textarea></label>` : ''}`);
   animateRings(Sheet.body);
@@ -1209,8 +1217,10 @@ function openProfile(k, {focusNotes, back} = {}){
   Sheet.open('profile', `
     ${back ? `<button type="button" class="backlink" data-unit="${esc(back)}">${ICON.back}${esc(back)}</button>` : ''}
     <div class="sh-head"><div class="prof-top">${avatar(r)}<div><h2>${esc(r.f)} ${esc(r.l)}</h2><p>${esc(r.p || '')}</p>${r.c ? `<p style="color:var(--ink);font-weight:600">${esc(r.c)}</p>` : ''}</div></div><button type="button" class="x" data-act="close" aria-label="Close">${ICON.x}</button></div>
-    <div class="row"><button type="button" class="btn${ed.star ? ' accent' : ''}" data-act="toggle-star" data-k="${esc(k)}">${ed.star ? '★ Starred' : '☆ Star'}</button>${link}${sn}${r.e ? `<button type="button" class="btn" data-copy="${esc(r.e)}">Copy email</button>` : ''}${r.c ? `<button type="button" class="btn ghost" data-unit="${esc(r.c)}">More at ${esc(r.c.length > 18 ? r.c.slice(0, 17) + '…' : r.c)}</button>` : ''}</div>
+    <div class="row"><button type="button" class="btn${ed.star ? ' accent' : ''}" data-act="toggle-star" data-k="${esc(k)}">${ed.star ? '★ Starred' : '☆ Star'}</button><button type="button" class="btn" data-msg="${esc(k)}">Write a message</button>${link}${sn}${r.e ? `<button type="button" class="btn" data-copy="${esc(r.e)}">Copy email</button>` : ''}${r.c ? `<button type="button" class="btn ghost" data-unit="${esc(r.c)}">More at ${esc(r.c.length > 18 ? r.c.slice(0, 17) + '…' : r.c)}</button>` : ''}</div>
     ${relSection(r)}
+    <h3 class="sect">Location</h3>
+    ${locationRow(r)}
     <h3 class="sect">Follow up</h3>
     ${follow}
     <dl class="kv">
@@ -1275,7 +1285,7 @@ async function commitImport(){
   try {
     const wasSample = S.mode === 'sample';
     await persist(plan); S.mode = 'live';
-    if (wasSample){ S.edits = {}; S.review = {}; S.targets = []; S.coInd = Object.create(null); S.coLink = Object.create(null); await saveEdits(); await saveReview(); }
+    if (wasSample){ S.edits = {}; S.review = {}; S.targets = []; S.coInd = Object.create(null); S.coLink = Object.create(null); S.coLoc = {}; S.found = {}; await saveEdits(); await saveReview(); }
     S.meta = plan.meta; hydrate(plan.rows); S.pending = null; Deck.reset();
     Onboard.done(); applyLens(); render(); fx.success(); scheduleReminders();
     const st = plan.stats;
@@ -1414,6 +1424,154 @@ async function onNotificationAction(a){
   if (k){ setTab('people', {silent: true}); openProfile(k); } else if (n && n.id === 1) showImport();
 }
 
+/* ---------- places: map, nearby, locations ---------- */
+// LinkedIn's export has no locations. They come from the phone's contacts (address, then phone
+// prefix), from locations set on a company or person, and for the sample network, made-up spots.
+const SAMPLE_SPOTS = [['Washington, DC', 38.8951, -77.0364], ['Arlington, VA', 38.8816, -77.091], ['Norfolk, VA', 36.8468, -76.2852], ['Raleigh, NC', 35.7721, -78.6386], ['Greensboro, NC', 36.0726, -79.792], ['Jacksonville, NC', 34.7541, -77.4302], ['Tampa, FL', 27.9475, -82.4584], ['San Diego, CA', 32.7157, -117.1647], ['Colorado Springs, CO', 38.8339, -104.8214], ['Huntsville, AL', 34.7304, -86.5861], ['San Antonio, TX', 29.4241, -98.4936], ['Charleston, SC', 32.7765, -79.9311], ['Atlanta, GA', 33.749, -84.388], ['Honolulu, HI', 21.3069, -157.8583], ['London, United Kingdom', 51.5085, -0.1257], ['Stuttgart, Germany', 48.7823, 9.177]];
+function mergePlaces(){
+  const out = {};
+  if (S.mode === 'sample'){ for (const r of S.all){ if (r.x) continue; const h = hash(r.k); if (h % 10 < 7){ const sp = SAMPLE_SPOTS[Math.floor(h / 10) % SAMPLE_SPOTS.length]; out[r.k] = {name: sp[0], lat: sp[1], lon: sp[2], prec: 'city', src: 'sample'}; } } }
+  else Object.assign(out, S.found || {});
+  const loc = S.coLoc || {};
+  if (Object.keys(loc).length) for (const r of S.all){ if (r.x) continue; const l = (r.cl.agency && loc[companyKey(r.cl.agency)]) || (r.c && loc[companyKey(r.c)]); if (l) out[r.k] = {name: l.name, lat: l.lat, lon: l.lon, prec: 'city', src: 'company'}; }
+  for (const r of S.all){ const e = r.ed; if (e && e.loc && e.lat != null && e.lon != null) out[r.k] = {name: e.loc, lat: +e.lat, lon: +e.lon, prec: 'city', src: 'you'}; }
+  S.places = out;
+}
+const PLACE_SRC = {you: 'Set by you', company: 'From the location you set for their company', address: 'From their address in your contacts', phone: 'From their phone number in your contacts', sample: 'Sample data'};
+function locationRow(r){
+  const pl = S.places && S.places[r.k];
+  return `<div class="loc-row">${pl ? `<p><b>${esc(pl.name)}${pl.prec !== 'city' ? ' (roughly)' : ''}</b><br><small class="muted">${esc(PLACE_SRC[pl.src] || '')}</small></p>` : '<p class="muted">Not known yet. LinkedIn doesn’t share locations.</p>'}
+    <div class="row"><input type="text" id="locIn" placeholder="City, like Tampa, FL or London" value="${esc(pl && pl.src === 'you' ? pl.name : '')}" autocomplete="off"><button type="button" class="btn" data-save-loc="${esc(r.k)}">${pl && pl.src === 'you' ? 'Change' : 'Set location'}</button>${pl && pl.src === 'you' ? `<button type="button" class="btn ghost" data-clear-loc="${esc(r.k)}">Clear</button>` : ''}</div></div>`;
+}
+async function saveLocation(k, text){
+  await loadGeo();
+  const hit = lookup(text);
+  if (!hit){ toast(`Couldn’t find “${text}”. Try a city and state, like Tampa, FL.`); return; }
+  await setEdit(k, {loc: hit.name, lat: hit.lat, lon: hit.lon});
+  fx.success(); toast(`Location set to ${hit.name}`); openProfile(k);
+}
+function companyLocationRow(name){
+  const l = (S.coLoc || {})[companyKey(name)];
+  return `<h3 class="sect">Location</h3><div class="loc-row"><p class="muted">${l ? `Everyone here: <b>${esc(l.name)}</b>` : 'Set a location for everyone here. Handy for a command, base or office. It shows them on the Map.'}</p>
+    <div class="row"><input type="text" id="coLocIn" placeholder="City, like Jacksonville, FL" value="${esc(l ? l.name : '')}" autocomplete="off"><button type="button" class="btn" data-save-co-loc="${esc(name)}">${l ? 'Change' : 'Set location'}</button></div></div>`;
+}
+async function saveCompanyLocation(name, text){
+  const key = companyKey(name); if (!key) return;
+  S.coLoc = S.coLoc || {};
+  if (!text.trim()){ delete S.coLoc[key]; }
+  else { await loadGeo(); const hit = lookup(text); if (!hit){ toast(`Couldn’t find “${text}”`); return; } S.coLoc[key] = {name: hit.name, lat: hit.lat, lon: hit.lon}; }
+  saveIndustries(); mergePlaces(); fx.success(); toast(text.trim() ? `Placed everyone at ${name}` : 'Location cleared'); openUnit(name);
+}
+function alumniHTML(name){
+  const n = name.toLowerCase(), out = [];
+  for (const r of S.all){
+    if (r.x || !r.pv || !r.pv.length || (r.c || '').toLowerCase() === n || r.cl.agency === name) continue;
+    const hit = r.pv.find(v => { const c = (v.c || '').toLowerCase(); return c && (c === n || (n.length > 3 && c.includes(n))); });
+    if (hit) out.push([r, hit]);
+  }
+  if (!out.length) return '';
+  out.sort((a, b) => a[0].cl.lv - b[0].cl.lv);
+  return `<h3 class="sect">Used to work here</h3><p class="muted">People who were here at an earlier refresh and have moved on. Often the best way in.</p><div class="rung-people">${out.slice(0, 20).map(([r, h]) => `<button type="button" class="mini" data-open="${esc(r.k)}" data-back="${esc(name)}">${avatar(r)}<span>${esc(r.f)} ${esc(r.l)}<em>Was ${esc(h.p || 'here')}, now ${esc(r.c || 'elsewhere')}</em></span></button>`).join('')}</div>`;
+}
+async function locateFromContacts(){
+  if (!NATIVE){ toast('Matching contacts works in the phone app.'); return; }
+  if (S.mode !== 'live'){ toast('Import your own network first.'); return; }
+  try {
+    const perm = await Contacts.requestPermissions();
+    if (perm.contacts !== 'granted' && perm.contacts !== 'limited'){ toast('Bearings needs access to your contacts for this.'); return; }
+    toast('Matching your contacts…');
+    const [{contacts}] = await Promise.all([Contacts.getContacts({projection: {name: true, organization: true, phones: true, emails: true, postalAddresses: true}}), loadGeo()]);
+    const {places, matched} = placesFromContacts(S.all, contacts || []);
+    S.found = places; S.placesMatched = matched;
+    await Store.write('places.json', {v: 1, built: TODAY, matched, people: places}).catch(() => {});
+    mergePlaces(); fx.success(); toast(`Found a location for ${fmt(Object.keys(S.places).length)} people`); renderGeo();
+  } catch (e) { toast('Couldn’t read contacts: ' + ((e && e.message) || 'unknown error')); }
+}
+const Geo = {map: null, layer: null, circle: null, center: null, centerName: '', radius: 50, place: null};
+function geoGroups(){
+  const by = new Map(), byK = new Map(S.all.map(r => [r.k, r]));
+  for (const [k, pl] of Object.entries(S.places || {})){
+    const r = byK.get(k); if (!r || r.x) continue;
+    let g = by.get(pl.name); if (!g){ g = {name: pl.name, lat: pl.lat, lon: pl.lon, rough: pl.prec !== 'city', people: []}; by.set(pl.name, g); }
+    g.people.push(r);
+  }
+  for (const g of by.values()) g.people.sort((a, b) => b.wm.score - a.wm.score || a.cl.lv - b.cl.lv);
+  return [...by.values()];
+}
+function renderGeo(){
+  const box = $('#geoMap'); if (!box) return;
+  if (!Geo.map){
+    Geo.map = L.map(box, {zoomControl: true, attributionControl: true, worldCopyJump: true}).setView([37.5, -92], 3);
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom: 18, attribution: '© OpenStreetMap contributors'}).addTo(Geo.map);
+    Geo.layer = L.layerGroup().addTo(Geo.map);
+  }
+  setTimeout(() => Geo.map && Geo.map.invalidateSize(), 60);
+  Geo.layer.clearLayers();
+  const groups = geoGroups();
+  for (const g of groups){
+    const n = g.people.length, rad = n >= 50 ? 20 : n >= 10 ? 15 : 11;
+    const m = L.circleMarker([g.lat, g.lon], {radius: rad, color: '#fff', weight: 2, fillColor: g.rough ? '#8F89A8' : '#7556E8', fillOpacity: 0.92});
+    m.bindTooltip(String(n), {permanent: true, direction: 'center', className: 'geo-count'});
+    m.on('click', () => { Geo.place = g.name; renderGeoList(); });
+    Geo.layer.addLayer(m);
+  }
+  if (Geo.circle){ Geo.map.removeLayer(Geo.circle); Geo.circle = null; }
+  if (Geo.center){ Geo.circle = L.circle([Geo.center.lat, Geo.center.lon], {radius: Geo.radius * 1609.344, color: '#FFB020', weight: 1.5, fillColor: '#FFB020', fillOpacity: 0.1}).addTo(Geo.map); }
+  const hasFound = S.mode === 'sample' || Object.keys(S.found || {}).length > 0;
+  $('#geoIntro').hidden = hasFound;
+  $('#geoClear').hidden = !Geo.center;
+  $('#geoR').value = String(Geo.radius);
+  $('#geoMeta').textContent = S.mode === 'sample' ? 'Sample network: locations are made up.' : `${fmt(Object.keys(S.places || {}).length)} of ${fmt(S.all.filter(r => !r.x).length)} people placed. Set anyone’s location from their profile, or a whole company from its page. Place data from GeoNames and Google’s libphonenumber.`;
+  renderGeoList();
+}
+function renderGeoList(){
+  const el = $('#geoList'); if (!el) return;
+  let groups = geoGroups(), title;
+  if (Geo.place){ groups = groups.filter(g => g.name === Geo.place); title = Geo.place; }
+  else if (Geo.center){
+    groups = groups.filter(g => !g.rough).map(g => Object.assign(g, {d: miles(Geo.center, g)})).filter(g => g.d <= Geo.radius).sort((a, b) => a.d - b.d);
+    const n = groups.reduce((a, g) => a + g.people.length, 0);
+    title = `${fmt(n)} ${n === 1 ? 'person' : 'people'} within ${Geo.radius} miles${Geo.centerName ? ' of ' + Geo.centerName : ''}`;
+  } else { groups = groups.sort((a, b) => b.people.length - a.people.length).slice(0, 12); title = 'Where your people are'; }
+  el.innerHTML = `<h3 class="sect">${esc(title)}${Geo.place ? ' <button type="button" class="linkish" data-geo-place="">Show all</button>' : ''}</h3>` + (groups.length ? groups.map(g => `<div class="geo-group"><p><b>${esc(g.name)}</b> <span class="muted">${fmt(g.people.length)} ${g.people.length === 1 ? 'person' : 'people'}${g.d != null ? `, ${g.d < 1 ? 'here' : Math.round(g.d) + ' mi'}` : g.rough ? ', roughly placed' : ''}</span></p><ul class="people">${g.people.slice(0, Geo.place ? 200 : 4).map(personRow).join('')}</ul>${!Geo.place && g.people.length > 4 ? `<button type="button" class="linkish" data-geo-place="${esc(g.name)}">All ${fmt(g.people.length)}</button>` : ''}</div>`).join('') : '<p class="muted">Nobody you know is placed here yet. Try a wider distance, match your contacts, or set locations on people and companies.</p>');
+}
+async function geoSearch(text){
+  await loadGeo();
+  const hit = lookup(text);
+  if (!hit){ toast(`Couldn’t find “${text}”. Try a city and state, like Tampa, FL.`); return; }
+  Geo.center = {lat: hit.lat, lon: hit.lon}; Geo.centerName = hit.name; Geo.place = null;
+  renderGeo(); Geo.map.setView([hit.lat, hit.lon], Geo.radius > 100 ? 6 : 8);
+}
+function geoNearMe(){
+  if (!navigator.geolocation){ toast('Location isn’t available here. Search for a city instead.'); return; }
+  navigator.geolocation.getCurrentPosition(p => {
+    Geo.center = {lat: p.coords.latitude, lon: p.coords.longitude}; Geo.centerName = ''; Geo.place = null;
+    renderGeo(); Geo.map.setView([Geo.center.lat, Geo.center.lon], 8);
+  }, () => toast('Location isn’t available. Allow it in settings, or search for a city.'), {maximumAge: 600000, timeout: 15000});
+}
+
+/* ---------- ready-made messages ---------- */
+function messageDrafts(r){
+  const first = r.f || 'there', co = r.c || '', title = r.p || '', me = (prefs.name || '').trim(), sign = me ? `\n\n${me.split(/\s+/)[0]}` : '';
+  const out = [], add = (id, label, text) => out.push({id, label, text: text + sign});
+  if (r.movedNow || r.jc) add('congrats', 'New role', `Hi ${first}, congratulations on the new role${title ? ` as ${title}` : ''}${co ? ` at ${co}` : ''}! Well deserved. I’d love to hear how it’s going once you’ve settled in.`);
+  if (isAnniversary(r.d)){ const y = new Date().getFullYear() - +r.d.slice(0, 4); add('anniv', `${y} years connected`, `Hi ${first}, LinkedIn tells me we’ve been connected for ${y} ${y === 1 ? 'year' : 'years'} now. Hope all is well${co ? ` at ${co}` : ''}. What are you working on these days?`); }
+  if (isCooling(r)) add('cold', 'It’s been a while', `Hi ${first}, it’s been a while since we last talked and I wanted to check in. How are things${co ? ` at ${co}` : ''}? Would be good to catch up soon.`);
+  if (r.isNew) add('new', 'Thanks for connecting', `Hi ${first}, thanks for connecting. I’d welcome the chance to learn more about your work${co ? ` at ${co}` : ''}. Open to a quick call sometime in the next few weeks?`);
+  if (Geo.centerName) add('trip', `Visiting ${Geo.centerName.split(',')[0]}`, `Hi ${first}, I’ll be in ${Geo.centerName.split(',')[0]} soon. Any chance you have time for a coffee while I’m in town?`);
+  add('checkin', 'Just checking in', `Hi ${first}, hope you’re doing well. I was thinking about our last conversation and wanted to see how things are going${co ? ` at ${co}` : ''}.`);
+  add('intro', 'Ask for an introduction', `Hi ${first}, I’m hoping to connect with the right person${co ? ` at ${co}` : ''} about a project I’m working on. Would you be open to pointing me in the right direction or making a quick introduction?`);
+  return out;
+}
+function openMessages(k){
+  const r = S.all.find(x => x.k === k); if (!r) return;
+  const drafts = messageDrafts(r), li = liPerson(r);
+  Sheet.open('message', head(`Message ${esc(r.f)}`, 'Pick a starting point and make it sound like you. LinkedIn doesn’t let apps send messages, so Bearings copies the text and opens their profile for you to paste.') + `
+    <div class="chips">${drafts.map((m, i) => `<button type="button" class="chip${i ? '' : ' on'}" data-msg-pick="${m.id}" data-msg-text="${esc(m.text)}">${esc(m.label)}</button>`).join('')}</div>
+    <textarea id="msgText" class="msg-text" rows="8">${esc(drafts[0].text)}</textarea>
+    <div class="row">${li ? `<button type="button" class="btn primary" data-msg-copy="${esc(li)}">Copy and open LinkedIn</button>` : ''}<button type="button" class="btn" data-msg-copy="-">Copy</button><button type="button" class="btn" data-msg-share="1">Share</button>${r.e ? `<a class="btn" href="mailto:${esc(r.e)}">Email</a>` : ''}</div>`);
+}
+
 /* ---------- onboarding ---------- */
 const OB_COLORS = ['#FFB020', '#7556E8', '#11946F', '#E5484D', '#3E6FE8', '#E57CD8', '#43D0C0', '#FF8A5C', '#9BBF3A'];
 const Onboard = (() => {
@@ -1539,6 +1697,7 @@ async function loadStore(opts = {}){
     const nextEdits = (e.data && e.data.edits) || {}, nextReview = (rv.data && rv.data.review) || {};
     if (opts.onlyIfChanged && S.mode === 'live' && n.data.meta && n.data.meta.rev === S.rev && JSON.stringify(nextEdits) === JSON.stringify(S.edits)){ S.review = nextReview; return; }
     S.edits = nextEdits; S.review = nextReview;
+    try { const pf = await Store.read('places.json'); S.found = (pf && pf.data && pf.data.people) || {}; S.placesMatched = (pf && pf.data && pf.data.matched) || 0; } catch { S.found = {}; }
     S.meta = n.data.meta || {}; S.rev = S.meta.rev; S.mode = 'live';
     hydrate(n.data.rows); Deck.reset(); applyLens(); render(); scheduleReminders();
     if (opts.announce) toast('Up to date');
@@ -1582,6 +1741,17 @@ document.addEventListener('click', async e => {
   const t = e.target.closest('button, .drop'); if (!t) return;
   const d = t.dataset;
   if (d.map){ if (d.map !== S.mapMode) setMapMode(d.map); return; }
+  if (d.msg){ openMessages(d.msg); return; }
+  if (d.msgPick){ const ta = $('#msgText'); if (ta){ ta.value = d.msgText; $$('[data-msg-pick]').forEach(b => b.classList.toggle('on', b === t.closest('[data-msg-pick]'))); } return; }
+  if (d.msgCopy){ const txt = ($('#msgText') || {}).value || ''; try { await navigator.clipboard.writeText(txt); } catch {} fx.success(); toast('Copied. Paste it into LinkedIn.'); if (d.msgCopy !== '-') openLinkedIn(d.msgCopy); return; }
+  if (d.msgShare){ const txt = ($('#msgText') || {}).value || ''; if (NATIVE) Share.share({text: txt}).catch(() => {}); else { try { await navigator.clipboard.writeText(txt); toast('Copied'); } catch {} } return; }
+  if (d.saveLoc){ await saveLocation(d.saveLoc, ($('#locIn') || {}).value || ''); return; }
+  if (d.clearLoc){ await setEdit(d.clearLoc, {loc: '', lat: null, lon: null}); toast('Location cleared'); openProfile(d.clearLoc); return; }
+  if (d.saveCoLoc){ await saveCompanyLocation(d.saveCoLoc, ($('#coLocIn') || {}).value || ''); return; }
+  if (d.geoContacts){ await locateFromContacts(); return; }
+  if (d.geoNear){ geoNearMe(); return; }
+  if (d.geoClear){ Geo.center = null; Geo.place = null; renderGeo(); return; }
+  if (d.geoPlace){ Geo.place = d.geoPlace; renderGeoList(); return; }
   if (d.themePick){ prefs.theme = d.themePick; savePrefs(); applyTheme(); fx.select(); $$('[data-theme-pick]').forEach(b => b.setAttribute('aria-checked', String(b.dataset.themePick === prefs.theme))); return; }
   if (d.follow){ const [k, n] = d.follow.split('|'); setFollowUp(k, +n); return; }
   if (d.replied){ const r = S.all.find(x => x.k === d.replied); if (r && r.rx){ fx.success(); await setEdit(r.k, {replied: r.rx.t}); toast('Marked as replied'); openProfile(r.k); } return; }
@@ -1673,6 +1843,8 @@ function applySearch(text){
   render();
 }
 let qT; $('#q').addEventListener('input', e => { clearTimeout(qT); qT = setTimeout(() => applySearch(e.target.value), 180); });
+document.addEventListener('keydown', e => { if (e.target && e.target.id === 'geoQ' && e.key === 'Enter'){ e.preventDefault(); geoSearch(e.target.value); } });
+document.addEventListener('change', e => { if (e.target && e.target.id === 'geoR'){ Geo.radius = +e.target.value; renderGeo(); } });
 $('#q').addEventListener('keydown', e => { if (e.key === 'Enter'){ e.target.blur(); if (S.tab === 'home' || S.tab === 'catchup' || S.tab === 'companies') setTab('people'); } });
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape' && Sheet.kind) Sheet.close();
@@ -1692,7 +1864,7 @@ document.addEventListener('drop', e => { const d = e.target.closest && e.target.
   let startTab = 'home', onboarded = false;
   try {
     startTab = localStorage.getItem('oob.tab') || 'home'; onboarded = !!localStorage.getItem('oob.onboarded');
-    const m = localStorage.getItem('oob.map'); if (['web', 'scope', 'ranks'].includes(m)) S.mapMode = m;
+    const m = localStorage.getItem('oob.map'); if (['web', 'scope', 'ranks', 'geo'].includes(m)) S.mapMode = m;
     const u = localStorage.getItem('oob.units'); if (['targets', 'industries', 'orgs'].includes(u)) S.unitsMode = u;
   } catch {}
   VIEW = S.all.filter(r => match(r));
