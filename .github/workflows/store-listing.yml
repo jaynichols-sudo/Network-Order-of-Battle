@@ -1,9 +1,7 @@
 name: Bearings App Store listing
 
 on:
-  push:
-    branches: [main]
-    paths: ['store/**', '.github/workflows/store-listing.yml']
+  # run by hand from the Actions tab: Mac runners use build minutes ten times faster
   workflow_dispatch:
 
 concurrency:

@@ -1,9 +1,7 @@
 name: Bearings Mac → TestFlight
 
 on:
-  push:
-    branches: [main]
-    paths: ['apple/**', 'src/**', 'ios/ci/**', '.github/workflows/mac-testflight.yml']
+  # run by hand from the Actions tab: Mac runners use build minutes ten times faster
   workflow_dispatch:
 
 concurrency:

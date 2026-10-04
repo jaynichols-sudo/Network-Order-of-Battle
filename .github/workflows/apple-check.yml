@@ -1,9 +1,7 @@
 name: Bearings native app check
 
 on:
-  push:
-    branches: [main]
-    paths: ['apple/**', 'src/**', '.github/workflows/apple-check.yml']
+  # run by hand from the Actions tab: Mac runners use build minutes ten times faster
   workflow_dispatch:
 
 permissions:
