@@ -56,7 +56,7 @@ def setup():
     # 1. Distribution certificate from a fresh RSA key
     key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
     csr = (x509.CertificateSigningRequestBuilder()
-           .subject_name(x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, f"OOB CI {run}"),
+           .subject_name(x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, f"Bearings CI {run}"),
                                     x509.NameAttribute(NameOID.EMAIL_ADDRESS, "ci@example.invalid")]))
            .sign(key, hashes.SHA256()))
     csr_pem = csr.public_bytes(serialization.Encoding.PEM).decode()
@@ -105,7 +105,7 @@ def setup():
             bundle = call("POST", "/bundleIds", {"data": {"type": "bundleIds", "attributes": {
                 "identifier": bid, "name": "Bearings " + role.title(), "platform": "IOS"}}})["data"]
             print("Registered bundle ID", bid)
-        name = f"OOB CI {role} {run}"
+        name = f"Bearings CI {role} {run}"
         prof = call("POST", "/profiles", {"data": {"type": "profiles",
             "attributes": {"name": name, "profileType": "IOS_APP_STORE"},
             "relationships": {"bundleId": {"data": {"type": "bundleIds", "id": bundle["id"]}},
@@ -166,6 +166,48 @@ def patch_project():
     print(f"Patched {n} App target configurations for manual signing")
 
 
+def call_soft(method, path, body=None):
+    """Like call(), but returns (ok, json-or-error-text) instead of exiting."""
+    req = urllib.request.Request(API + path, method=method,
+                                 data=json.dumps(body).encode() if body is not None else None,
+                                 headers={"Authorization": "Bearer " + token(), "Content-Type": "application/json"})
+    try:
+        with urllib.request.urlopen(req) as r:
+            raw = r.read()
+            return True, (json.loads(raw) if raw else {})
+    except urllib.error.HTTPError as e:
+        return False, e.read().decode()[:600]
+
+
+def rename():
+    """Sets the App Store name (first available of NAMES) and subtitle. Safe to run every build."""
+    bid = os.environ.get("APP_BUNDLE_ID", "com.jaynichols.networkoob")
+    names = [n.strip() for n in os.environ.get("NAMES", "Bearings").split("|") if n.strip()]
+    subtitle = os.environ.get("SUBTITLE", "")
+    app = call("GET", f"/apps?filter[bundleId]={bid}")["data"][0]
+    infos = call("GET", f"/apps/{app['id']}/appInfos")["data"]
+    editable = [i for i in infos if i["attributes"].get("appStoreState", i["attributes"].get("state", "")) not in ("READY_FOR_SALE", "READY_FOR_DISTRIBUTION", "REPLACED_WITH_NEW_INFO")] or infos
+    info = editable[0]
+    locs = call("GET", f"/appInfos/{info['id']}/appInfoLocalizations")["data"]
+    for loc in locs:
+        cur = loc["attributes"].get("name") or ""
+        if cur in names and (not subtitle or loc["attributes"].get("subtitle") == subtitle):
+            print(f"::notice title=App Store name::Already '{cur}' ({loc['attributes'].get('locale')})")
+            continue
+        done = False
+        for n in names:
+            attrs = {"name": n}
+            if subtitle: attrs["subtitle"] = subtitle
+            ok, res = call_soft("PATCH", f"/appInfoLocalizations/{loc['id']}", {"data": {"type": "appInfoLocalizations", "id": loc["id"], "attributes": attrs}})
+            if ok:
+                print(f"::notice title=App Store name::Renamed '{cur}' to '{n}' ({loc['attributes'].get('locale')})")
+                done = True
+                break
+            print(f"'{n}' not accepted: {res}")
+        if not done:
+            print(f"::warning title=App Store name::None of {names} were accepted. Still '{cur}'.")
+
+
 def status():
     """Waits for App Store Connect to finish processing this build and reports the result."""
     bid, build = os.environ.get("APP_BUNDLE_ID", "com.jaynichols.networkoob"), os.environ["BUILD_NUMBER"]
@@ -183,4 +225,4 @@ def status():
 
 
 if __name__ == "__main__":
-    {"setup": setup, "cleanup": cleanup, "patch": patch_project, "status": status}[sys.argv[1]]()
+    {"setup": setup, "cleanup": cleanup, "patch": patch_project, "status": status, "rename": rename}[sys.argv[1]]()

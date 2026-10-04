@@ -1,7 +1,7 @@
 {
-  "name": "network-order-of-battle",
+  "name": "bearings",
   "version": "1.0.0",
-  "description": "Network Order of Battle: map of LinkedIn connections by segment, branch and rank",
+  "description": "Bearings: know where everyone in your network landed",
   "scripts": {
     "build": "node scripts/build.mjs",
     "sync": "npm run build && npx cap sync"

@@ -13,12 +13,12 @@ App identifiers used everywhere below:
 ## 1. Apple Developer portal (developer.apple.com)
 
 1. **Team ID:** Account → Membership details. Copy the 10-character Team ID.
-2. **iCloud container:** Certificates, IDs & Profiles → Identifiers → **+** → *iCloud Containers* → Description `Network OOB`, Identifier `iCloud.com.jaynichols.networkoob` → Register.
-3. **App ID:** Identifiers → **+** → *App IDs* → *App* → Description `Network Order of Battle`, Bundle ID *Explicit* `com.jaynichols.networkoob`. Under Capabilities tick **iCloud** (choose "Include CloudKit support" is fine, either works). Register, then open the App ID again → iCloud → **Edit** → tick `iCloud.com.jaynichols.networkoob` → Save.
+2. **iCloud container:** Certificates, IDs & Profiles → Identifiers → **+** → *iCloud Containers* → Description `Bearings`, Identifier `iCloud.com.jaynichols.networkoob` → Register.
+3. **App ID:** Identifiers → **+** → *App IDs* → *App* → Description `Bearings`, Bundle ID *Explicit* `com.jaynichols.networkoob`. Under Capabilities tick **iCloud** (choose "Include CloudKit support" is fine, either works). Register, then open the App ID again → iCloud → **Edit** → tick `iCloud.com.jaynichols.networkoob` → Save.
 
 ## 2. App Store Connect (appstoreconnect.apple.com)
 
-1. **Create the app record:** Apps → **+** → New App. Platform **iOS**, Name `Network Order of Battle` (any unused name works, only you see it in TestFlight), Bundle ID `com.jaynichols.networkoob`, SKU `network-oob`, User Access *Full Access*.
+1. **Create the app record:** Apps → **+** → New App. Platform **iOS**, Name `Bearings` (or the closest available name; this is the App Store name), Bundle ID `com.jaynichols.networkoob`, SKU `network-oob`, User Access *Full Access*.
 2. **Mac availability:** in the app → Pricing and Availability → make sure **iPhone and iPad Apps on Apple Silicon Macs** is set to *Make this app available*. That is what puts it on your Mac.
 3. **API key for the build robot:** Users and Access → **Integrations** → App Store Connect API → Team Keys → **Generate API Key**. Name `GitHub Actions`, Access **Admin** (needed so the build can create its own signing certificate). Download the `.p8` file (you only get one chance) and copy the **Key ID** and the **Issuer ID** shown above the list.
 
@@ -45,7 +45,7 @@ Repo → Actions → **iOS + Mac → TestFlight** → Run workflow. It takes abo
 
 - **iPhone / iPad:** install the TestFlight app. In App Store Connect → your app → TestFlight → Internal Testing → create a group, add yourself, and add the build. Accept the invite in TestFlight.
 - **Mac (Apple Silicon):** install TestFlight from the Mac App Store and sign in with the same Apple ID. The app appears there too.
-- **Android:** Repo → Actions → latest **Android build** run → download the `order-of-battle-android-…` artifact, unzip, copy `app-release.apk` to the phone, and open it (allow "install unknown apps" for your file manager when asked). The `.aab` file in the same zip is what you would upload to Google Play later if you want store installs.
+- **Android:** Repo → Actions → latest **Android build** run → download the `bearings-android-…` artifact, unzip, copy `app-release.apk` to the phone, and open it (allow "install unknown apps" for your file manager when asked). The `.aab` file in the same zip is what you would upload to Google Play later if you want store installs.
 
 ## How data is stored
 

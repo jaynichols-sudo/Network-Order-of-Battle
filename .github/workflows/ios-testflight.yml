@@ -1,4 +1,4 @@
-name: iOS + Mac → TestFlight
+name: Bearings iOS + Mac → TestFlight
 
 on:
   push:
@@ -116,6 +116,13 @@ jobs:
             -authenticationKeyID "$ASC_KEY_ID" \
             -authenticationKeyIssuerID "$ASC_ISSUER_ID" 2>&1 | tee "$RUNNER_TEMP/export.log" | tail -40
           grep -q "EXPORT SUCCEEDED\|Upload succeeded\|Uploaded" "$RUNNER_TEMP/export.log" || exit 1
+
+      - name: Set the App Store name
+        continue-on-error: true
+        env:
+          NAMES: "Bearings|Bearings: Network Map|Bearings Network|Bearings: Know Your Network"
+          SUBTITLE: "Your network, mapped"
+        run: python3 ios/ci/asc_signing.py rename
 
       - name: Wait for TestFlight processing
         continue-on-error: true

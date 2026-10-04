@@ -1,4 +1,4 @@
-name: Android build
+name: Bearings Android build
 
 on:
   push:
@@ -49,7 +49,7 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: order-of-battle-android-${{ github.run_number }}
+          name: bearings-android-${{ github.run_number }}
           path: |
             android/app/build/outputs/apk/release/*.apk
             android/app/build/outputs/bundle/release/*.aab

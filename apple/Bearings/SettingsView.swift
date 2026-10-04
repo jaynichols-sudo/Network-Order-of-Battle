@@ -263,10 +263,15 @@ struct OnboardingView: View {
                 ForEach(Array(pages.enumerated()), id: \.offset) { i, p in
                     VStack(spacing: 22) {
                         Spacer()
-                        Image(systemName: p.0)
-                            .font(.system(size: 88))
-                            .foregroundStyle(Theme.amber, Theme.violet)
-                            .symbolRenderingMode(.palette)
+                        if i == 0 {
+                            Image("BrandMark").resizable().scaledToFit().frame(width: 150, height: 150)
+                                .accessibilityLabel("Bearings")
+                        } else {
+                            Image(systemName: p.0)
+                                .font(.system(size: 88))
+                                .foregroundStyle(Theme.amber, Theme.violet)
+                                .symbolRenderingMode(.palette)
+                        }
                         Text(p.1).geist(.title, .bold).multilineTextAlignment(.center)
                         Text(p.2).font(Theme.geist(.body)).foregroundStyle(.secondary).multilineTextAlignment(.center)
                         Spacer()

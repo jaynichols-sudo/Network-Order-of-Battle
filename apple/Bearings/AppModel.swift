@@ -124,6 +124,31 @@ final class AppModel {
     // MARK: loading
 
     @ObservationIgnored private var startTask: Task<Void, Never>?
+    @ObservationIgnored private var pendingHome: String?
+
+    /// Zip code (US) or the "Geo Location" area from LinkedIn's Profile.csv.
+    static func homeFromProfile(_ csv: String) -> String? {
+        let lines = csv.replacingOccurrences(of: "\u{FEFF}", with: "").components(separatedBy: .newlines).filter { !$0.isEmpty }
+        guard lines.count >= 2 else { return nil }
+        func cells(_ line: String) -> [String] {
+            var out: [String] = [], cur = "", quoted = false
+            for ch in line {
+                if ch == "\"" { quoted.toggle() } else if ch == "," && !quoted { out.append(cur); cur = "" } else { cur.append(ch) }
+            }
+            out.append(cur)
+            return out
+        }
+        let head = cells(lines[0]).map { $0.trimmingCharacters(in: .whitespaces).lowercased() }
+        let row = cells(lines[1])
+        func val(_ name: String) -> String {
+            guard let i = head.firstIndex(of: name), i < row.count else { return "" }
+            return row[i].trimmingCharacters(in: .whitespaces)
+        }
+        let zip = val("zip code"), geo = val("geo location").replacingOccurrences(of: " Area", with: "")
+        if zip.count == 5, zip.allSatisfy(\.isNumber) { return zip + ", USA" }
+        let first = geo.components(separatedBy: "--").first ?? geo
+        return first.isEmpty ? nil : first
+    }
 
     /// Safe to call from anywhere (Siri, widgets, the app); the first caller does the work, others wait.
     func start() async {
@@ -625,6 +650,8 @@ final class AppModel {
             let more = ["messages": "messages.csv", "invitations": "invitations.csv", "endGiven": "endorsement_given_info.csv",
                         "endRecv": "endorsement_received_info.csv", "recGiven": "recommendations_given.csv", "recRecv": "recommendations_received.csv"]
             for (k, f) in more { if let t = try? zip.text(f) { texts[k] = t } }
+            // your own profile says roughly where you live: a good default home for trip planning
+            if let prof = try? zip.text("profile.csv") { pendingHome = Self.homeFromProfile(prof) }
         } else {
             texts["connections"] = String(decoding: data, as: UTF8.self)
         }
@@ -643,6 +670,10 @@ final class AppModel {
         prefs.set(true, forKey: "onboarded")
         await reload()
         if Locator.contactsAllowed() || !foundPlaces.isEmpty { await locate(askContacts: false) }
+        if let h = pendingHome, CalendarService.shared.home == nil {
+            pendingHome = nil
+            _ = await CalendarService.shared.setHome(h)
+        }
         Haptic.success()
         if plan.wasSample || plan.stats.first {
             tab = .home
