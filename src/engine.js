@@ -10,7 +10,7 @@ import { parseQuery, matchNL } from './nlq.js';
 import { INDUSTRIES, indColor, indShort, setIndustryOverrides, companyKey, UNCLASSIFIED, GOV_IND } from './industry.js';
 
 /* ---------- state ---------- */
-const S = {all: [], byK: new Map(), edits: {}, review: {}, targets: [], meta: null, mode: 'sample', coInd: Object.create(null), coLink: Object.create(null), lensPref: null, lens: false, hasRel: false};
+const S = {all: [], byK: new Map(), edits: {}, review: {}, targets: [], meta: null, mode: 'sample', coInd: Object.create(null), coLink: Object.create(null), coLoc: Object.create(null), lensPref: null, lens: false, hasRel: false};
 const SEG_COLORS = ['#7A9A1E', '#3E7BE0', '#1E9E8F', '#7556E8', '#C79100', '#D9467F', '#E0683A', '#A07C50', '#6B7F99', '#5B6B83'];
 const segColor = seg => SEG_COLORS[SEGI[seg] ?? 9];
 const GOV_SEGS3 = ['DoD & Military', 'Federal Civilian', 'State & Local'];
@@ -226,6 +226,7 @@ const links = {
 };
 function unit(name){
   const ps = unitPeople(name).sort(bySenior);
+  const loc = companyLocation(name);
   const cov = coverage(ps), gaps = gapsOf(cov), target = S.targets.find(t => t.name === name);
   const isCo = S.all.some(r => r.c === name) && !S.all.some(r => r.cl.agency === name);
   const indCount = new Map(); ps.forEach(r => indCount.set(r.cl.ind, (indCount.get(r.cl.ind) || 0) + 1));
@@ -233,7 +234,8 @@ function unit(name){
   return {name, count: ps.length, score: cov.score, lv: cov.lv, gaps, isTarget: !!target, note: (target && target.note) || '', isCompany: isCo,
     industry: {auto: autoInd, set: S.coInd[companyKey(name)] || ''},
     rungs: ladder().map(([lv, label]) => ({lv, label, keys: ps.filter(r => Math.min(4, Math.max(1, r.cl.lv)) === lv).map(r => r.k)})),
-    links: {company: links.company(name), companyExact: liExact(name), peopleAt: links.peopleAt(name), salesNav: links.snCompany(name)}};
+    links: {company: links.company(name), companyExact: liExact(name), peopleAt: links.peopleAt(name), salesNav: links.snCompany(name)},
+    location: loc};
 }
 function addTargetCandidates(q){
   const counts = new Map();
@@ -319,6 +321,25 @@ function setCompanyIndustry(company, ind){
   rehydrate();
   return {companies: S.coInd, links: S.coLink};
 }
+// A location for everyone at a company, agency or command: {name, lat, lon}, or null to clear.
+function setCompanyLocation(company, loc){
+  const key = companyKey(company); if (!key) throw new Error('No company name');
+  if (loc && loc.name && isFinite(loc.lat) && isFinite(loc.lon)) S.coLoc[key] = {name: String(loc.name).slice(0, 80), lat: +loc.lat, lon: +loc.lon};
+  else delete S.coLoc[key];
+  return true;
+}
+// People placed by their company's or command's location. Agency wins over the raw company name.
+function companyPlaces(){
+  const out = {};
+  if (!Object.keys(S.coLoc).length) return out;
+  for (const r of S.all){
+    if (r.x) continue;
+    const l = (r.cl.agency && S.coLoc[companyKey(r.cl.agency)]) || (r.c && S.coLoc[companyKey(r.c)]);
+    if (l) out[r.k] = l;
+  }
+  return out;
+}
+const companyLocation = company => S.coLoc[companyKey(company)] || null;
 function setCompanyLink(company, url){
   const key = companyKey(company), v = String(url || '').trim();
   if (v && !/^https?:\/\/([a-z]+\.)?linkedin\.com\/(company|school|showcase)\/[^\s]+/i.test(v)) throw new Error('That doesn’t look like a LinkedIn company page address');
@@ -544,7 +565,7 @@ function importTexts(t, device){
 }
 
 /* ---------- backup, restore, export ---------- */
-function backup(){ return JSON.stringify({app: 'order-of-battle', kind: 'notes-backup', version: 1, created: new Date().toISOString(), edits: S.edits, targets: S.targets, companies: S.coInd, links: S.coLink, review: S.review}); }
+function backup(){ return JSON.stringify({app: 'order-of-battle', kind: 'notes-backup', version: 1, created: new Date().toISOString(), edits: S.edits, targets: S.targets, companies: S.coInd, links: S.coLink, locations: S.coLoc, review: S.review}); }
 function restore(text){
   const data = JSON.parse(text);
   if (!data || data.kind !== 'notes-backup' || typeof data.edits !== 'object') throw new Error('That isn’t a Bearings backup file.');
@@ -558,6 +579,7 @@ function restore(text){
   for (const t of data.targets || []) if (t && t.name && !S.targets.some(x => x.name === t.name)) S.targets.push(t);
   for (const [k, v] of Object.entries(data.companies || {})) if (!Object.hasOwn(S.coInd, k)) S.coInd[k] = v;
   for (const [k, v] of Object.entries(data.links || {})) if (!Object.hasOwn(S.coLink, k)) S.coLink[k] = v;
+  for (const [k, v] of Object.entries(data.locations || {})) if (!Object.hasOwn(S.coLoc, k)) S.coLoc[k] = v;
   for (const [k, v] of Object.entries(data.review || {})) if (!Object.hasOwn(S.review, k)) S.review[k] = v;
   rehydrate();
   return {edits: S.edits, targets: S.targets, companies: S.coInd, links: S.coLink, review: S.review, added, kept};
@@ -611,6 +633,7 @@ function load(st){
   S.targets = st.targets || [];
   S.coInd = Object.assign(Object.create(null), st.companies || {});
   S.coLink = Object.assign(Object.create(null), st.links || {});
+  S.coLoc = Object.assign(Object.create(null), st.locations || {});
   if ('lens' in st) S.lensPref = st.lens;
   hydrate(st.rows || []);
   return info();
@@ -625,17 +648,17 @@ function loadFiles(f, lens){
   const n = p(f.network), e = p(f.edits), rv = p(f.review), tg = p(f.targets), ci = p(f.industries);
   if (!n || !n.rows) return Object.assign(loadSample(), {empty: true});
   return load({mode: 'live', rows: n.rows, meta: n.meta || {}, edits: (e && e.edits) || {}, review: (rv && rv.review) || {}, targets: (tg && tg.targets) || [],
-    companies: (ci && ci.companies) || {}, links: (ci && ci.links) || {}, lens});
+    companies: (ci && ci.companies) || {}, links: (ci && ci.links) || {}, locations: (ci && ci.locations) || {}, lens});
 }
 function fileData(name){
   if (name === 'network'){ if (!S.pending) throw new Error('Nothing to save'); const p = S.pending; S.pending = null; return p; }
   if (name === 'edits') return {edits: S.edits, rev: Date.now()};
   if (name === 'review') return {review: S.review};
   if (name === 'targets') return {targets: S.targets};
-  if (name === 'industries') return {companies: S.coInd, links: S.coLink};
+  if (name === 'industries') return {companies: S.coInd, links: S.coLink, locations: S.coLoc};
   throw new Error('Unknown file ' + name);
 }
-function clearNotes(){ S.edits = {}; S.review = {}; S.targets = []; S.coInd = Object.create(null); S.coLink = Object.create(null); return true; }
+function clearNotes(){ S.edits = {}; S.review = {}; S.targets = []; S.coInd = Object.create(null); S.coLink = Object.create(null); S.coLoc = Object.create(null); return true; }
 function setLens(pref){ S.lensPref = pref == null ? null : !!pref; applyLens(); return info(); }
 function people(){ return S.all.map(vm); }
 function person(k){ const r = S.byK.get(k); if (!r) return null; return Object.assign(vm(r), {links: {profile: links.person(r), salesNav: links.snPerson(r)}}); }
@@ -644,7 +667,7 @@ function constants(){
     branches: BRANCHES, statuses: STATUSES, tiers: TIERS, certs: CERTS.map(c => c[0]), since: SINCE, signals: SIGNALS_UI, grades: GRADE_OPTS, bands: BAND_LABEL, unclassified: UNCLASSIFIED, gov: GOV_IND};
 }
 
-const api = {load, loadSample, loadFiles, clearNotes, clusters, placeClues, setLens, info, people, person, search, facets, home, payoff, targets, unit, addTargetCandidates, toggleTarget, setTargetNote, orgs,
+const api = {load, loadSample, loadFiles, clearNotes, clusters, placeClues, setCompanyLocation, companyPlaces, setLens, info, people, person, search, facets, home, payoff, targets, unit, addTargetCandidates, toggleTarget, setTargetNote, orgs,
   industries, industry, setCompanyIndustry, setCompanyLink, ranks, deck, deckCount, reviewed, radar, setEdit, followUp, markReplied, addNote,
   importTexts, backup, restore, exportCSV, reminders, watch, constants};
 // Every call goes through here: JSON string in, JSON string out, errors as {error}.

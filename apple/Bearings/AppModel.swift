@@ -2,6 +2,7 @@ import Foundation
 import SwiftUI
 import Observation
 import CoreLocation
+import WidgetKit
 
 enum AppTab: String, Hashable, CaseIterable {
     case home, people, companies, explore, catchup
@@ -73,6 +74,7 @@ final class AppModel {
     // places
     private(set) var places: [String: PersonPlace] = [:]
     private var foundPlaces: [String: PersonPlace] = [:]
+    private var companyPlaced: [String: PersonPlace] = [:]
     private(set) var placesBuilt = ""
     private(set) var contactsMatched = 0
     private(set) var locating = false
@@ -133,6 +135,7 @@ final class AppModel {
         Notifications.shared.deliverPending()
         if info.isSample && !prefs.bool(forKey: "onboarded") { showOnboarding = true }
         applyDemoArguments()
+        if let u = pendingDeepLink { pendingDeepLink = nil; openDeepLink(u) }
     }
 
     /// Launch arguments used by CI to capture screenshots, e.g. -startTab people -demoOpen person.
@@ -152,6 +155,7 @@ final class AppModel {
         }
     }
     var showFiltersOnLaunch = false
+    private var pendingDeepLink: URL?
 
     func scheduleReload() {
         reloadTask?.cancel()
@@ -212,6 +216,7 @@ final class AppModel {
         }
         await refreshSummary()
         await runSearch()
+        await refreshCompanyPlaces()
         mergePlaces()
         Notifications.shared.schedule(model: self)
         pushWatch()
@@ -226,9 +231,10 @@ final class AppModel {
         var people: [String: PersonPlace]
     }
 
-    /// Your own settings win, then Contacts and title clues.
+    /// Your own settings win: the person first, then their company or office. Then Contacts and title clues.
     func mergePlaces() {
         var out = info.isSample ? Locator.samplePlaces(people) : foundPlaces
+        for (k, pl) in companyPlaced { out[k] = pl }
         for p in people {
             if let e = p.ed, !e.loc.isEmpty, let la = e.lat, let lo = e.lon {
                 out[p.k] = PersonPlace(name: e.loc, lat: la, lon: lo, prec: "city", src: "you")
@@ -269,6 +275,40 @@ final class AppModel {
         await edit(k, call: "setEdit", [k, ["loc": name, "lat": loc.coordinate.latitude, "lon": loc.coordinate.longitude]])
         mergePlaces()
         return true
+    }
+
+    private struct Loc: Decodable { var name: String; var lat: Double; var lon: Double }
+
+    private func refreshCompanyPlaces() async {
+        let m = (try? await engine.call("companyPlaces", as: [String: Loc].self)) ?? [:]
+        companyPlaced = m.mapValues { PersonPlace(name: $0.name, lat: $0.lat, lon: $0.lon, prec: "city", src: "company") }
+    }
+
+    /// Sets (or with an empty query, clears) the location for everyone at a company or command.
+    func setCompanyLocation(_ company: String, query: String) async -> Bool {
+        let q = query.trimmingCharacters(in: .whitespaces)
+        var loc: Any = NSNull()
+        if !q.isEmpty {
+            guard let mark = try? await CLGeocoder().geocodeAddressString(q).first, let l = mark.location else {
+                show("Couldn’t find “\(q)”. Try a city and state or country.")
+                return false
+            }
+            let name = [mark.locality ?? q, mark.administrativeArea ?? mark.country].compactMap { $0 }.joined(separator: ", ")
+            loc = ["name": name, "lat": l.coordinate.latitude, "lon": l.coordinate.longitude]
+        }
+        do {
+            try await engine.run("setCompanyLocation", [company, loc])
+            await saveFile("industries", "industries.json")
+            await refreshCompanyPlaces()
+            mergePlaces()
+            Haptic.success()
+            let n = companyPlaced.count
+            show(q.isEmpty ? "Location cleared for \(company)" : "Placed everyone at \(company). \(n.formatted()) \(n == 1 ? "person" : "people") placed by company.")
+            return true
+        } catch {
+            show(error.localizedDescription)
+            return false
+        }
     }
 
     private func refreshSummary() async {
@@ -495,6 +535,25 @@ final class AppModel {
 
     func open(_ route: Route) { paths[tab, default: []].append(route) }
 
+    /// bearings://person/<key>, bearings://tab/<name>, from widgets.
+    func openDeepLink(_ url: URL) {
+        guard loaded else { pendingDeepLink = url; return }
+        let parts = url.pathComponents.filter { $0 != "/" }
+        switch url.host {
+        case "person":
+            if let raw = parts.first, let k = raw.removingPercentEncoding, byKey[k] != nil {
+                tab = .people
+                paths[.people] = [.person(k)]
+            }
+        case "tab":
+            if let t = parts.first, let at = AppTab(rawValue: t) { tab = at }
+        case "filter":
+            if let sig = parts.first { perform(CardAction(kind: "filter", tab: nil, name: nil, sig: [sig], seg: nil, status: nil)) }
+        default:
+            tab = .home
+        }
+    }
+
     // MARK: import
 
     func readImport(_ url: URL) async throws -> ImportPlan {
@@ -600,6 +659,9 @@ final class AppModel {
             // the engine builds the snapshot; pass its JSON straight through
             if let snap = try? await engine.call("watch", [firstName], as: WatchSnapshotJSON.self) {
                 WatchLink.shared.send(json: snap.json)
+                // the same summary drives the iPhone and iPad widgets
+                GlanceStore.save(Glance.from(snap.snapshot))
+                WidgetCenter.shared.reloadAllTimelines()
             }
         }
     }
@@ -642,8 +704,10 @@ final class AppModel {
 /// Re-encodes the engine's watch snapshot so it can be sent as-is.
 struct WatchSnapshotJSON: Decodable {
     let json: String
+    let snapshot: WatchSnapshot
     init(from decoder: Decoder) throws {
         let snap = try WatchSnapshot(from: decoder)
+        snapshot = snap
         json = String(decoding: (try? JSONEncoder().encode(snap)) ?? Data(), as: UTF8.self)
     }
 }

@@ -17,6 +17,10 @@ struct BearingsApp: App {
                 .preferredColorScheme(appearance == "light" ? .light : appearance == "dark" ? .dark : nil)
                 .task { await model.start() }
                 .onOpenURL { url in
+                    if url.scheme == "bearings" {
+                        model.openDeepLink(url)
+                        return
+                    }
                     guard url.isFileURL else { return }
                     if url.pathExtension.lowercased() == "json" {
                         Task { await model.restore(url) }

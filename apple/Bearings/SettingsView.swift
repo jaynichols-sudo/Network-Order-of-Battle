@@ -10,6 +10,7 @@ struct SettingsView: View {
     @AppStorage("salesnav") private var salesNav = false
     @AppStorage("notify") private var notify = true
     @AppStorage("haptics") private var haptics = true
+    @AppStorage("contactPhotos") private var contactPhotos = true
     @State private var restoring = false
 
     var body: some View {
@@ -17,6 +18,7 @@ struct SettingsView: View {
             Form {
                 generalSection
                 networkSection
+                contactsSection
                 dataSection
                 aboutSection
             }
@@ -63,6 +65,22 @@ struct SettingsView: View {
             Text("Your network")
         } footer: {
             Text("The federal view adds branch, rank, agency and federal segments. Reminders cover follow-ups you set, plus a weekly nudge to refresh.")
+        }
+    }
+
+    private var contactsSection: some View {
+        Section {
+            Button(model.locating ? "Matching…" : "Match with my Contacts") { Task { await model.locate() } }
+                .disabled(model.locating || model.info.isSample)
+            Toggle("Use their Contacts photo", isOn: $contactPhotos)
+                .onChange(of: contactPhotos) { _, _ in PhotoStore.shared.replaceAllKeepingFiles() }
+            if model.contactsMatched > 0 {
+                LabeledContent("Matched", value: "\(model.contactsMatched.formatted()) people, \(PhotoStore.shared.count.formatted()) with photos")
+            }
+        } header: {
+            Text("iPhone Contacts")
+        } footer: {
+            Text("Matching connections to your Contacts, by email or name, gives Bearings their photo and a rough location for the Map. It all happens on this device. It runs again after each LinkedIn refresh.")
         }
     }
 

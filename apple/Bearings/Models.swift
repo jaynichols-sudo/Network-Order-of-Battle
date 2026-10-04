@@ -363,6 +363,8 @@ struct UnitDetail: Decodable {
     struct Rung: Decodable, Identifiable { var lv: Int; var label: String; var keys: [String]; var id: Int { lv } }
     struct Ind: Decodable { var auto: String; var set: String }
     struct Links: Decodable { var company: String; var companyExact: Bool; var peopleAt: String; var salesNav: String }
+    struct Location: Decodable { var name: String; var lat: Double; var lon: Double }
+    var location: Location?
     var name: String
     var count: Int
     var score: Int

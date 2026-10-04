@@ -127,6 +127,16 @@ struct Glance: Codable {
     var nextName: String?
     var nextWhy: String?
     var sample: Bool
+    /// The next few people to get back to, for the larger widgets.
+    var next: [Item]? = nil
+
+    struct Item: Codable, Hashable {
+        var k: String
+        var n: String
+        var why: String
+        /// "reply" or "due"
+        var kind: String
+    }
 
     func dueNow(on day: String = Day.today) -> Int { dues.filter { $0 <= day }.count }
     static let empty = Glance(gen: "", waiting: 0, cold: 0, dues: [], nextName: nil, nextWhy: nil, sample: false)
@@ -138,8 +148,11 @@ struct Glance: Codable {
         var name: String?, why: String?
         if let p = waiting.first { name = p.n; why = "wrote \(Day.ago(p.lt))" }
         else if let p = dueNow.first { name = p.n; why = "follow-up due" }
+        let items = waiting.prefix(4).map { Item(k: $0.k, n: $0.n, why: "Wrote \(Day.ago($0.lt))", kind: "reply") }
+            + dueNow.prefix(4).map { Item(k: $0.k, n: $0.n, why: "Follow up \(Day.nice($0.due))", kind: "due") }
         return Glance(gen: s.gen, waiting: waiting.count, cold: s.people.filter { $0.has("c") }.count,
-                      dues: s.people.compactMap { $0.due }.sorted(), nextName: name, nextWhy: why, sample: s.sample)
+                      dues: s.people.compactMap { $0.due }.sorted(), nextName: name, nextWhy: why, sample: s.sample,
+                      next: Array(items.prefix(6)))
     }
 }
 

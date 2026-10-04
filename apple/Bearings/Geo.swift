@@ -22,6 +22,7 @@ struct PersonPlace: Codable, Hashable {
         case "address": return "From their address in your Contacts"
         case "phone": return "From their phone number in your Contacts"
         case "title": return "From their job title or company"
+        case "company": return "From the location you set for their company"
         case "sample": return "Sample data"
         default: return ""
         }
@@ -156,7 +157,9 @@ enum Locator {
             let index = PlaceIndex.shared
             if contactsAllowed() {
                 let keys: [CNKeyDescriptor] = [CNContactGivenNameKey, CNContactFamilyNameKey, CNContactEmailAddressesKey,
-                                               CNContactPhoneNumbersKey, CNContactPostalAddressesKey, CNContactOrganizationNameKey].map { $0 as CNKeyDescriptor }
+                                               CNContactPhoneNumbersKey, CNContactPostalAddressesKey, CNContactOrganizationNameKey,
+                                               CNContactThumbnailImageDataKey].map { $0 as CNKeyDescriptor }
+                var photos: [String: Data] = [:]
                 var byEmail: [String: CNContact] = [:]
                 var byName: [String: [CNContact]] = [:]
                 let req = CNContactFetchRequest(keysToFetch: keys)
@@ -174,6 +177,7 @@ enum Locator {
                     }
                     guard let c = card else { continue }
                     matched += 1
+                    if let img = c.thumbnailImageData { photos[p.k] = img }
                     let addresses = c.postalAddresses.sorted { a, _ in a.label == CNLabelWork }
                     if let a = addresses.lazy.compactMap({ index.place(address: $0.value) }).first {
                         out[p.k] = a
@@ -183,6 +187,7 @@ enum Locator {
                     let found = phones.compactMap { index.place(phone: $0.value.stringValue) }
                     if let best = found.first(where: { !$0.isApproximate }) ?? found.first { out[p.k] = best }
                 }
+                PhotoStore.shared.replaceAll(photos)
             }
             for clue in clues where clue.count == 3 && out[clue[0]] == nil {
                 if let c = index.city(clue[1], admin: clue[2], country: "US") {

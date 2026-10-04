@@ -745,7 +745,7 @@ function toggleTarget(name){
 
 /* ---------- industries ---------- */
 let coIndT = 0;
-function saveIndustries(){ if (S.mode !== 'live') return; clearTimeout(coIndT); coIndT = setTimeout(() => Store.write('industries.json', {companies: S.coInd, links: S.coLink}).catch(() => {}), 400); }
+function saveIndustries(){ if (S.mode !== 'live') return; clearTimeout(coIndT); coIndT = setTimeout(() => Store.write('industries.json', {companies: S.coInd, links: S.coLink, locations: S.coLoc || {}}).catch(() => {}), 400); }
 /* ---------- LinkedIn links ---------- */
 function editCompanyPage(name){
   const row = $('#liRow'); if (!row) return;
@@ -1535,6 +1535,7 @@ async function loadStore(opts = {}){
     S.targets = (tg && tg.data && tg.data.targets) || [];
     S.coInd = Object.assign(Object.create(null), (ci && ci.data && ci.data.companies) || {});
     S.coLink = Object.assign(Object.create(null), (ci && ci.data && ci.data.links) || {});
+    S.coLoc = (ci && ci.data && ci.data.locations) || {};
     const nextEdits = (e.data && e.data.edits) || {}, nextReview = (rv.data && rv.data.review) || {};
     if (opts.onlyIfChanged && S.mode === 'live' && n.data.meta && n.data.meta.rev === S.rev && JSON.stringify(nextEdits) === JSON.stringify(S.edits)){ S.review = nextReview; return; }
     S.edits = nextEdits; S.review = nextReview;

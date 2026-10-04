@@ -91,12 +91,21 @@ struct Avatar: View {
     var size: CGFloat = 40
 
     var body: some View {
+        let _ = PhotoStore.shared.version
         ZStack {
-            Circle().fill(person.tint.opacity(0.18))
-            Text(person.initials)
-                .font(.custom("Geist-SemiBold", fixedSize: size * 0.36))
-                .foregroundStyle(person.tint)
-                .minimumScaleFactor(0.5)
+            if let img = PhotoStore.shared.image(for: person.k) {
+                Image(uiImage: img)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: size, height: size)
+                    .clipShape(Circle())
+            } else {
+                Circle().fill(person.tint.opacity(0.18))
+                Text(person.initials)
+                    .font(.custom("Geist-SemiBold", fixedSize: size * 0.36))
+                    .foregroundStyle(person.tint)
+                    .minimumScaleFactor(0.5)
+            }
         }
         .frame(width: size, height: size)
         .overlay(alignment: .bottomTrailing) {

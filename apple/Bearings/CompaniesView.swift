@@ -182,6 +182,8 @@ struct UnitView: View {
     @State private var note = ""
     @State private var editingLink = false
     @State private var linkText = ""
+    @State private var editingPlace = false
+    @State private var placeText = ""
 
     var body: some View {
         List {
@@ -189,6 +191,7 @@ struct UnitView: View {
                 headerSection(u)
                 actionSection(u)
                 linkSection(u)
+                locationSection(u)
                 gapSection(u)
                 ForEach(u.rungs) { r in rungSection(r) }
                 if u.isTarget { noteSection }
@@ -295,6 +298,49 @@ struct UnitView: View {
         Task {
             if await model.setCompanyLink(name, linkText) {
                 editingLink = false
+                await load()
+            }
+        }
+    }
+
+    private func locationSection(_ u: UnitDetail) -> some View {
+        Section {
+            if editingPlace {
+                TextField("City, like Jacksonville, FL or Stuttgart", text: $placeText)
+                    .submitLabel(.done)
+                    .onSubmit { savePlace() }
+                HStack {
+                    Button("Save") { savePlace() }.buttonStyle(.borderedProminent)
+                    Button("Cancel") { editingPlace = false }.buttonStyle(.bordered)
+                }
+            } else if let l = u.location {
+                LabeledContent("Everyone here", value: l.name)
+                Button("Change location") { placeText = l.name; editingPlace = true }
+                Button("Clear location", role: .destructive) {
+                    Task {
+                        _ = await model.setCompanyLocation(name, query: "")
+                        await load()
+                    }
+                }
+            } else {
+                Button {
+                    placeText = ""
+                    editingPlace = true
+                } label: {
+                    Label("Set a location for everyone here", systemImage: "mappin.and.ellipse")
+                }
+            }
+        } header: {
+            Text("Location")
+        } footer: {
+            Text("Handy for a command, base or office where everyone works in one place. It shows them on the Map. A location you set on a person still wins.")
+        }
+    }
+
+    private func savePlace() {
+        Task {
+            if await model.setCompanyLocation(name, query: placeText) {
+                editingPlace = false
                 await load()
             }
         }
