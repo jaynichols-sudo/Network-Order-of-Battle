@@ -1,4 +1,5 @@
 import Foundation
+#if canImport(WatchConnectivity) && !targetEnvironment(macCatalyst)
 import WatchConnectivity
 
 /// Owns the iPhone side of the Apple Watch connection.
@@ -108,3 +109,13 @@ final class WatchLink: NSObject, WCSessionDelegate {
         if error != nil { UserDefaults.standard.set(true, forKey: lastKey) }
     }
 }
+#else
+/// No Apple Watch on the Mac: the same API, doing nothing.
+final class WatchLink {
+    static let shared = WatchLink()
+    var onAction: (() -> Void)?
+    func start() {}
+    func send(json: String) {}
+    func drain() -> [[String: Any]] { [] }
+}
+#endif

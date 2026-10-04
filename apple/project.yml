@@ -101,12 +101,17 @@ targets:
         CODE_SIGN_STYLE: Manual
         CODE_SIGN_IDENTITY: Apple Distribution
         PROVISIONING_PROFILE_SPECIFIER: ${OOB_PROFILE_APP}
-        SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD: YES
+        "PROVISIONING_PROFILE_SPECIFIER[sdk=macosx*]": ${OOB_PROFILE_APPMAC}
+        SUPPORTS_MACCATALYST: YES
+        DERIVE_MACCATALYST_PRODUCT_BUNDLE_IDENTIFIER: NO
+        SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD: NO
+        MACOSX_DEPLOYMENT_TARGET: "15.0"
     dependencies:
       - target: BearingsHomeWidgets
         embed: true
       - target: BearingsWatch
         embed: true
+        platformFilter: iOS
         copy:
           destination: productsDirectory
           subpath: $(CONTENTS_FOLDER_PATH)/Watch
@@ -218,4 +223,8 @@ targets:
         CODE_SIGN_STYLE: Manual
         CODE_SIGN_IDENTITY: Apple Distribution
         PROVISIONING_PROFILE_SPECIFIER: ${OOB_PROFILE_HOMEWIDGETS}
+        "PROVISIONING_PROFILE_SPECIFIER[sdk=macosx*]": ${OOB_PROFILE_HOMEWIDGETSMAC}
+        SUPPORTS_MACCATALYST: YES
+        DERIVE_MACCATALYST_PRODUCT_BUNDLE_IDENTIFIER: NO
+        MACOSX_DEPLOYMENT_TARGET: "15.0"
         SKIP_INSTALL: YES
