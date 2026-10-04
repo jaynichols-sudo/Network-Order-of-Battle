@@ -120,6 +120,7 @@ struct PersonRow: View {
             }
         }
         .padding(.vertical, 2)
+        .accessibilityElement(children: .combine)
     }
 
     @ViewBuilder private var flags: some View {

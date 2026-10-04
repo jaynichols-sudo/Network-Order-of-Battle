@@ -45,6 +45,11 @@ struct CatchUpView: View {
                                         else { withAnimation(.spring) { drag = .zero } }
                                     }, isEnabled: i == 0)
                                 .onTapGesture { if i == 0 { model.open(.person(k)) } }
+                                .accessibilityElement(children: .combine)
+                                .accessibilityHint(i == 0 ? "Swipe right to star, left to skip" : "")
+                                .accessibilityAction(named: "Star") { if i == 0 { decide(star: true) } }
+                                .accessibilityAction(named: "Skip") { if i == 0 { decide(star: false) } }
+                                .accessibilityHidden(i != 0)
                                 .allowsHitTesting(i == 0)
                         }
                     }

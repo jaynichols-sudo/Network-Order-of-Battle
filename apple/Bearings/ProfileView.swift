@@ -17,6 +17,7 @@ struct ProfileView: View {
     @State private var placeQuery = ""
     @State private var editingPlace = false
     @State private var writing = false
+    @State private var sfBusy = false
     @FocusState private var noteFocused: Bool
 
     var body: some View {
@@ -103,6 +104,25 @@ struct ProfileView: View {
             }
             if !p.c.isEmpty {
                 NavigationLink(value: Route.unit(p.c)) { Label("More at \(p.c)", systemImage: "building.2") }
+            }
+            if Salesforce.shared.connected && !model.info.isSample {
+                if let url = Salesforce.shared.contactURL(p.k) {
+                    Link(destination: url) { Label("Open in Salesforce", systemImage: "cloud") }
+                }
+                Button {
+                    sfBusy = true
+                    Task {
+                        do {
+                            try await Salesforce.shared.push(p, profileURL: links?.profile ?? p.u)
+                            Haptic.success()
+                            model.show("Sent to Salesforce")
+                        } catch { model.show("Salesforce: \(error.localizedDescription)") }
+                        sfBusy = false
+                    }
+                } label: {
+                    Label(sfBusy ? "Sending…" : (Salesforce.shared.contactURL(p.k) == nil ? "Send to Salesforce" : "Update in Salesforce"), systemImage: "arrow.up.circle")
+                }
+                .disabled(sfBusy)
             }
         }
     }

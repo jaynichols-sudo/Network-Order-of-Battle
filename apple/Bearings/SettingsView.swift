@@ -1,4 +1,5 @@
 import SwiftUI
+import AuthenticationServices
 import UniformTypeIdentifiers
 
 struct SettingsView: View {
@@ -12,6 +13,14 @@ struct SettingsView: View {
     @AppStorage("haptics") private var haptics = true
     @AppStorage("contactPhotos") private var contactPhotos = true
     @State private var restoring = false
+    @Environment(\.webAuthenticationSession) private var webAuth
+    @AppStorage("sfDomain") private var sfDomain = "login.salesforce.com"
+    @AppStorage("sfClientId") private var sfClientId = ""
+    @AppStorage("sfAuto") private var sfAuto = true
+    @AppStorage("sfAccounts") private var sfAccounts = true
+    @State private var sfGuide = false
+    @State private var feedback = false
+    @State private var sfWorking = false
     @State private var homeText = UserDefaults.standard.string(forKey: "homeName") ?? ""
 
     var body: some View {
@@ -21,6 +30,7 @@ struct SettingsView: View {
                 networkSection
                 contactsSection
                 calendarSection
+                salesforceSection
                 dataSection
                 aboutSection
             }
@@ -113,6 +123,68 @@ struct SettingsView: View {
         }
     }
 
+    private var salesforceSection: some View {
+        Section {
+            if Salesforce.shared.connected {
+                LabeledContent("Connected to", value: Salesforce.shared.host)
+                Button(sfWorking ? "Sending… \(Salesforce.shared.progress)" : "Send starred, follow-ups and notes now") {
+                    sfWorking = true
+                    Task {
+                        let r = await Salesforce.shared.syncAll(model: model)
+                        sfWorking = false
+                        model.show(r.failed == 0 ? "Sent \(r.ok) \(r.ok == 1 ? "person" : "people") to Salesforce" : "Sent \(r.ok), \(r.failed) failed. \(r.error ?? "")")
+                    }
+                }
+                .disabled(sfWorking)
+                Toggle("Keep linked people up to date", isOn: $sfAuto)
+                Toggle("Create missing accounts", isOn: $sfAccounts)
+                Button("Disconnect", role: .destructive) { Salesforce.shared.disconnect() }
+            } else {
+                Picker("Salesforce login", selection: Binding(get: { ["login.salesforce.com", "test.salesforce.com"].contains(sfDomain) ? sfDomain : "custom" },
+                                                               set: { sfDomain = $0 == "custom" ? "" : $0 })) {
+                    Text("Production").tag("login.salesforce.com")
+                    Text("Sandbox").tag("test.salesforce.com")
+                    Text("My Domain").tag("custom")
+                }
+                if !["login.salesforce.com", "test.salesforce.com"].contains(sfDomain) {
+                    TextField("yourcompany.my.salesforce.com", text: $sfDomain)
+                        .textInputAutocapitalization(.never).autocorrectionDisabled().keyboardType(.URL)
+                }
+                TextField("Connected app consumer key", text: $sfClientId)
+                    .textInputAutocapitalization(.never).autocorrectionDisabled()
+                Button(sfWorking ? "Connecting…" : "Connect Salesforce") { connectSalesforce() }
+                    .disabled(sfClientId.trimmingCharacters(in: .whitespaces).isEmpty || sfWorking)
+                Button("How to set this up") { sfGuide = true }
+            }
+        } header: {
+            Text("Salesforce")
+        } footer: {
+            Text("Sends contacts, follow-up tasks and notes from Bearings to Salesforce. You sign in with Salesforce directly; Bearings never sees your password, and there’s no Bearings server in between.")
+        }
+        .sheet(isPresented: $sfGuide) { SalesforceGuide() }
+        .sheet(isPresented: $feedback) {
+            FeedbackMail(to: AppInfo.supportEmail, body: "\n\n\n—\n" + Diagnostics.shared.summary(model: model), attachments: Diagnostics.shared.reports)
+                .ignoresSafeArea()
+        }
+    }
+
+    private func connectSalesforce() {
+        let id = sfClientId.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let url = Salesforce.shared.authorizeURL(domain: sfDomain, clientId: id) else { return }
+        sfWorking = true
+        Task {
+            defer { sfWorking = false }
+            do {
+                let cb = try await webAuth.authenticate(using: url, callbackURLScheme: "bearings")
+                try await Salesforce.shared.finishSignIn(callback: cb, domain: sfDomain, clientId: id)
+                Haptic.success()
+                model.show("Connected to Salesforce")
+            } catch {
+                if (error as NSError).code != 1 { model.show("Salesforce: \(error.localizedDescription)") }
+            }
+        }
+    }
+
     private func reschedule(_ on: Bool) {
         Task {
             if on { await Notifications.shared.requestPermission() }
@@ -146,7 +218,17 @@ struct SettingsView: View {
                 dismiss()
                 model.showOnboarding = true
             }
-            Button("Contact support") { contactSupport() }
+            Button("Send feedback") {
+                if FeedbackMail.available { feedback = true } else { contactSupport() }
+            }
+            if let product = Pro.shared.product {
+                if Pro.shared.owned {
+                    LabeledContent("Bearings Pro", value: "Unlocked. Thank you!")
+                } else {
+                    Button("Get Bearings Pro (\(product.displayPrice))") { Task { _ = await Pro.shared.buy() } }
+                    Button("Restore purchase") { Task { await Pro.shared.restore() } }
+                }
+            }
         } footer: {
             Text("Private by design: no account and no server. Your network lives on your devices and in your own iCloud. Industry, seniority, branch and rank are worked out from each person’s title and company. Fix anything that’s off from their profile.")
         }
@@ -157,7 +239,7 @@ struct SettingsView: View {
         let v = info["CFBundleShortVersionString"] as? String ?? ""
         let b = info["CFBundleVersion"] as? String ?? ""
         let device = UIDevice.current.model + " " + UIDevice.current.systemVersion
-        let body = "\n\n—\nBearings \(v) (\(b)), \(device)"
+        let body = "\n\n—\nBearings \(v) (\(b)), \(device)\n" + Diagnostics.shared.summary(model: model)
         guard var c = URLComponents(string: "mailto:" + AppInfo.supportEmail) else { return }
         c.queryItems = [URLQueryItem(name: "subject", value: "Bearings support"), URLQueryItem(name: "body", value: body)]
         if let u = c.url { openURL(u) }
@@ -218,5 +300,43 @@ struct OnboardingView: View {
         UserDefaults.standard.set(true, forKey: "onboarded")
         dismiss()
         if doImport { model.showImport = true }
+    }
+}
+
+struct SalesforceGuide: View {
+    @Environment(\.dismiss) private var dismiss
+    var body: some View {
+        NavigationStack {
+            List {
+                Section {
+                    Text("Salesforce needs a “connected app” in your org before any app can sign in. A Salesforce admin does this once, in about five minutes.")
+                }
+                Section("In Salesforce Setup") {
+                    step(1, "Open App Manager", "Setup, then App Manager, then New Connected App (or New External Client App).")
+                    step(2, "Name it", "Bearings. Add your email as the contact.")
+                    step(3, "Turn on OAuth", "Tick Enable OAuth Settings. Callback URL: bearings://oauth/salesforce")
+                    step(4, "Pick scopes", "Manage user data via APIs (api), and Perform requests at any time (refresh_token, offline_access).")
+                    step(5, "Security", "Tick Require Proof Key for Code Exchange (PKCE). Untick Require Secret for Web Server Flow.")
+                    step(6, "Copy the key", "Save, wait a few minutes, then copy the Consumer Key into Bearings.")
+                }
+                Section {
+                    Text("Bearings creates or updates a Contact (and its Account), a follow-up Task when you set one, and a Note with your notes. It only touches records it created or matched by email, or by name and company.")
+                        .font(.footnote).foregroundStyle(.secondary)
+                }
+            }
+            .navigationTitle("Set up Salesforce")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
+        }
+    }
+
+    private func step(_ n: Int, _ t: String, _ d: String) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            Text("\(n)").font(.subheadline.weight(.bold)).frame(width: 24, height: 24).background(Theme.accent.opacity(0.2), in: Circle())
+            VStack(alignment: .leading, spacing: 2) {
+                Text(t).fontWeight(.semibold)
+                Text(d).font(.subheadline).foregroundStyle(.secondary).textSelection(.enabled)
+            }
+        }
     }
 }

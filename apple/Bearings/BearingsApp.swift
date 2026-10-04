@@ -53,6 +53,7 @@ struct BearingsApp: App {
 final class AppDelegate: NSObject, UIApplicationDelegate {
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
         Notifications.shared.register()
+        Diagnostics.shared.start()
         WatchLink.shared.start()
         return true
     }

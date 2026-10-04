@@ -141,6 +141,8 @@ final class AppModel {
             Task { @MainActor in self?.scheduleReload() }
         }
         isCloud = await store.isCloud()
+        await Salesforce.shared.attach(store)
+        Task { await Pro.shared.load() }
         await reload()
         loaded = true
         store.startWatching()
@@ -391,6 +393,7 @@ final class AppModel {
             try await engine.run(call, args)
             await saveFile("edits", "edits.json")
             await refreshPerson(k)
+            Salesforce.shared.afterEdit(k, model: self)
         } catch { show(error.localizedDescription) }
     }
 
@@ -435,6 +438,8 @@ final class AppModel {
             try await engine.run("setEdit", [k, p])
             await saveFile("edits", "edits.json")
             if companyIndustry != nil { await refreshAll() } else { await refreshPerson(k) }
+            await loadFull(k)
+            Salesforce.shared.afterEdit(k, model: self)
             Haptic.success()
             show(info.isSample ? "Sample data: changes aren’t saved" : (isCloud ? "Saved and syncing to iCloud" : "Saved"))
         } catch { show("Couldn’t save: \(error.localizedDescription)") }
