@@ -200,5 +200,5 @@ enum Haptic {
 
 enum AppInfo {
     /// Where "Contact support" sends email. Change this once there's a dedicated support inbox.
-    static let supportEmail = "support@jaynichols.net"
+    static let supportEmail = "jay@jaynichols.net"
 }
