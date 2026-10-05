@@ -19,27 +19,18 @@ struct ProfileView: View {
     @State private var writing = false
     @State private var sfBusy = false
     @FocusState private var noteFocused: Bool
+    @Environment(\.openURL) private var openURL
 
     var body: some View {
         if let p = model.person(k) {
             List {
                 header(p)
-                actions(p)
                 if model.info.hasRel { relationship(p) }
+                TimelineSection(person: p)
                 followUp(p)
                 location(p)
+                more(p)
                 details(p)
-                if let pv = p.pv, !pv.isEmpty {
-                    Section("Earlier roles") {
-                        ForEach(Array(pv.enumerated()), id: \.offset) { _, r in
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(r.p.isEmpty ? "Unknown title" : r.p)
-                                Text("\(r.c.isEmpty ? "Unknown company" : r.c), until \(Day.nice(r.until))")
-                                    .font(Theme.geist(.footnote)).foregroundStyle(.secondary)
-                            }
-                        }
-                    }
-                }
                 notes(p)
             }
             .listStyle(.insetGrouped)
@@ -69,33 +60,111 @@ struct ProfileView: View {
 
     private func header(_ p: Person) -> some View {
         Section {
-            HStack(spacing: 14) {
-                Avatar(person: p, size: 64)
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(p.fullName).geist(.title2, .bold)
-                    if !p.p.isEmpty { Text(p.p).font(Theme.geist(.subheadline)).foregroundStyle(.secondary) }
-                    if !p.c.isEmpty { Text(p.c).font(Theme.geist(.subheadline, .semibold)) }
+            VStack(spacing: 14) {
+                ZStack {
+                    if model.info.hasRel {
+                        Circle().stroke(Color(.tertiarySystemFill), lineWidth: 4)
+                        Circle()
+                            .trim(from: 0, to: CGFloat(p.score) / 100)
+                            .stroke(Band.color(p.band), style: StrokeStyle(lineWidth: 4, lineCap: .round))
+                            .rotationEffect(.degrees(-90))
+                    }
+                    Avatar(person: p, size: 104)
                 }
+                .frame(width: 118, height: 118)
+                VStack(spacing: 4) {
+                    Text(p.fullName)
+                        .font(Theme.geist(.title, .bold))
+                        .multilineTextAlignment(.center)
+                    if !p.p.isEmpty {
+                        Text(p.p).font(Theme.geist(.body)).foregroundStyle(.secondary).multilineTextAlignment(.center).lineLimit(3)
+                    }
+                    if !p.c.isEmpty {
+                        Button { model.open(.unit(p.c)) } label: {
+                            HStack(spacing: 4) {
+                                Text(p.c).font(Theme.geist(.body, .semibold))
+                                Image(systemName: "chevron.right").font(.caption.weight(.bold)).foregroundStyle(.tertiary)
+                            }
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                badges(p)
+                actionRow(p)
             }
-            .padding(.vertical, 4)
+            .frame(maxWidth: .infinity)
+            .padding(.top, 4)
             .listRowBackground(Color.clear)
-            .listRowInsets(EdgeInsets(top: 0, leading: 4, bottom: 0, trailing: 4))
+            .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 8, trailing: 0))
         }
     }
 
-    private func actions(_ p: Person) -> some View {
-        Section {
-            Button {
+    private func badgeList(_ p: Person) -> [Badge] {
+        var out: [Badge] = []
+        if p.waiting { out.append(Badge(text: "Waiting on your reply", color: Theme.amber)) }
+        if p.moved { out.append(Badge(text: "New job", color: Theme.info)) }
+        if p.isNew { out.append(Badge(text: "New connection", color: Theme.accent)) }
+        if p.due { out.append(Badge(text: "Follow-up due", color: Theme.violet)) }
+        if model.info.hasRel && p.rx != nil { out.append(Badge(text: Band.label(p.band), color: Band.color(p.band))) }
+        return Array(out.prefix(3))
+    }
+
+    struct Badge: Hashable { let text: String; let color: Color }
+
+    @ViewBuilder private func badges(_ p: Person) -> some View {
+        let items = badgeList(p)
+        if !items.isEmpty {
+            HStack(spacing: 6) {
+                ForEach(items, id: \.self) { b in Flag(text: b.text, color: b.color) }
+            }
+        }
+    }
+
+    private func actionRow(_ p: Person) -> some View {
+        HStack(spacing: 18) {
+            RoundAction(title: "Message", icon: "square.and.pencil", tint: Theme.accent) { writing = true }
+            RoundAction(title: p.starred ? "Starred" : "Star", icon: p.starred ? "star.fill" : "star", tint: Theme.amber, on: p.starred) {
+                Haptic.star()
                 Task { await model.toggleStar(p.k) }
+            }
+            Menu {
+                ForEach([(7, "In a week"), (14, "In 2 weeks"), (30, "In a month"), (90, "In 3 months")], id: \.0) { d, l in
+                    Button(l) { Task { await model.followUp(p.k, days: d) } }
+                }
+                if let due = p.ed?.due, !due.isEmpty {
+                    Divider()
+                    Button("Clear reminder", role: .destructive) { Task { await model.followUp(p.k, days: 0) } }
+                }
             } label: {
-                Label(p.starred ? "Starred" : "Star", systemImage: p.starred ? "star.fill" : "star")
+                RoundActionLabel(title: "Remind", icon: (p.ed?.due ?? "").isEmpty ? "bell" : "bell.badge.fill", tint: Theme.violet, on: !(p.ed?.due ?? "").isEmpty)
             }
-            .tint(Theme.amber)
-            Button { writing = true } label: { Label("Write a message", systemImage: "square.and.pencil") }
-            if let l = links, !l.profile.isEmpty {
-                LinkButton(title: p.u.isEmpty ? "Find on LinkedIn" : "LinkedIn profile", url: l.profile)
-                if model.salesNav { LinkButton(title: "Sales Navigator", url: l.salesNav, icon: "safari") }
+            .buttonStyle(.plain)
+            if let l = links, let u = URL(string: l.profile), !l.profile.isEmpty {
+                RoundAction(title: "LinkedIn", icon: "link", tint: Theme.info) { Haptic.tap(); openURL(u) }
             }
+            if Salesforce.shared.connected && !model.info.isSample {
+                RoundAction(title: sfBusy ? "Sending" : "Salesforce", icon: "cloud", tint: Theme.info) { sendToSalesforce(p) }
+                    .disabled(sfBusy)
+            }
+        }
+        .padding(.top, 4)
+    }
+
+    private func sendToSalesforce(_ p: Person) {
+        sfBusy = true
+        Task {
+            do {
+                try await Salesforce.shared.push(p, profileURL: links?.profile ?? p.u)
+                Haptic.success()
+                model.show("Sent to Salesforce")
+            } catch { model.show("Salesforce: \(error.localizedDescription)") }
+            sfBusy = false
+        }
+    }
+
+    @ViewBuilder private func more(_ p: Person) -> some View {
+        Section {
+            if model.salesNav, let l = links, !l.salesNav.isEmpty { LinkButton(title: "Sales Navigator", url: l.salesNav, icon: "safari") }
             if !p.e.isEmpty {
                 Button {
                     UIPasteboard.general.string = p.e
@@ -105,24 +174,8 @@ struct ProfileView: View {
             if !p.c.isEmpty {
                 NavigationLink(value: Route.unit(p.c)) { Label("More at \(p.c)", systemImage: "building.2") }
             }
-            if Salesforce.shared.connected && !model.info.isSample {
-                if let url = Salesforce.shared.contactURL(p.k) {
-                    Link(destination: url) { Label("Open in Salesforce", systemImage: "cloud") }
-                }
-                Button {
-                    sfBusy = true
-                    Task {
-                        do {
-                            try await Salesforce.shared.push(p, profileURL: links?.profile ?? p.u)
-                            Haptic.success()
-                            model.show("Sent to Salesforce")
-                        } catch { model.show("Salesforce: \(error.localizedDescription)") }
-                        sfBusy = false
-                    }
-                } label: {
-                    Label(sfBusy ? "Sending…" : (Salesforce.shared.contactURL(p.k) == nil ? "Send to Salesforce" : "Update in Salesforce"), systemImage: "arrow.up.circle")
-                }
-                .disabled(sfBusy)
+            if Salesforce.shared.connected && !model.info.isSample, let url = Salesforce.shared.contactURL(p.k) {
+                Link(destination: url) { Label("Open in Salesforce", systemImage: "cloud") }
             }
         }
     }
@@ -130,16 +183,6 @@ struct ProfileView: View {
     @ViewBuilder private func relationship(_ p: Person) -> some View {
         Section("Relationship") {
             if let x = p.rx {
-                HStack {
-                    Text(Band.label(p.band))
-                        .font(Theme.geist(.subheadline, .semibold))
-                        .foregroundStyle(Band.color(p.band))
-                    Spacer()
-                    Gauge(value: Double(p.score), in: 0...100) { EmptyView() }
-                        .gaugeStyle(.accessoryLinearCapacity)
-                        .tint(Band.color(p.band))
-                        .frame(width: 120)
-                }
                 if !x.t.isEmpty {
                     VStack(alignment: .leading, spacing: 6) {
                         Text(x.dir == "i" ? "\(p.f) wrote you \(Day.ago(x.t))" : "You wrote \(Day.ago(x.t))")
@@ -179,8 +222,8 @@ struct ProfileView: View {
     }
 
     @ViewBuilder private func followUp(_ p: Person) -> some View {
-        Section("Follow up") {
-            if let due = p.ed?.due, !due.isEmpty {
+        if let due = p.ed?.due, !due.isEmpty {
+            Section("Follow up") {
                 HStack {
                     VStack(alignment: .leading) {
                         if due <= Day.today { Text("Follow up now").font(Theme.geist(.subheadline, .semibold)).foregroundStyle(Theme.violet) }
@@ -189,15 +232,6 @@ struct ProfileView: View {
                     Spacer()
                     Button("Done") { Task { await model.followUp(p.k, days: 0) } }
                         .buttonStyle(.bordered)
-                }
-            } else {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack {
-                        ForEach([(7, "In a week"), (14, "In 2 weeks"), (30, "In a month"), (90, "In 3 months")], id: \.0) { d, l in
-                            Button(l) { Task { await model.followUp(p.k, days: d) } }
-                                .buttonStyle(.bordered)
-                        }
-                    }
                 }
             }
         }

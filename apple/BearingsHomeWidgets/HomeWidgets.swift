@@ -125,6 +125,15 @@ struct HomeWidgetView: View {
 }
 
 @main
+struct BearingsWidgetBundle: WidgetBundle {
+    var body: some Widget {
+        BearingsHomeWidgets()
+        #if os(iOS) && !targetEnvironment(macCatalyst)
+        TripLiveActivity()
+        #endif
+    }
+}
+
 struct BearingsHomeWidgets: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: "BearingsHome", provider: HomeProvider()) { entry in

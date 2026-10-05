@@ -58,6 +58,26 @@ enum Theme {
         return Font.custom(name(for: style == .headline && weight == .regular ? .semibold : weight), size: size, relativeTo: style)
     }
 
+    /// Geist Mono for figures, so numbers read as data and line up.
+    static func mono(_ style: Font.TextStyle, _ weight: Font.Weight = .medium) -> Font {
+        let size: CGFloat
+        switch style {
+        case .largeTitle: size = 34
+        case .title: size = 28
+        case .title2: size = 22
+        case .title3: size = 20
+        case .headline: size = 17
+        case .subheadline: size = 15
+        case .callout: size = 16
+        case .footnote: size = 13
+        case .caption: size = 12
+        case .caption2: size = 11
+        default: size = 17
+        }
+        let heavy = weight == .semibold || weight == .bold || weight == .heavy || weight == .black
+        return Font.custom(heavy ? "GeistMono-SemiBold" : "GeistMono-Medium", size: size, relativeTo: style)
+    }
+
     static func name(for weight: Font.Weight) -> String {
         switch weight {
         case .bold, .heavy, .black: return "Geist-Bold"
@@ -80,6 +100,31 @@ enum Theme {
 }
 
 extension View {
+    /// Liquid Glass on iOS 26 and later, a material elsewhere.
+    @ViewBuilder func glassCapsule(tint: Color? = nil) -> some View {
+        if #available(iOS 26.0, *) {
+            self.glassEffect(tint.map { Glass.regular.tint($0.opacity(0.35)).interactive() } ?? Glass.regular.interactive(), in: Capsule())
+        } else {
+            self.background(.regularMaterial, in: Capsule())
+        }
+    }
+
+    @ViewBuilder func glassCircle(tint: Color? = nil) -> some View {
+        if #available(iOS 26.0, *) {
+            self.glassEffect(tint.map { Glass.regular.tint($0).interactive() } ?? Glass.regular.interactive(), in: Circle())
+        } else {
+            self.background(Circle().fill(tint ?? Color(.tertiarySystemFill)))
+        }
+    }
+
+    @ViewBuilder func glassButton() -> some View {
+        if #available(iOS 26.0, *) { self.buttonStyle(.glass) } else { self.buttonStyle(.bordered) }
+    }
+
+    @ViewBuilder func prominentGlassButton() -> some View {
+        if #available(iOS 26.0, *) { self.buttonStyle(.glassProminent) } else { self.buttonStyle(.borderedProminent) }
+    }
+
     func geist(_ style: Font.TextStyle, _ weight: Font.Weight = .regular) -> some View {
         font(Theme.geist(style, weight))
     }

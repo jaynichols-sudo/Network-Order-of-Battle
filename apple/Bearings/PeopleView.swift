@@ -2,6 +2,7 @@ import SwiftUI
 
 struct PeopleView: View {
     @Environment(AppModel.self) private var model
+    var zoom: Namespace.ID?
     @State private var showFilters = false
 
     var body: some View {
@@ -19,7 +20,7 @@ struct PeopleView: View {
                 }
                 ForEach(model.results) { p in
                     NavigationLink(value: Route.person(p.k)) {
-                        PersonRow(person: p, lens: model.info.lens)
+                        PersonRow(person: p, lens: model.info.lens, zoom: zoom)
                     }
                     .swipeActions(edge: .leading) {
                         Button {
@@ -82,10 +83,11 @@ struct PeopleView: View {
 struct PersonRow: View {
     let person: Person
     var lens = false
+    var zoom: Namespace.ID?
 
     var body: some View {
         HStack(spacing: 12) {
-            Avatar(person: person, size: 42)
+            avatar
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
                     Text(person.fullName)
@@ -97,7 +99,7 @@ struct PersonRow: View {
                     Text(person.p).font(Theme.geist(.subheadline)).foregroundStyle(.secondary).lineLimit(1)
                 }
                 if !person.c.isEmpty {
-                    Text(person.c).font(Theme.geist(.subheadline)).foregroundStyle(.secondary).lineLimit(1)
+                    Text(person.c).font(Theme.geist(.subheadline, .medium)).foregroundStyle(.primary.opacity(0.75)).lineLimit(1)
                 }
             }
             Spacer(minLength: 4)
@@ -105,22 +107,35 @@ struct PersonRow: View {
                 if let t = person.rx?.t, !t.isEmpty {
                     HStack(spacing: 4) {
                         Circle().fill(Band.color(person.band)).frame(width: 7, height: 7)
-                        Text(Day.short(t)).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+                        Text(Day.short(t)).font(Theme.mono(.caption)).foregroundStyle(.secondary)
                     }
                     .accessibilityLabel("\(Band.label(person.band)), last message \(Day.ago(t))")
                 }
                 if lens && !person.cl.grade.isEmpty {
                     Text(person.cl.grade)
-                        .font(.caption2.weight(.bold).monospaced())
+                        .font(Theme.mono(.caption, .semibold))
                         .padding(.horizontal, 6).padding(.vertical, 2)
                         .background(Color(.tertiarySystemFill), in: Capsule())
                 } else if !person.indShort.isEmpty && person.cl.ind != "Unclassified" {
-                    Text(person.indShort).font(.caption).foregroundStyle(.tertiary).lineLimit(1)
+                    Text(person.indShort)
+                        .font(Theme.geist(.caption, .medium))
+                        .foregroundStyle(Color(hex: person.indColor))
+                        .padding(.horizontal, 7).padding(.vertical, 3)
+                        .background(Color(hex: person.indColor).opacity(0.12), in: Capsule())
+                        .lineLimit(1)
                 }
             }
         }
-        .padding(.vertical, 2)
+        .padding(.vertical, 4)
         .accessibilityElement(children: .combine)
+    }
+
+    @ViewBuilder private var avatar: some View {
+        if let zoom {
+            Avatar(person: person, size: 46).matchedTransitionSource(id: person.k, in: zoom)
+        } else {
+            Avatar(person: person, size: 46)
+        }
     }
 
     @ViewBuilder private var flags: some View {
@@ -137,7 +152,7 @@ struct Flag: View {
     let color: Color
     var body: some View {
         Text(text)
-            .font(.caption2.weight(.bold))
+            .font(Theme.geist(.caption, .semibold))
             .foregroundStyle(color)
             .padding(.horizontal, 6)
             .padding(.vertical, 2)

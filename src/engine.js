@@ -522,6 +522,44 @@ function radar(input){
   return {wedges: wedges.map(({i, ...w}) => w), dots, bands: BANDS};
 }
 
+/* ---------- compass (home) ---------- */
+// You in the middle. Distance is how close you are (or seniority, without messages);
+// direction is the sector. Flags: w waiting on you, j new job, n new connection, s starred.
+function compass(input){
+  const {match} = compile(input || {});
+  const inView = S.all.filter(r => match(r) && !r.x);
+  const G = groupList(), gi = Object.fromEntries(G.map((g, i) => [g.id, i]));
+  const counts = G.map(() => 0); for (const r of inView){ const i = gi[groupOf(r)]; if (i != null) counts[i]++; }
+  const present = G.map((s, i) => ({s, i, n: counts[i]})).filter(p => p.n);
+  const wts = present.map(p => Math.max(Math.pow(p.n, 0.6), 2.4)), tw = wts.reduce((a, b) => a + b, 0) || 1;
+  let a = -Math.PI / 2;
+  const wedges = present.map((p, j) => { const span = wts[j] / tw * Math.PI * 2; const w = {id: p.s.id, short: p.s.short, color: p.s.color, a0: a, a1: a + span, n: p.n, i: p.i, close: 0, flagged: 0}; a += span; return w; });
+  const byI = new Map(wedges.map(w => [w.i, w]));
+  const rel = S.hasRel;
+  const RINGS = rel ? [[0.34, 'Close'], [0.58, 'Warm'], [0.80, 'Light'], [1.0, 'Not in touch']] : [[0.30, 'Executives'], [0.55, 'Directors'], [0.78, 'Managers'], [1.0, 'Everyone else']];
+  const dots = [], tally = {w: 0, j: 0, n: 0, s: 0, close: 0};
+  for (const r of inView){
+    const w = byI.get(gi[groupOf(r)]); if (!w) continue;
+    const span = w.a1 - w.a0, pad = Math.min(0.03, span * 0.12);
+    const t = w.a0 + pad + h01(r.k, 'a') * (span - 2 * pad);
+    let rr;
+    if (rel){
+      const sc = r.wm.score;
+      rr = sc >= 60 ? 0.10 + (100 - sc) / 40 * 0.22 : sc >= 35 ? 0.36 + (59 - sc) / 24 * 0.20 : sc >= 12 ? 0.60 + (34 - sc) / 22 * 0.18 : 0.82 + h01(r.k, 'r') * 0.15;
+      rr += (h01(r.k, 'j') - 0.5) * 0.03;
+    } else {
+      const band = Math.min(Math.max(r.cl.lv, 1), 4) - 1, lo = [0.1, 0.32, 0.57, 0.80][band], hi = RINGS[band][0] - 0.02;
+      rr = lo + h01(r.k, 'r') * (hi - lo);
+    }
+    rr = Math.max(0.09, Math.min(0.98, rr));
+    const f = isWaiting(r) ? 'w' : r.movedNow ? 'j' : r.isNew ? 'n' : (r.ed && r.ed.star) ? 's' : '';
+    if (f) { tally[f]++; w.flagged++; }
+    if (rel && r.wm.score >= 60) { tally.close++; w.close++; }
+    dots.push({k: r.k, a: +t.toFixed(4), r: +rr.toFixed(4), c: w.color, f});
+  }
+  return {wedges: wedges.map(({i, ...w}) => w), dots, rings: RINGS.map(([r, label]) => ({r, label})), rel, total: dots.length, tally};
+}
+
 /* ---------- clusters (constellation) ---------- */
 // People gather around their company or command; groups sit in wedges by industry or segment.
 function clusters(input, opts){
@@ -728,7 +766,7 @@ function constants(){
 }
 
 const api = {load, loadSample, loadFiles, clearNotes, clusters, placeClues, setCompanyLocation, companyPlaces, messages, matchAttendees, alsoAt, setLens, info, people, person, search, facets, home, payoff, targets, unit, addTargetCandidates, toggleTarget, setTargetNote, orgs,
-  industries, industry, setCompanyIndustry, setCompanyLink, ranks, deck, deckCount, reviewed, radar, setEdit, followUp, markReplied, addNote,
+  industries, industry, setCompanyIndustry, setCompanyLink, ranks, deck, deckCount, reviewed, radar, compass, setEdit, followUp, markReplied, addNote,
   importTexts, backup, restore, exportCSV, reminders, watch, constants};
 // Every call goes through here: JSON string in, JSON string out, errors as {error}.
 globalThis.Bearings = {

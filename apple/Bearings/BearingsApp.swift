@@ -16,7 +16,10 @@ struct BearingsApp: App {
                 .font(Theme.geist(.body))
                 .tint(Theme.accent)
                 .preferredColorScheme(appearance == "light" ? .light : appearance == "dark" ? .dark : nil)
-                .task { await model.start() }
+                .task {
+                    await model.start()
+                    await TripMode.refresh(model: model)
+                }
                 .onOpenURL { url in
                     if url.scheme == "bearings" {
                         model.openDeepLink(url)
@@ -43,6 +46,7 @@ struct BearingsApp: App {
                             await model.reload()
                             await model.drainWatch()
                             await CalendarService.shared.scan(model: model, force: true)
+                            await TripMode.refresh(model: model)
                         }
                     }
                 }

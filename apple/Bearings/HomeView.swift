@@ -7,9 +7,12 @@ struct HomeView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
                 header
+                CompassCard()
                 banner
                 ComingUp()
-                StatsStrip()
+                if !model.home.cards.isEmpty {
+                    Text("Worth your time").font(Theme.geist(.title3, .bold)).padding(.top, 6)
+                }
                 LazyVStack(spacing: 12) {
                     ForEach(model.home.cards) { card in
                         HomeCardView(card: card)
@@ -21,7 +24,7 @@ struct HomeView: View {
         }
         .background(Color(.systemGroupedBackground))
         .navigationTitle("Home")
-        .toolbar { MainToolbar() }
+        .toolbar(.hidden, for: .navigationBar)
         .refreshable { await model.reload() }
     }
 
@@ -32,16 +35,22 @@ struct HomeView: View {
     }
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(greeting)
-                .geist(.title2, .bold)
-            Text(model.info.isSample && !UserDefaults.standard.bool(forKey: "storeMode")
-                 ? "You’re looking around a sample network."
-                 : "\(model.info.count.formatted()) people in your network\(model.info.lastImport.isEmpty ? "" : ", refreshed \(Day.nice(model.info.lastImport))").")
-                .foregroundStyle(.secondary)
-                .font(Theme.geist(.subheadline))
+        HStack(alignment: .top) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(greeting)
+                    .font(Theme.geist(.largeTitle, .bold))
+                    .minimumScaleFactor(0.7)
+                    .lineLimit(1)
+                Text(model.info.isSample && !UserDefaults.standard.bool(forKey: "storeMode")
+                     ? "You’re looking around a sample network."
+                     : "\(model.info.count.formatted()) people\(model.info.lastImport.isEmpty ? "" : ", refreshed \(Day.nice(model.info.lastImport))")")
+                    .foregroundStyle(.secondary)
+                    .font(Theme.geist(.subheadline))
+            }
+            Spacer()
+            AccountButton()
         }
-        .padding(.top, 4)
+        .padding(.top, 8)
     }
 
     @ViewBuilder private var banner: some View {

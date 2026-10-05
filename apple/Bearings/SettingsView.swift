@@ -106,6 +106,12 @@ struct SettingsView: View {
                         await CalendarService.shared.scan(model: model, force: true)
                     }
                 }))
+            Toggle("Trip mode on the Lock Screen", isOn: Binding(
+                get: { TripMode.enabled },
+                set: { on in
+                    TripMode.enabled = on
+                    Task { await TripMode.refresh(model: model) }
+                }))
             TextField("Home city, like Greensboro, NC", text: $homeText)
                 .submitLabel(.done)
                 .onSubmit {
@@ -119,7 +125,7 @@ struct SettingsView: View {
         } header: {
             Text("Calendar")
         } footer: {
-            Text("Bearings reads your calendar on this device to brief you 30 minutes before meetings with people you know, and to spot trips more than 75 miles from home. Nothing is uploaded.")
+            Text("Bearings reads your calendar on this device to brief you 30 minutes before meetings with people you know, and to spot trips more than 75 miles from home. In Trip mode, a trip shows on your Lock Screen two days ahead with who you know nearby. Nothing is uploaded.")
         }
     }
 

@@ -116,6 +116,9 @@ final class AppModel {
     var lensArg: Any { lensPref.map { $0 as Any } ?? NSNull() }
     var salesNav: Bool { prefs.bool(forKey: "salesnav") }
     var firstName: String { (prefs.string(forKey: "name") ?? "").split(separator: " ").first.map(String.init) ?? "" }
+    var myInitials: String {
+        (prefs.string(forKey: "name") ?? "").split(separator: " ").prefix(2).compactMap { $0.first.map(String.init) }.joined().uppercased()
+    }
     var lastBackup: String { prefs.string(forKey: "lastBackup") ?? "" }
 
     func person(_ k: String) -> Person? { byKey[k] }
@@ -514,6 +517,7 @@ final class AppModel {
     func industry(_ id: String) async -> IndustryDetail? { try? await engine.call("industry", [id], as: IndustryDetail.self) }
     func orgs() async -> Orgs? { try? await engine.call("orgs", [["text": "", "filters": Filters().json]], as: Orgs.self) }
     func addCandidates(_ q: String) async -> [NameCount] { (try? await engine.call("addTargetCandidates", [q], as: [NameCount].self)) ?? [] }
+    func compass() async -> CompassData { (try? await engine.call("compass", [["text": "", "filters": Filters().json]], as: CompassData.self)) ?? .empty }
     func radar() async -> RadarData { (try? await engine.call("radar", [queryArgs], as: RadarData.self)) ?? .empty }
     func ranks() async -> RanksData? { try? await engine.call("ranks", [queryArgs], as: RanksData.self) }
     func clusters() async -> ClustersData? { try? await engine.call("clusters", [queryArgs, ["max": 40]], as: ClustersData.self) }
