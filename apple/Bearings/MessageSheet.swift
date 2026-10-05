@@ -10,10 +10,27 @@ struct MessageSheet: View {
     let k: String
     var trip: (city: String, when: String)?
     var meeting: String?
+    var intro: String?
+    var event: String?
     @State private var drafts: [DraftMessage] = []
     @State private var picked = ""
     @State private var text = ""
     @State private var profile = ""
+    @State private var writing = false
+
+    private func writeWithAI(_ p: Person) {
+        writing = true
+        let purpose = drafts.first(where: { $0.id == picked })?.label ?? "Just checking in"
+        Task {
+            if let t = await Brief.draft(p, purpose: purpose, model: model) {
+                withAnimation { text = t }
+                Haptic.success()
+            } else {
+                model.show("Couldn’t write a draft right now")
+            }
+            writing = false
+        }
+    }
 
     var body: some View {
         NavigationStack {
@@ -31,6 +48,22 @@ struct MessageSheet: View {
                             }
                             .padding(.vertical, 4)
                         }
+                    }
+                }
+                if Brief.aiAvailable, let p = model.person(k) {
+                    Section {
+                        Button {
+                            writeWithAI(p)
+                        } label: {
+                            HStack {
+                                Label(writing ? "Writing…" : "Write it for me", systemImage: "apple.intelligence")
+                                Spacer()
+                                if writing { ProgressView() }
+                            }
+                        }
+                        .disabled(writing)
+                    } footer: {
+                        Text("Apple Intelligence writes a personal version from your history together. It runs on this iPhone; nothing is sent anywhere.")
                     }
                 }
                 Section {
@@ -66,7 +99,7 @@ struct MessageSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Close") { dismiss() } } }
             .task {
-                drafts = await model.messages(k, trip: trip, meeting: meeting)
+                drafts = await model.messages(k, trip: trip, meeting: meeting, intro: intro, event: event)
                 if let first = drafts.first { picked = first.id; text = first.text }
                 profile = await model.links(k)?.profile ?? ""
             }

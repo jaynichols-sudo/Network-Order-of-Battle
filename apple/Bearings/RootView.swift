@@ -32,6 +32,8 @@ struct RootView: View {
         .sheet(isPresented: $model.showAddTarget) { AddTargetView() }
         .sheet(isPresented: $model.showPayoff) { PayoffView() }
         .sheet(isPresented: $model.showShareCard) { ShareCardSheet() }
+        .sheet(isPresented: $model.newEvent) { NewEventSheet() }
+        .sheet(isPresented: $model.showQuickFind) { QuickFind() }
         .sheet(item: Binding(get: { model.introQuery.map { IntroFinderView.Wrapped(id: $0) } }, set: { model.introQuery = $0?.id })) { w in
             IntroFinderView(query: w.id)
         }
@@ -62,6 +64,7 @@ struct RootView: View {
                     case .meeting(let id): MeetingView(id: id)
                     case .trip(let id): TripView(id: id)
                     case .trips: TripsView()
+                    case .event(let id): EventView(id: id)
                     }
                 }
         }

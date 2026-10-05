@@ -136,7 +136,7 @@ final class PlaceIndex: @unchecked Sendable {
 
 /// Builds the person -> place table from Contacts and title clues, and saves it.
 enum Locator {
-    struct Result { var places: [String: PersonPlace]; var matched: Int }
+    struct Result { var places: [String: PersonPlace]; var matched: Int; var births: [String: String] = [:]; var inContacts: [String] = [] }
 
     static func contactsAllowed() -> Bool {
         let s = CNContactStore.authorizationStatus(for: .contacts)
@@ -154,11 +154,14 @@ enum Locator {
         await Task.detached(priority: .utility) {
             var out: [String: PersonPlace] = [:]
             var matched = 0
+            var found: [String: String] = [:]
+            var linked: [String] = []
             let index = PlaceIndex.shared
             if contactsAllowed() {
                 let keys: [CNKeyDescriptor] = [CNContactGivenNameKey, CNContactFamilyNameKey, CNContactEmailAddressesKey,
                                                CNContactPhoneNumbersKey, CNContactPostalAddressesKey, CNContactOrganizationNameKey,
-                                               CNContactThumbnailImageDataKey].map { $0 as CNKeyDescriptor }
+                                               CNContactThumbnailImageDataKey, CNContactBirthdayKey].map { $0 as CNKeyDescriptor }
+                var births: [String: String] = [:]
                 var photos: [String: Data] = [:]
                 var byEmail: [String: CNContact] = [:]
                 var byName: [String: [CNContact]] = [:]
@@ -177,7 +180,9 @@ enum Locator {
                     }
                     guard let c = card else { continue }
                     matched += 1
+                    linked.append(p.k)
                     if let img = c.thumbnailImageData { photos[p.k] = img }
+                    if let b = c.birthday, let mo = b.month, let d = b.day { births[p.k] = String(format: "%02d-%02d", mo, d) }
                     let addresses = c.postalAddresses.sorted { a, _ in a.label == CNLabelWork }
                     if let a = addresses.lazy.compactMap({ index.place(address: $0.value) }).first {
                         out[p.k] = a
@@ -188,13 +193,14 @@ enum Locator {
                     if let best = found.first(where: { !$0.isApproximate }) ?? found.first { out[p.k] = best }
                 }
                 PhotoStore.shared.replaceAll(photos)
+                found = births
             }
             for clue in clues where clue.count == 3 && out[clue[0]] == nil {
                 if let c = index.city(clue[1], admin: clue[2], country: "US") {
                     out[clue[0]] = PersonPlace(name: "\(clue[1]), \(clue[2])", lat: c.0, lon: c.1, prec: "city", src: "title")
                 }
             }
-            return Result(places: out, matched: matched)
+            return Result(places: out, matched: matched, births: found, inContacts: linked)
         }.value
     }
 

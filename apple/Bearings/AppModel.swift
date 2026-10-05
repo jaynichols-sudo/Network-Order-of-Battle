@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import UserNotifications
 import Observation
 import CoreLocation
 import WidgetKit
@@ -34,6 +35,7 @@ enum Route: Hashable {
     case meeting(String)
     case trip(String)
     case trips
+    case event(String)
 }
 
 enum CompaniesMode: String, CaseIterable, Identifiable {
@@ -97,6 +99,36 @@ final class AppModel {
     var showShareCard = false
     var introQuery: String?
     private(set) var savedSearches: [SavedSearch] = []
+    private(set) var events: [NetEvent] = []
+    /// "MM-dd" from their Contacts card, for people matched to one.
+    private(set) var birthdays: [String: String] = [:]
+    /// People matched to a card in your Contacts.
+    private(set) var inContacts: Set<String> = []
+
+    /// The next birthday for someone, if Contacts has one.
+    func nextBirthday(_ k: String) -> Date? {
+        guard let md = birthdays[k] else { return nil }
+        let parts = md.split(separator: "-").compactMap { Int($0) }
+        guard parts.count == 2 else { return nil }
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: Date())
+        var c = cal.dateComponents([.year], from: today)
+        c.month = parts[0]; c.day = parts[1]
+        guard var d = cal.date(from: c) else { return nil }
+        if d < today { c.year = (c.year ?? 0) + 1; d = cal.date(from: c) ?? d }
+        return d
+    }
+
+    func upcomingBirthdays(within days: Int = 7) -> [(person: Person, date: Date)] {
+        let limit = Calendar.current.date(byAdding: .day, value: days, to: Calendar.current.startOfDay(for: Date())) ?? Date()
+        return birthdays.keys.compactMap { k -> (person: Person, date: Date)? in
+            guard let p = byKey[k], p.x == nil, let d = nextBirthday(k), d <= limit else { return nil }
+            return (p, d)
+        }
+        .sorted { $0.date < $1.date }
+    }
+    var newEvent = false
+    var showQuickFind = false
     var shareFile: ShareFile?
     var pendingImportURL: URL?
 
@@ -199,6 +231,18 @@ final class AppModel {
             if let t = targets.first { paths[tab, default: []].append(.unit(t.name)) }
         case "settings": showSettings = true
         case "onboarding": showOnboarding = true
+        case "intro": introQuery = targets.first?.name ?? "NAVFAC"
+        case "quickfind": showQuickFind = true
+        case "event":
+            let known = people.filter { $0.x == nil }.sorted { $0.score > $1.score }
+            var e = NetEvent(name: "AFCEA TechNet Augusta", place: "Augusta, GA", start: Date().addingTimeInterval(-2 * 86400), end: Date().addingTimeInterval(-86400))
+            e.attending = known.dropFirst(6).prefix(9).map(\.k)
+            e.met = known.prefix(4).enumerated().map { i, p in
+                NetEvent.Met(k: p.k, name: p.fullName, company: p.c, title: p.p, note: i == 0 ? "Wants a follow-up demo for the OT team in November." : "", followed: i == 1)
+            } + [NetEvent.Met(name: "Dana Whitfield", company: "Fort Eisenhower", title: "Network Operations Lead", email: "", note: "Met at the Army Cyber booth.")]
+            events = [e]
+            tab = .home
+            paths[.home] = [.event(e.id)]
         case "share": showShareCard = true
         case "import": showImport = true
         case "filters": showFiltersOnLaunch = true
@@ -242,6 +286,10 @@ final class AppModel {
         } catch {
             errorNote = "Your saved network didn’t load (\(error.localizedDescription)). Close and reopen the app to try again."
         }
+        if case .data(let t) = await store.read("events.json"), let t, let d = t.data(using: .utf8),
+           let list = try? JSONDecoder().decode([NetEvent].self, from: d) {
+            events = list
+        }
         if case .data(let t) = await store.read("lists.json"), let t, let d = t.data(using: .utf8),
            let lists = try? JSONDecoder().decode([SavedSearch].self, from: d) {
             savedSearches = lists
@@ -249,6 +297,8 @@ final class AppModel {
         if case .data(let t) = await store.read("places.json"), let t, let d = t.data(using: .utf8),
            let f = try? JSONDecoder().decode(PlacesFile.self, from: d) {
             foundPlaces = f.people
+            birthdays = f.births ?? [:]
+            inContacts = Set(f.inContacts ?? [])
             placesBuilt = f.built
             contactsMatched = f.matched ?? 0
         }
@@ -286,6 +336,8 @@ final class AppModel {
         var built: String
         var matched: Int?
         var people: [String: PersonPlace]
+        var births: [String: String]?
+        var inContacts: [String]?
     }
 
     /// Your own settings win: the person first, then their company or office. Then Contacts and title clues.
@@ -311,7 +363,9 @@ final class AppModel {
         foundPlaces = r.places
         contactsMatched = r.matched
         placesBuilt = Day.today
-        let file = PlacesFile(built: placesBuilt, matched: r.matched, people: r.places)
+        birthdays = r.births
+        inContacts = Set(r.inContacts)
+        let file = PlacesFile(built: placesBuilt, matched: r.matched, people: r.places, births: r.births, inContacts: r.inContacts)
         if let d = try? JSONEncoder().encode(file) { try? await store.write("places.json", String(decoding: d, as: UTF8.self)) }
         mergePlaces()
         show("Found a location for \(places.count.formatted()) \(places.count == 1 ? "person" : "people")")
@@ -459,6 +513,74 @@ final class AppModel {
         show("Marked as replied")
     }
 
+    // MARK: events
+
+    func saveEvent(_ e: NetEvent) async {
+        if let i = events.firstIndex(where: { $0.id == e.id }) { events[i] = e } else { events.append(e) }
+        await writeEvents()
+        await scheduleEventNudge(e)
+    }
+
+    func deleteEvent(_ e: NetEvent) async {
+        events.removeAll { $0.id == e.id }
+        paths[tab] = (paths[tab] ?? []).filter { $0 != .event(e.id) }
+        await writeEvents()
+        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ["ev-\(e.id)"])
+    }
+
+    /// Saves someone you met: matched to your network when possible, with a note on their timeline.
+    func addMet(_ m: NetEvent.Met, to e: NetEvent) async {
+        var m = m
+        if m.k == nil, let k = await matchAttendees([(m.email, m.name)]).first ?? nil { m.k = k }
+        guard var ev = events.first(where: { $0.id == e.id }) else { return }
+        if let i = ev.met.firstIndex(where: { $0.id == m.id }) { ev.met[i] = m } else { ev.met.append(m) }
+        if let k = m.k {
+            ev.attending.removeAll { $0 == k }
+            await addNote(k, m.note.isEmpty ? "Met in person" : m.note, source: e.name)
+            try? await engine.run("touch", [k])
+            await saveFile("edits", "edits.json")
+            await refreshPerson(k)
+        }
+        Haptic.success()
+        await saveEvent(ev)
+        show(m.k == nil ? "Added \(m.name)" : "Added \(m.name), with a note on their timeline")
+    }
+
+    func updateMet(_ m: NetEvent.Met, in e: NetEvent) async {
+        guard var ev = events.first(where: { $0.id == e.id }), let i = ev.met.firstIndex(where: { $0.id == m.id }) else { return }
+        ev.met[i] = m
+        Haptic.tap()
+        await saveEvent(ev)
+    }
+
+    func removeMet(_ m: NetEvent.Met, from e: NetEvent) async {
+        guard var ev = events.first(where: { $0.id == e.id }) else { return }
+        ev.met.removeAll { $0.id == m.id }
+        await saveEvent(ev)
+    }
+
+    private func writeEvents() async {
+        guard let d = try? JSONEncoder().encode(events), let t = String(data: d, encoding: .utf8) else { return }
+        try? await store.write("events.json", t)
+    }
+
+    /// The morning after an event: who still needs a follow-up.
+    private func scheduleEventNudge(_ e: NetEvent) async {
+        let center = UNUserNotificationCenter.current()
+        center.removePendingNotificationRequests(withIdentifiers: ["ev-\(e.id)"])
+        var at = Calendar.current.date(byAdding: .day, value: 1, to: e.end) ?? e.end
+        at = Calendar.current.date(bySettingHour: 9, minute: 0, second: 0, of: at) ?? at
+        guard at > Date() else { return }
+        await Notifications.shared.requestPermission()
+        let c = UNMutableNotificationContent()
+        c.title = "Follow up from \(e.name)"
+        c.body = e.met.isEmpty ? "Who did you meet? Add them while it’s fresh, then send a quick note." : "You met \(e.met.count) \(e.met.count == 1 ? "person" : "people"). A short note this week makes the connection stick."
+        c.sound = .default
+        c.userInfo = ["event": e.id]
+        let comps = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: at)
+        try? await center.add(UNNotificationRequest(identifier: "ev-\(e.id)", content: c, trigger: UNCalendarNotificationTrigger(dateMatching: comps, repeats: false)))
+    }
+
     // MARK: saved searches
 
     func saveSearch(named name: String) async {
@@ -588,8 +710,10 @@ final class AppModel {
         if let i = people.firstIndex(where: { $0.k == k }) { people[i] = p }
     }
 
-    func messages(_ k: String, trip: (city: String, when: String)? = nil, meeting: String? = nil) async -> [DraftMessage] {
+    func messages(_ k: String, trip: (city: String, when: String)? = nil, meeting: String? = nil, intro: String? = nil, event: String? = nil) async -> [DraftMessage] {
         var ctx: [String: Any] = [:]
+        if let intro { ctx["intro"] = intro }
+        if let event { ctx["event"] = event }
         let me = (prefs.string(forKey: "name") ?? "").trimmingCharacters(in: .whitespaces)
         if !me.isEmpty { ctx["me"] = me }
         if let t = trip { ctx["trip"] = ["city": t.city, "when": t.when] }
@@ -690,6 +814,11 @@ final class AppModel {
             if let id = parts.first?.removingPercentEncoding { tab = .home; paths[.home] = [.trip(id)] }
         case "filter":
             if let sig = parts.first { perform(CardAction(kind: "filter", tab: nil, name: nil, sig: [sig], seg: nil, status: nil)) }
+        case "map":
+            UserDefaults.standard.set("map", forKey: "exploreMode")
+            tab = .explore
+        case "event":
+            if let id = parts.first?.removingPercentEncoding { tab = .home; paths[.home] = [.event(id)] }
         default:
             tab = .home
         }
@@ -823,6 +952,18 @@ final class AppModel {
     func handleNotification(k: String?, action: String) async {
         if action.hasPrefix("meeting:") { tab = .home; paths[.home] = [.meeting(String(action.dropFirst(8)))]; return }
         if action.hasPrefix("trip:") { tab = .home; paths[.home] = [.trip(String(action.dropFirst(5)))]; return }
+        if action.hasPrefix("event:") { tab = .home; paths[.home] = [.event(String(action.dropFirst(6)))]; return }
+        if action.hasPrefix("note:"), let k {
+            let body = action.dropFirst(5)
+            let parts = body.split(separator: "\n", maxSplits: 1, omittingEmptySubsequences: false)
+            let source = parts.first.map(String.init) ?? ""
+            let text = parts.count > 1 ? String(parts[1]).trimmingCharacters(in: .whitespacesAndNewlines) : ""
+            if !text.isEmpty {
+                await addNote(k, text, source: source)
+                await touched(k)
+            }
+            return
+        }
         guard let k else { if action == "refresh" { showImport = true }; return }
         switch action {
         case "done": await followUp(k, days: 0)
@@ -849,6 +990,19 @@ final class AppModel {
     }
 
     func drainWatch() async {
+        // taps on Home Screen widget buttons
+        let widget = WidgetActionQueue.drain()
+        if !widget.isEmpty && !info.isSample {
+            for a in widget {
+                switch a.action {
+                case "replied": try? await engine.run("markReplied", [a.k])
+                case "snooze": try? await engine.run("followUp", [a.k, 7])
+                default: try? await engine.run("followUp", [a.k, 0])
+                }
+            }
+            await saveFile("edits", "edits.json")
+            await refreshAll()
+        }
         let actions = WatchLink.shared.drain()
         guard !actions.isEmpty else { return }
         if info.isSample { show("Watch changes aren’t saved in the sample network"); return }

@@ -267,6 +267,8 @@ function messages(k, ctx){
   const co = r.c || '', title = r.p || '';
   const out = [];
   const add = (id, label, text) => out.push({id, label, text: text + me});
+  if (ctx.intro) add('introTo', `Intro to ${ctx.intro}`, `Hi ${first}, I hope you’re well. I’m looking to connect with the right people at ${ctx.intro}${co && co !== ctx.intro ? '' : ' in your organization'} and thought of you first. Would you be open to a quick introduction, or pointing me to who I should talk to? Happy to send a short note you can forward.`);
+  if (ctx.event) add('event', `Great to meet at ${ctx.event}`, `Hi ${first}, great to meet you at ${ctx.event}. I enjoyed our conversation and would like to keep it going. Do you have time for a quick call in the next couple of weeks?`);
   if (ctx.trip) add('trip', `Visiting ${ctx.trip.city}`, `Hi ${first}, I’ll be in ${ctx.trip.city} ${ctx.trip.when}. Any chance you have time for a coffee while I’m in town? It would be great to catch up.`);
   if (ctx.meeting) add('after', 'After our meeting', `Hi ${first}, thanks for the time today. I appreciated the conversation about ${ctx.meeting}. I’ll follow up on what we discussed and keep you posted.`);
   if (r.movedNow || r.jc) add('congrats', 'Congratulations on the new role', `Hi ${first}, congratulations on the new role${title ? ` as ${title}` : ''}${co ? ` at ${co}` : ''}! Well deserved. I’d love to hear how it’s going once you’ve settled in.`);

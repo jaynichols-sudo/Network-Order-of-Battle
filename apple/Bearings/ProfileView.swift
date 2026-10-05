@@ -20,11 +20,13 @@ struct ProfileView: View {
     @State private var sfBusy = false
     @FocusState private var noteFocused: Bool
     @Environment(\.openURL) private var openURL
+    @State private var addingContact = false
 
     var body: some View {
         if let p = model.person(k) {
             List {
                 header(p)
+                Section { BriefCard(person: p) }
                 if model.info.hasRel { relationship(p) }
                 TimelineSection(person: p)
                 followUp(p)
@@ -105,6 +107,9 @@ struct ProfileView: View {
         if p.moved { out.append(Badge(text: "New job", color: Theme.info)) }
         if p.isNew { out.append(Badge(text: "New connection", color: Theme.accent)) }
         if p.due { out.append(Badge(text: "Follow-up due", color: Theme.violet)) }
+        if let b = model.nextBirthday(p.k), b.timeIntervalSinceNow < 14 * 86400 {
+            out.append(Badge(text: Calendar.current.isDateInToday(b) ? "Birthday today" : "Birthday \(b.formatted(.dateTime.month(.abbreviated).day()))", color: Theme.bad))
+        }
         if p.over, let c = p.circle { out.append(Badge(text: "\(c.title): overdue", color: Theme.violet)) }
         if model.info.hasRel && p.rx != nil { out.append(Badge(text: Band.label(p.band), color: Band.color(p.band))) }
         return Array(out.prefix(3))
@@ -195,6 +200,13 @@ struct ProfileView: View {
             }
             if !p.c.isEmpty {
                 NavigationLink(value: Route.unit(p.c)) { Label("More at \(p.c)", systemImage: "building.2") }
+                Button { model.introQuery = p.c } label: { Label("Other ways into \(p.c)", systemImage: "point.3.connected.trianglepath.dotted") }
+            }
+            if !model.inContacts.contains(p.k) {
+                Button { addingContact = true } label: { Label("Add to Contacts", systemImage: "person.crop.circle.badge.plus") }
+                    .sheet(isPresented: $addingContact) {
+                        NewContactView(name: p.fullName, company: p.c, title: p.p, email: p.e, url: links?.profile ?? p.u).ignoresSafeArea()
+                    }
             }
             if Salesforce.shared.connected && !model.info.isSample, let url = Salesforce.shared.contactURL(p.k) {
                 Link(destination: url) { Label("Open in Salesforce", systemImage: "cloud") }

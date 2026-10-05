@@ -77,8 +77,13 @@ struct BearingsCommands: Commands {
                     .keyboardShortcut(KeyEquivalent(Character(String(i + 1))))
             }
             Divider()
+            Button("Quick Find…") { model.showQuickFind = true }
+                .keyboardShortcut("k")
             Button("Search People") { model.tab = .people; model.paths[.people] = [] }
                 .keyboardShortcut("f")
+            Button("Find a Way In…") { model.introQuery = "" }
+                .keyboardShortcut("i", modifiers: [.command, .shift])
+            Button("New Event…") { model.newEvent = true }
             Button("Trips") { model.tab = .home; model.paths[.home] = [.trips] }
                 .keyboardShortcut("t", modifiers: [.command, .shift])
             Button("Add to Watchlist…") { model.tab = .companies; model.companiesMode = .watchlist; model.showAddTarget = true }

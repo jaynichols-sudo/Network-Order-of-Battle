@@ -44,6 +44,7 @@ targets:
         LSRequiresIPhoneOS: true
         NSContactsUsageDescription: Bearings matches your LinkedIn connections to your contacts on this device to work out roughly where they are, so you can see who's nearby when you travel. Nothing is uploaded.
         NSCalendarsFullAccessUsageDescription: Bearings reads your calendar on this device to brief you before meetings with people you know and to spot upcoming trips. Nothing is uploaded.
+        NSCameraUsageDescription: Bearings uses the camera to scan business cards and badges at events. The picture is read on this device and not kept.
         NSLocationWhenInUseUsageDescription: Bearings uses your location to show which of your connections are nearby.
         LSSupportsOpeningDocumentsInPlace: true
         NSSupportsLiveActivities: true
@@ -98,6 +99,7 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.jaynichols.networkoob
         PRODUCT_NAME: Bearings
+        SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) MAIN_APP"
         TARGETED_DEVICE_FAMILY: "1,2"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor

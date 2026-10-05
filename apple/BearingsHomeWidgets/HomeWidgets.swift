@@ -106,13 +106,26 @@ struct HomeWidgetView: View {
                     Spacer()
                 } else {
                     ForEach(items, id: \.self) { it in
-                        Link(destination: personURL(it.k)) {
-                            HStack(spacing: 8) {
-                                Circle().fill(it.kind == "reply" ? Palette.coral : Palette.violet).frame(width: 7, height: 7)
-                                VStack(alignment: .leading, spacing: 0) {
-                                    Text(it.n).font(.custom("Geist-SemiBold", size: 14)).lineLimit(1)
-                                    Text(it.why).font(.custom("Geist-Regular", size: 12)).foregroundStyle(.secondary).lineLimit(1)
+                        HStack(spacing: 8) {
+                            Link(destination: personURL(it.k)) {
+                                HStack(spacing: 8) {
+                                    Circle().fill(it.kind == "reply" ? Palette.coral : Palette.violet).frame(width: 7, height: 7)
+                                    VStack(alignment: .leading, spacing: 0) {
+                                        Text(it.n).font(.custom("Geist-SemiBold", size: 14)).lineLimit(1)
+                                        Text(it.why).font(.custom("Geist-Regular", size: 12)).foregroundStyle(.secondary).lineLimit(1)
+                                    }
                                 }
+                            }
+                            Spacer(minLength: 4)
+                            if !entry.glance.sample {
+                                Button(intent: WidgetPersonIntent(k: it.k, action: it.kind == "reply" ? "replied" : "done")) {
+                                    Image(systemName: "checkmark")
+                                        .font(.system(size: 11, weight: .bold))
+                                        .frame(width: 24, height: 24)
+                                }
+                                .buttonStyle(.plain)
+                                .background(Circle().fill(.fill.tertiary))
+                                .accessibilityLabel(it.kind == "reply" ? "Mark replied" : "Mark done")
                             }
                         }
                     }
@@ -130,6 +143,8 @@ struct BearingsWidgetBundle: WidgetBundle {
         BearingsHomeWidgets()
         #if os(iOS) && !targetEnvironment(macCatalyst)
         TripLiveActivity()
+        CatchUpControl()
+        NearbyControl()
         #endif
     }
 }
@@ -145,3 +160,31 @@ struct BearingsHomeWidgets: Widget {
         .supportedFamilies([.systemSmall, .systemMedium, .accessoryCircular, .accessoryRectangular, .accessoryInline])
     }
 }
+
+#if os(iOS) && !targetEnvironment(macCatalyst)
+/// Control Center: jump into Catch Up.
+struct CatchUpControl: ControlWidget {
+    var body: some ControlWidgetConfiguration {
+        StaticControlConfiguration(kind: "com.jaynichols.networkoob.control.catchup") {
+            ControlWidgetButton(action: OpenBearingsIntent(screen: "tab/catchup")) {
+                Label("Catch Up", systemImage: "rectangle.stack")
+            }
+        }
+        .displayName("Bearings Catch Up")
+        .description("Swipe through new connections and job changes.")
+    }
+}
+
+/// Control Center: who's nearby, on the map.
+struct NearbyControl: ControlWidget {
+    var body: some ControlWidgetConfiguration {
+        StaticControlConfiguration(kind: "com.jaynichols.networkoob.control.nearby") {
+            ControlWidgetButton(action: OpenBearingsIntent(screen: "map")) {
+                Label("Who’s nearby", systemImage: "location.north.circle")
+            }
+        }
+        .displayName("Who’s nearby")
+        .description("Opens the Bearings map around you.")
+    }
+}
+#endif

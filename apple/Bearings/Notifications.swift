@@ -15,7 +15,9 @@ final class Notifications: NSObject, UNUserNotificationCenterDelegate, @unchecke
         let done = UNNotificationAction(identifier: "done", title: "Done", options: [])
         let snooze = UNNotificationAction(identifier: "snooze", title: "Snooze a week", options: [])
         let follow = UNNotificationCategory(identifier: "FOLLOW", actions: [done, snooze], intentIdentifiers: [], options: [])
-        center.setNotificationCategories([follow])
+        let note = UNTextInputNotificationAction(identifier: "note", title: "Add a note", options: [], textInputButtonTitle: "Save", textInputPlaceholder: "What did you talk about?")
+        let after = UNNotificationCategory(identifier: "AFTER", actions: [note], intentIdentifiers: [], options: [])
+        center.setNotificationCategories([follow, after])
     }
 
     func requestPermission() async {
@@ -35,7 +37,7 @@ final class Notifications: NSObject, UNUserNotificationCenterDelegate, @unchecke
             if Task.isCancelled { return }
             let center = UNUserNotificationCenter.current()
             let pending = await center.pendingNotificationRequests()
-            center.removePendingNotificationRequests(withIdentifiers: pending.map(\.identifier).filter { $0.hasPrefix("f-") || $0 == "refresh" })
+            center.removePendingNotificationRequests(withIdentifiers: pending.map(\.identifier).filter { $0.hasPrefix("f-") || $0.hasPrefix("b-") || $0 == "refresh" })
             guard UserDefaults.standard.object(forKey: "notify") as? Bool ?? true, !model.info.isSample else { return }
             let settings = await center.notificationSettings()
             guard settings.authorizationStatus == .authorized || settings.authorizationStatus == .provisional else { return }
@@ -70,7 +72,18 @@ final class Notifications: NSObject, UNUserNotificationCenterDelegate, @unchecke
                 let comps = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: at)
                 requests.insert(UNNotificationRequest(identifier: "refresh", content: c, trigger: UNCalendarNotificationTrigger(dateMatching: comps, repeats: false)), at: 0)
             }
-            for r in requests.prefix(60) { try? await center.add(r) }
+            for (p, d) in model.upcomingBirthdays(within: 30).prefix(8) {
+                var comps = Calendar.current.dateComponents([.year, .month, .day], from: d)
+                comps.hour = 9
+                guard let at = Calendar.current.date(from: comps), at > now else { continue }
+                let c = UNMutableNotificationContent()
+                c.title = "\(p.fullName)’s birthday is today"
+                c.body = "A short note goes a long way."
+                c.sound = .default
+                c.userInfo = ["k": p.k]
+                requests.append(UNNotificationRequest(identifier: "b-\(p.k)", content: c, trigger: UNCalendarNotificationTrigger(dateMatching: comps, repeats: false)))
+            }
+            for r in requests.prefix(62) { try? await center.add(r) }
         }
     }
 
@@ -88,7 +101,11 @@ final class Notifications: NSObject, UNUserNotificationCenterDelegate, @unchecke
         let info = response.notification.request.content.userInfo
         let k = info["k"] as? String
         var action = response.actionIdentifier
-        if action == UNNotificationDefaultActionIdentifier {
+        if let typed = response as? UNTextInputNotificationResponse {
+            action = "note:" + ((info["mt"] as? String) ?? "") + "\n" + typed.userText
+        } else if action == UNNotificationDefaultActionIdentifier, let ev = info["event"] as? String {
+            action = "event:" + ev
+        } else if action == UNNotificationDefaultActionIdentifier {
             if let m = info["meeting"] as? String { action = "meeting:" + m }
             else if let t = info["trip"] as? String { action = "trip:" + t }
             else { action = info["refresh"] != nil ? "refresh" : "open" }

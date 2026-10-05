@@ -12,6 +12,8 @@ struct HomeView: View {
                 SavedSearchStrip()
                 banner
                 ComingUp()
+                BirthdaysCard()
+                EventsStrip()
                 if !model.home.cards.isEmpty {
                     Text("Worth your time").font(Theme.geist(.title3, .bold)).padding(.top, 6)
                 }

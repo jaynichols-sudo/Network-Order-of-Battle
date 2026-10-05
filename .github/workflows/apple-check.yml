@@ -105,6 +105,8 @@ jobs:
             shoot $dev $p-16-onboard-start -demoOpen onboarding -onboardStep 2
             shoot $dev $p-17-onboard-linkedin -demoOpen onboarding -onboardStep 3
             shoot $dev $p-18-share -demoOpen share
+            shoot $dev $p-19-event -demoOpen event
+            shoot $dev $p-20-intro -startTab companies -demoOpen intro
             xcrun simctl ui $dev appearance dark
             shoot $dev $p-12-home-dark
             shoot $dev $p-13-people-dark -startTab people

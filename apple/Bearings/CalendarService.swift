@@ -228,7 +228,7 @@ final class CalendarService {
         let center = UNUserNotificationCenter.current()
         Task {
             let pending = await center.pendingNotificationRequests()
-            center.removePendingNotificationRequests(withIdentifiers: pending.map(\.identifier).filter { $0.hasPrefix("m-") || $0.hasPrefix("t-") })
+            center.removePendingNotificationRequests(withIdentifiers: pending.map(\.identifier).filter { $0.hasPrefix("m-") || $0.hasPrefix("t-") || $0.hasPrefix("a-") })
             guard UserDefaults.standard.object(forKey: "notify") as? Bool ?? true else { return }
             let now = Date()
             for m in meetings.prefix(20) {
@@ -246,6 +246,18 @@ final class CalendarService {
                 c.sound = .default
                 let comps = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: at)
                 try? await center.add(UNNotificationRequest(identifier: "m-\(m.id)", content: c, trigger: UNCalendarNotificationTrigger(dateMatching: comps, repeats: false)))
+            }
+            // after the meeting: a quick note, typed right into the notification
+            for m in meetings.prefix(20) {
+                let at = m.end.addingTimeInterval(15 * 60)
+                guard at > now, let first = m.matched.compactMap({ model.person($0) }).first else { continue }
+                let c = UNMutableNotificationContent()
+                c.title = "How did it go with \(first.f)?"
+                c.body = "Add a quick note to \(first.f)’s timeline while it’s fresh. Press and hold to type it here."
+                c.categoryIdentifier = "AFTER"
+                c.userInfo = ["k": first.k, "mt": m.title]
+                let comps = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: at)
+                try? await center.add(UNNotificationRequest(identifier: "a-\(m.id)", content: c, trigger: UNCalendarNotificationTrigger(dateMatching: comps, repeats: false)))
             }
             for t in trips.prefix(10) {
                 let n = nearby(t, model: model).count
