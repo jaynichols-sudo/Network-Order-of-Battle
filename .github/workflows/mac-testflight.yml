@@ -56,7 +56,13 @@ jobs:
           INSTALLER_CERT: "1"
         run: |
           python3 -m pip install --quiet --break-system-packages pyjwt cryptography 2>/dev/null || python3 -m pip install --quiet --user pyjwt cryptography
-          python3 ios/ci/asc_signing.py setup
+          if ! python3 ios/ci/asc_signing.py setup > "$RUNNER_TEMP/setup.log" 2>&1; then
+            cat "$RUNNER_TEMP/setup.log"
+            msg=$(tail -25 "$RUNNER_TEMP/setup.log" | sed 's/%/%25/g' | awk 'BEGIN{ORS="%0A"}{print}')
+            echo "::error title=Signing setup::$msg"
+            exit 1
+          fi
+          cat "$RUNNER_TEMP/setup.log"
 
       - name: Archive the Mac app
         run: |
