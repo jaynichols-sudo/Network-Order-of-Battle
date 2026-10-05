@@ -8,3 +8,4 @@ www/
 apple/*.xcodeproj/
 apple/*/Info.plist
 apple/*/*.entitlements
+!apple/*/*-mac.entitlements
