@@ -88,8 +88,26 @@ struct PersonRow: View {
     let person: Person
     var lens = false
     var zoom: Namespace.ID?
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
+        if typeSize.isAccessibilitySize {
+            // big text: stack everything so names aren't cut off
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 10) { avatar; flags }
+                Text(person.fullName).font(Theme.geist(.body, .semibold))
+                if !person.p.isEmpty { Text(person.p).font(Theme.geist(.subheadline)).foregroundStyle(.secondary) }
+                if !person.c.isEmpty { Text(person.c).font(Theme.geist(.subheadline, .medium)).foregroundStyle(.primary.opacity(0.75)) }
+                meta
+            }
+            .padding(.vertical, 4)
+            .accessibilityElement(children: .combine)
+        } else {
+            row
+        }
+    }
+
+    private var row: some View {
         HStack(spacing: 12) {
             avatar
             VStack(alignment: .leading, spacing: 2) {
@@ -107,29 +125,33 @@ struct PersonRow: View {
                 }
             }
             Spacer(minLength: 4)
-            VStack(alignment: .trailing, spacing: 4) {
-                if let t = person.rx?.t, !t.isEmpty {
-                    HStack(spacing: 4) {
-                        Circle().fill(Band.color(person.band)).frame(width: 7, height: 7)
-                        Text(Day.short(t)).font(Theme.mono(.caption)).foregroundStyle(.secondary)
-                    }
-                    .accessibilityLabel("\(Band.label(person.band)), last message \(Day.ago(t))")
-                }
-                if lens && !person.cl.grade.isEmpty {
-                    Text(person.cl.grade)
-                        .font(Theme.mono(.caption, .semibold))
-                        .padding(.horizontal, 6).padding(.vertical, 2)
-                        .background(Color(.tertiarySystemFill), in: Capsule())
-                } else if !person.indShort.isEmpty && person.cl.ind != "Unclassified" {
-                    HStack(spacing: 4) {
-                        Circle().fill(Color(hex: person.indColor)).frame(width: 6, height: 6)
-                        Text(person.indShort).font(Theme.geist(.caption, .medium)).foregroundStyle(.secondary).lineLimit(1)
-                    }
-                }
-            }
+            meta
         }
         .padding(.vertical, 4)
         .accessibilityElement(children: .combine)
+    }
+
+    private var meta: some View {
+        VStack(alignment: .trailing, spacing: 4) {
+            if let t = person.rx?.t, !t.isEmpty {
+                HStack(spacing: 4) {
+                    Circle().fill(Band.color(person.band)).frame(width: 7, height: 7)
+                    Text(Day.short(t)).font(Theme.mono(.caption)).foregroundStyle(.secondary)
+                }
+                .accessibilityLabel("\(Band.label(person.band)), last message \(Day.ago(t))")
+            }
+            if lens && !person.cl.grade.isEmpty {
+                Text(person.cl.grade)
+                    .font(Theme.mono(.caption, .semibold))
+                    .padding(.horizontal, 6).padding(.vertical, 2)
+                    .background(Color(.tertiarySystemFill), in: Capsule())
+            } else if !person.indShort.isEmpty && person.cl.ind != "Unclassified" {
+                HStack(spacing: 4) {
+                    Circle().fill(Color(hex: person.indColor)).frame(width: 6, height: 6)
+                    Text(person.indShort).font(Theme.geist(.caption, .medium)).foregroundStyle(.secondary).lineLimit(1)
+                }
+            }
+        }
     }
 
     @ViewBuilder private var avatar: some View {

@@ -12,7 +12,20 @@ struct CompassData: Decodable {
         var mid: Double { (a0 + a1) / 2 }
         var span: Double { a1 - a0 }
     }
-    struct Dot: Decodable { var k: String; var a: Double; var r: Double; var c: String; var f: String }
+    struct Dot: Decodable {
+        var k: String, a: Double, r: Double, c: String
+        /// w waiting, o overdue, j new job, n new connection, s starred; empty (and left out) for everyone else
+        var f: String
+        enum K: String, CodingKey { case k, a, r, c, f }
+        init(from d: Decoder) throws {
+            let x = try d.container(keyedBy: K.self)
+            k = try x.decode(String.self, forKey: .k)
+            a = try x.decode(Double.self, forKey: .a)
+            r = try x.decode(Double.self, forKey: .r)
+            c = (try? x.decode(String.self, forKey: .c)) ?? "#8F89A8"
+            f = (try? x.decodeIfPresent(String.self, forKey: .f)) ?? ""
+        }
+    }
     struct Ring: Decodable, Hashable { var r: Double; var label: String }
     struct Tally: Decodable, Hashable { var w = 0, o = 0, j = 0, n = 0, s = 0, close = 0 }
     var wedges: [Wedge]
