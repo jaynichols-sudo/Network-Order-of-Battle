@@ -13,7 +13,12 @@ struct CompaniesView: View {
             }
         }
         .navigationTitle("Companies")
-        .toolbar { MainToolbar() }
+        .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                Button { model.introQuery = "" } label: { Label("Find a way in", systemImage: "point.3.connected.trianglepath.dotted") }
+            }
+            MainToolbar()
+        }
     }
 }
 
@@ -201,6 +206,18 @@ struct UnitView: View {
         .listStyle(.insetGrouped)
         .navigationTitle(name)
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Menu {
+                    Button { model.introQuery = name } label: { Label("Find a way in", systemImage: "point.3.connected.trianglepath.dotted") }
+                    if let u {
+                        Button {
+                            if let url = AccountMapDocument.pdf(u, model: model) { model.shareFile = ShareFile(url: url) }
+                        } label: { Label("Share account map (PDF)", systemImage: "doc.richtext") }
+                    }
+                } label: { Label("More", systemImage: "ellipsis.circle") }
+            }
+        }
         .task(id: name) {
             await load()
             note = u?.note ?? ""

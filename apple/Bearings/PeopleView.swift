@@ -4,6 +4,7 @@ struct PeopleView: View {
     @Environment(AppModel.self) private var model
     var zoom: Namespace.ID?
     @State private var showFilters = false
+    @State private var pinning = false
 
     var body: some View {
         @Bindable var model = model
@@ -59,6 +60,8 @@ struct PeopleView: View {
                         }
                     }
                     Divider()
+                    Button { pinning = true } label: { Label("Pin this search to Home", systemImage: "pin") }
+                        .disabled(model.searchText.isEmpty && model.filters.isEmpty)
                     Button {
                         Task { await model.exportCSV(keys: model.results.map(\.k)) }
                     } label: {
@@ -76,6 +79,7 @@ struct PeopleView: View {
             }
         }
         .sheet(isPresented: $showFilters) { FilterSheet() }
+        .modifier(PinSearchAlert(asking: $pinning))
         .onAppear { if model.showFiltersOnLaunch { model.showFiltersOnLaunch = false; showFilters = true } }
     }
 }
@@ -141,6 +145,7 @@ struct PersonRow: View {
     @ViewBuilder private var flags: some View {
         if person.waiting { Flag(text: "Reply", color: Theme.bad) }
         else if person.due { Flag(text: "Follow up", color: Theme.violet) }
+        else if person.over { Flag(text: "Overdue", color: Theme.violet) }
         else if person.moved { Flag(text: "New job", color: Theme.info) }
         else if person.isNew { Flag(text: "New", color: Theme.accent) }
         else if person.x != nil { Flag(text: "Removed", color: .secondary) }
@@ -222,7 +227,7 @@ struct ActiveFilters: View {
         var out: [Token] = []
         let sigLabels = ["new": "New since last refresh", "jc": "Job change", "star": "Starred", "notes": "Has notes", "email": "Has email", "gov": ".gov / .mil email",
                          "clr": "Clearance", "jcw": "Changed jobs this refresh", "anniv": "Anniversary this week", "due": "Follow-up due",
-                         "waiting": "Waiting on your reply", "cold": "Going cold", "never": "Never messaged"]
+                         "waiting": "Waiting on your reply", "cold": "Going cold", "never": "Never messaged", "overdue": "Overdue to reach out", "circle": "In a circle"]
         for v in f.sig.sorted() { out.append(Token(group: "sig", value: v, label: sigLabels[v] ?? v)) }
         for (g, set) in [("rel", f.rel), ("ind", f.ind), ("sen", f.sen), ("func", f.fn), ("seg", f.seg), ("branch", f.branch), ("status", f.status), ("tier", f.tier), ("cert", f.cert)] {
             for v in set.sorted() { out.append(Token(group: g, value: v, label: v)) }

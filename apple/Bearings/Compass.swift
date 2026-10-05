@@ -14,7 +14,7 @@ struct CompassData: Decodable {
     }
     struct Dot: Decodable { var k: String; var a: Double; var r: Double; var c: String; var f: String }
     struct Ring: Decodable, Hashable { var r: Double; var label: String }
-    struct Tally: Decodable, Hashable { var w = 0, j = 0, n = 0, s = 0, close = 0 }
+    struct Tally: Decodable, Hashable { var w = 0, o = 0, j = 0, n = 0, s = 0, close = 0 }
     var wedges: [Wedge]
     var dots: [Dot]
     var rings: [Ring]
@@ -246,6 +246,11 @@ struct CompassView: View {
                          with: .radialGradient(Gradient(colors: [Theme.amber.opacity(0.55 * dim), Theme.amber.opacity(0)]), center: p, startRadius: 0, endRadius: halo))
                 let s = dot * 1.5
                 ctx.fill(Path(ellipseIn: CGRect(x: p.x - s, y: p.y - s, width: s * 2, height: s * 2)), with: .color(Theme.amber.opacity(dim)))
+            case "o":
+                let s = dot * 1.4
+                ctx.fill(Path(ellipseIn: CGRect(x: p.x - s, y: p.y - s, width: s * 2, height: s * 2)), with: .color(Theme.violet.opacity(dim)))
+                let o = s + 2.4
+                ctx.stroke(Path(ellipseIn: CGRect(x: p.x - o, y: p.y - o, width: o * 2, height: o * 2)), with: .color(Theme.violet.opacity(0.75 * dim)), style: StrokeStyle(lineWidth: 1.3, dash: [2, 2]))
             case "j":
                 let phase = reduceMotion ? 0.4 : ((t + Double(abs(item.dot.k.hashValue % 100)) / 50).truncatingRemainder(dividingBy: 2.2)) / 2.2
                 let pr = dot * (1.6 + CGFloat(phase) * 4)
@@ -378,6 +383,9 @@ struct CompassCard: View {
         return ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
                 SignalChip(value: t.w, label: "waiting on you", dot: Theme.amber, glow: true) { model.perform(CardAction(kind: "filter", sig: ["waiting"])) }
+                if t.o > 0 {
+                    SignalChip(value: t.o, label: "overdue", dot: Theme.violet, ring: true) { model.perform(CardAction(kind: "filter", sig: ["overdue"])) }
+                }
                 SignalChip(value: t.j, label: "new jobs", dot: Theme.info, ring: true) { model.perform(CardAction(kind: "filter", sig: ["jcw"])) }
                 SignalChip(value: t.n, label: "new connections", dot: Theme.accent, ring: true) { model.perform(CardAction(kind: "filter", sig: ["new"])) }
                 if data.rel {

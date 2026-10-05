@@ -9,6 +9,7 @@ struct HomeView: View {
             VStack(alignment: .leading, spacing: 18) {
                 header
                 CompassCard()
+                SavedSearchStrip()
                 banner
                 ComingUp()
                 if !model.home.cards.isEmpty {

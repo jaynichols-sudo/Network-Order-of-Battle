@@ -21,13 +21,18 @@ const groupList = () => [
 ];
 const groupColor = g => GOV_SEGS3.includes(g) ? segColor(g) : indColor(g);
 const BAND_LABEL = {strong: 'Close', warm: 'Warm', light: 'Light touch', none: 'No real contact'};
-const SIGNALS_UI = [...SIGNALS, ['jcw', 'Changed jobs this refresh'], ['anniv', 'Anniversary this week'], ['due', 'Follow-up due'], ['waiting', 'Waiting on your reply'], ['cold', 'Going cold'], ['never', 'Never messaged']];
+const SIGNALS_UI = [...SIGNALS, ['jcw', 'Changed jobs this refresh'], ['anniv', 'Anniversary this week'], ['due', 'Follow-up due'], ['waiting', 'Waiting on your reply'], ['overdue', 'Overdue to reach out'], ['circle', 'In a circle'], ['cold', 'Going cold'], ['never', 'Never messaged']];
 const SAMPLE_TARGETS = ['NAVFAC', 'USACE', 'DISA', 'Duke Energy', 'CISA'];
 
 const daysSince = d => d ? Math.floor((Date.parse(TODAY) - Date.parse(d)) / 864e5) : 99999;
 const isWaiting = r => !!(r.rx && r.rx.dir === 'i' && r.rx.o && daysSince(r.rx.t) <= 45 && !(r.ed && r.ed.replied === r.rx.t));
 const isCooling = r => { const x = r.rx; if (!x || x.m < 8 || (x.o || 0) < 3 || (x.i || 0) < 3) return false; const d = daysSince(x.t); return d > 150 && d < 900; };
 const isDue = r => !!(r.ed && r.ed.due && r.ed.due <= TODAY);
+// keep-in-touch circles: how often you mean to be in touch, in days
+const CIRCLES = {inner: 30, key: 90, wide: 365};
+const lastTouch = r => { const a = (r.rx && r.rx.t) || '', b = (r.ed && r.ed.touched) || ''; return a > b ? a : b; };
+const isOverdue = r => { const c = r.ed && CIRCLES[r.ed.circle]; return !!c && !r.x && daysSince(lastTouch(r)) > c; };
+const touchDue = r => { const c = r.ed && CIRCLES[r.ed.circle]; if (!c) return ''; const t = lastTouch(r); return t ? isoDay(Date.parse(t) + c * 864e5) : TODAY; };
 const addDays = n => isoDay(Date.now() + n * 864e5);
 function isAnniversary(d){
   if (!d || d.length < 10) return false;
@@ -75,7 +80,8 @@ function vm(r, full){
     cl: {seg: c.seg, branch: c.branch, status: c.status, rank: c.rank, grade: c.grade, tier: c.tier, gn: c.gn, sen: c.sen, func: c.func, agency: c.agency, certs: c.certs, clr: !!c.clr, lv: c.lv, ind: c.ind, indHow: c.indHow || ''},
     group: groupOf(r), color: groupColor(groupOf(r)), indColor: indColor(c.ind), indShort: indShort(c.ind),
     band: r.wm.band, score: r.wm.score, isNew: !!r.isNew, moved: !!r.movedNow,
-    waiting: isWaiting(r), cooling: isCooling(r), due: isDue(r), anniv: isAnniversary(r.d)};
+    waiting: isWaiting(r), cooling: isCooling(r), due: isDue(r), anniv: isAnniversary(r.d),
+    over: isOverdue(r), touch: lastTouch(r), next: touchDue(r)};
   if (r.x) o.x = r.x;
   if (r.jc) o.jc = r.jc;
   if (r.fs) o.fs = r.fs;
@@ -108,6 +114,8 @@ function sigOk(r, s){
     case 'anniv': return isAnniversary(r.d);
     case 'due': return isDue(r);
     case 'waiting': return isWaiting(r);
+    case 'overdue': return isOverdue(r);
+    case 'circle': return !!(r.ed && CIRCLES[r.ed.circle]);
     case 'cold': return isCooling(r);
     case 'never': return !(r.rx && r.rx.m);
   }
@@ -441,6 +449,8 @@ function cards(opts){
   const names = (rs, n = 2) => rs.slice(0, n).map(r => fullName(r)).join(', ') + (rs.length > n ? ` and ${fmt(rs.length - n)} more` : '');
   const keys = rs => rs.map(r => r.k);
   const rq = deckCount();
+  const overdue = A.filter(isOverdue).sort((a, b) => (CIRCLES[a.ed.circle] - CIRCLES[b.ed.circle]) || lastTouch(a).localeCompare(lastTouch(b)));
+  if (overdue.length) out.push({tone: 'amber', icon: 'circle.circle', hero: !rq, title: `${fmt(overdue.length)} ${overdue.length === 1 ? 'person in your circles is' : 'people in your circles are'} overdue`, body: `Time to reach out: ${names(overdue, 2)}.`, people: keys(overdue), act: {kind: 'filter', sig: ['overdue']}});
   if (rq) out.push({tone: 'coral', icon: 'rectangle.stack', hero: true, title: `Catch up on ${fmt(rq)} ${rq === 1 ? 'person' : 'people'}`, body: 'New connections and job changes since your last refresh. Swipe right to star, left to skip. Takes a couple of minutes.', people: keys(A.filter(r => r.isNew || r.movedNow).sort(bySenior)), act: {kind: 'tab', tab: 'catchup'}});
   const due = A.filter(r => isDue(r)).sort((a, b) => (a.ed.due || '').localeCompare(b.ed.due || ''));
   if (due.length) out.push({tone: 'violet', icon: 'bell', title: `${fmt(due.length)} ${due.length === 1 ? 'follow-up' : 'follow-ups'} due`, body: `You planned to reach out to ${names(due, 2)}.`, people: keys(due), act: {kind: 'filter', sig: ['due']}});
@@ -537,7 +547,7 @@ function compass(input){
   const byI = new Map(wedges.map(w => [w.i, w]));
   const rel = S.hasRel;
   const RINGS = rel ? [[0.34, 'Close'], [0.58, 'Warm'], [0.80, 'Light'], [1.0, 'Not in touch']] : [[0.30, 'Executives'], [0.55, 'Directors'], [0.78, 'Managers'], [1.0, 'Everyone else']];
-  const dots = [], tally = {w: 0, j: 0, n: 0, s: 0, close: 0};
+  const dots = [], tally = {w: 0, o: 0, j: 0, n: 0, s: 0, close: 0};
   for (const r of inView){
     const w = byI.get(gi[groupOf(r)]); if (!w) continue;
     const span = w.a1 - w.a0, pad = Math.min(0.03, span * 0.12);
@@ -552,7 +562,7 @@ function compass(input){
       rr = lo + h01(r.k, 'r') * (hi - lo);
     }
     rr = Math.max(0.09, Math.min(0.98, rr));
-    const f = isWaiting(r) ? 'w' : r.movedNow ? 'j' : r.isNew ? 'n' : (r.ed && r.ed.star) ? 's' : '';
+    const f = isWaiting(r) ? 'w' : isOverdue(r) ? 'o' : r.movedNow ? 'j' : r.isNew ? 'n' : (r.ed && r.ed.star) ? 's' : '';
     if (f) { tally[f]++; w.flagged++; }
     if (rel && r.wm.score >= 60) { tally.close++; w.close++; }
     dots.push({k: r.k, a: +t.toFixed(4), r: +rr.toFixed(4), c: w.color, f});
@@ -647,6 +657,41 @@ function addNote(k, text, source){
   const r = S.byK.get(k); if (!r) return {edits: S.edits};
   const cur = (r.ed && r.ed.note) || '';
   return setEdit(k, {note: ((cur ? cur + '\n' : '') + `${TODAY}${source ? ' (' + source + ')' : ''}: ${String(text).slice(0, 500)}`).slice(-4000)});
+}
+
+const touch = k => setEdit(k, {touched: TODAY});
+const setCircle = (k, c) => setEdit(k, {circle: CIRCLES[c] ? c : ''});
+
+/* ---------- intro finder ---------- */
+// "Who can get me into X?": people there now, people who used to be, and people
+// you're close to in the same sector, with the best few paths first.
+const coKey = s => String(s || '').toLowerCase().replace(/&/g, ' and ').replace(/[^a-z0-9 ]/g, ' ')
+  .replace(/\b(the|inc|llc|ltd|corp|corporation|co|company|incorporated|plc|gmbh|lp|llp|group|holdings)\b/g, ' ').replace(/\s+/g, ' ').trim();
+function introPaths(q){
+  const want = coKey(q);
+  if (want.length < 2) return {company: '', ind: '', now: [], alumni: [], sector: [], best: []};
+  const hit = c => { const k = coKey(c); return !!k && (k === want || (want.length >= 4 && (k.startsWith(want + ' ') || k.includes(' ' + want + ' ') || k.endsWith(' ' + want)))); };
+  const A = live();
+  const warmFirst = (a, b) => b.wm.score - a.wm.score || a.cl.lv - b.cl.lv;
+  const now = A.filter(r => hit(r.c) || hit(r.cl.agency)).sort(warmFirst);
+  const nowSet = new Set(now.map(r => r.k));
+  const alumni = [];
+  for (const r of A){
+    if (nowSet.has(r.k)) continue;
+    const p = (r.pv || []).find(x => hit(x.c));
+    if (p) alumni.push({r, was: p.p || '', until: p.until || ''});
+  }
+  alumni.sort((a, b) => warmFirst(a.r, b.r));
+  const counts = {}; for (const r of now) counts[r.cl.ind] = (counts[r.cl.ind] || 0) + 1;
+  const ind = S.coInd[q] || Object.entries(counts).filter(([i]) => i !== UNCLASSIFIED).sort((a, b) => b[1] - a[1]).map(([i]) => i)[0] || '';
+  const sector = ind ? A.filter(r => !nowSet.has(r.k) && r.cl.ind === ind && r.wm.score >= 35 && !alumni.some(a => a.r.k === r.k)).sort(warmFirst).slice(0, 12) : [];
+  const best = [];
+  for (const r of now.filter(r => r.wm.score >= 35).slice(0, 3)) best.push({k: r.k, why: `Works there now. ${BAND_LABEL[r.wm.band]}${r.rx && r.rx.t ? ', last talked ' + niceDate(r.rx.t) : ''}.`});
+  for (const a of alumni.filter(a => a.r.wm.score >= 35).slice(0, 2)) best.push({k: a.r.k, why: `Used to work there${a.was ? ' as ' + a.was : ''}. ${BAND_LABEL[a.r.wm.band]}.`});
+  if (best.length < 3) for (const r of now.filter(r => r.wm.score < 35).sort((a, b) => a.cl.lv - b.cl.lv).slice(0, 3 - best.length)) best.push({k: r.k, why: `Works there now${r.cl.sen ? ', ' + r.cl.sen.toLowerCase() : ''}. You haven’t talked much yet.`});
+  if (best.length < 3) for (const r of sector.slice(0, 3 - best.length)) best.push({k: r.k, why: `Close to you in ${ind}. Likely knows people there.`});
+  const name = (now[0] && (hit(now[0].c) ? now[0].c : now[0].cl.agency)) || (alumni[0] && (alumni[0].r.pv || []).find(x => hit(x.c))?.c) || q;
+  return {company: name, ind, now: now.slice(0, 50).map(r => r.k), alumni: alumni.slice(0, 30).map(a => ({k: a.r.k, was: a.was, until: a.until})), sector: sector.map(r => r.k), best: best.slice(0, 4)};
 }
 
 /* ---------- import ---------- */
@@ -806,7 +851,7 @@ function constants(){
 }
 
 const api = {load, loadSample, loadFiles, clearNotes, clusters, placeClues, setCompanyLocation, companyPlaces, messages, matchAttendees, alsoAt, setLens, info, people, person, search, facets, home, payoff, targets, unit, addTargetCandidates, toggleTarget, setTargetNote, orgs,
-  industries, industry, setCompanyIndustry, setCompanyLink, ranks, deck, deckCount, reviewed, radar, compass, startFromContacts, setEdit, followUp, markReplied, addNote,
+  industries, industry, setCompanyIndustry, setCompanyLink, ranks, deck, deckCount, reviewed, radar, compass, startFromContacts, introPaths, touch, setCircle, setEdit, followUp, markReplied, addNote,
   importTexts, backup, restore, exportCSV, reminders, watch, constants};
 // Every call goes through here: JSON string in, JSON string out, errors as {error}.
 globalThis.Bearings = {

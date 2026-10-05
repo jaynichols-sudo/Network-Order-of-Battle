@@ -105,6 +105,7 @@ struct ProfileView: View {
         if p.moved { out.append(Badge(text: "New job", color: Theme.info)) }
         if p.isNew { out.append(Badge(text: "New connection", color: Theme.accent)) }
         if p.due { out.append(Badge(text: "Follow-up due", color: Theme.violet)) }
+        if p.over, let c = p.circle { out.append(Badge(text: "\(c.title): overdue", color: Theme.violet)) }
         if model.info.hasRel && p.rx != nil { out.append(Badge(text: Band.label(p.band), color: Band.color(p.band))) }
         return Array(out.prefix(3))
     }
@@ -121,7 +122,7 @@ struct ProfileView: View {
     }
 
     private func actionRow(_ p: Person) -> some View {
-        HStack(spacing: 18) {
+        HStack(spacing: 10) {
             RoundAction(title: "Message", icon: "square.and.pencil", tint: Theme.accent) { writing = true }
             RoundAction(title: p.starred ? "Starred" : "Star", icon: p.starred ? "star.fill" : "star", tint: Theme.amber, on: p.starred) {
                 Haptic.star()
@@ -137,6 +138,27 @@ struct ProfileView: View {
                 }
             } label: {
                 RoundActionLabel(title: "Remind", icon: (p.ed?.due ?? "").isEmpty ? "bell" : "bell.badge.fill", tint: Theme.violet, on: !(p.ed?.due ?? "").isEmpty)
+            }
+            .buttonStyle(.plain)
+            Menu {
+                Section("Keep in touch") {
+                    ForEach(KeepCircle.allCases) { c in
+                        Button {
+                            Task { await model.setCircle(p.k, c) }
+                        } label: {
+                            Label("\(c.title) · \(c.cadence.lowercased())", systemImage: p.circle == c ? "checkmark" : c.icon)
+                        }
+                    }
+                    if p.circle != nil {
+                        Button("Remove from circle", role: .destructive) { Task { await model.setCircle(p.k, nil) } }
+                    }
+                }
+                Button {
+                    Task { await model.touched(p.k) }
+                } label: { Label("I was in touch today", systemImage: "checkmark.bubble") }
+            } label: {
+                RoundActionLabel(title: p.circle == nil ? "Circle" : (p.over ? "Overdue" : "In touch"), icon: p.circle?.icon ?? "circle.dashed",
+                                 tint: p.over ? Theme.violet : Theme.good, on: p.circle != nil)
             }
             .buttonStyle(.plain)
             if let l = links, let u = URL(string: l.profile), !l.profile.isEmpty {

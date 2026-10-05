@@ -34,7 +34,7 @@ struct RoundActionLabel: View {
                 .font(Theme.geist(.caption, .medium))
                 .foregroundStyle(.secondary)
         }
-        .frame(minWidth: 56)
+        .frame(minWidth: 54)
         .accessibilityElement(children: .combine)
     }
 }
@@ -97,6 +97,12 @@ struct TimelineSection: View {
         var out: [Event] = []
         if let due = p.ed?.due, !due.isEmpty {
             out.append(Event(id: "due", date: due, icon: "bell.fill", color: Theme.violet, title: due <= Day.today ? "Follow-up due" : "Follow-up planned"))
+        }
+        if let c = p.circle, !p.next.isEmpty {
+            out.append(Event(id: "next", date: p.next, icon: c.icon, color: Theme.violet, title: p.over ? "Overdue to reach out" : "Next check-in", detail: "\(c.title), \(c.cadence.lowercased())"))
+        }
+        if let t = p.ed?.touched, !t.isEmpty {
+            out.append(Event(id: "touched", date: t, icon: "checkmark.bubble.fill", color: Theme.good, title: "You were in touch"))
         }
         out.append(contentsOf: notes(p))
         if let x = p.rx {

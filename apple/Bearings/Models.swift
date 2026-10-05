@@ -97,8 +97,9 @@ struct Edit: Decodable, Hashable {
     var ind = "", seg = "", branch = "", status = "", grade = "", rank = ""
     var loc = ""
     var lat: Double?, lon: Double?
+    var circle = "", touched = ""
 
-    enum K: String, CodingKey { case star, note, due, replied, updated, tags, ind, seg, branch, status, grade, rank, loc, lat, lon }
+    enum K: String, CodingKey { case star, note, due, replied, updated, tags, ind, seg, branch, status, grade, rank, loc, lat, lon, circle, touched }
     init() {}
     init(from d: Decoder) throws {
         let c = try d.container(keyedBy: K.self)
@@ -117,6 +118,8 @@ struct Edit: Decodable, Hashable {
         loc = c.lenient(String.self, .loc) ?? ""
         lat = c.lenient(Double.self, .lat)
         lon = c.lenient(Double.self, .lon)
+        circle = c.lenient(String.self, .circle) ?? ""
+        touched = c.lenient(String.self, .touched) ?? ""
     }
 }
 
@@ -142,6 +145,9 @@ struct Person: Decodable, Identifiable, Hashable {
     var group: String, color: String, indColor: String, indShort: String
     var band: String, score: Int
     var isNew: Bool, moved: Bool, waiting: Bool, cooling: Bool, due: Bool, anniv: Bool
+    /// Keep-in-touch: overdue in their circle, last time you were in touch, and when you're next due.
+    var over: Bool, touch: String, next: String
+    var circle: KeepCircle? { ed.flatMap { KeepCircle(rawValue: $0.circle) } }
     var x: String?, jc: String?, fs: String?
     var pv: [PastRole]?
     var rx: Relationship?
@@ -159,7 +165,7 @@ struct Person: Decodable, Identifiable, Hashable {
     var tint: Color { Color(hex: color) }
     var subtitle: String { [p, c].filter { !$0.isEmpty }.joined(separator: " · ") }
 
-    enum K: String, CodingKey { case k, f, l, name, u, e, c, p, d, cl, group, color, indColor, indShort, band, score, isNew, moved, waiting, cooling, due, anniv, x, jc, fs, pv, rx, ed, links }
+    enum K: String, CodingKey { case k, f, l, name, u, e, c, p, d, cl, group, color, indColor, indShort, band, score, isNew, moved, waiting, cooling, due, anniv, over, touch, next, x, jc, fs, pv, rx, ed, links }
     init(from dec: Decoder) throws {
         let c = try dec.container(keyedBy: K.self)
         k = try c.decode(String.self, forKey: .k)
@@ -173,11 +179,39 @@ struct Person: Decodable, Identifiable, Hashable {
         band = c.lenient(String.self, .band) ?? "none"; score = c.lenientInt(.score) ?? 0
         isNew = c.lenientBool(.isNew); moved = c.lenientBool(.moved); waiting = c.lenientBool(.waiting)
         cooling = c.lenientBool(.cooling); due = c.lenientBool(.due); anniv = c.lenientBool(.anniv)
+        over = c.lenientBool(.over); touch = c.lenient(String.self, .touch) ?? ""; next = c.lenient(String.self, .next) ?? ""
         x = c.lenient(String.self, .x); jc = c.lenient(String.self, .jc); fs = c.lenient(String.self, .fs)
         pv = c.lenient([PastRole].self, .pv)
         rx = c.lenient(Relationship.self, .rx)
         ed = c.lenient(Edit.self, .ed)
         links = c.lenient(PersonLinks.self, .links)
+    }
+}
+
+/// How often you mean to be in touch with someone.
+enum KeepCircle: String, CaseIterable, Identifiable {
+    case inner, key, wide
+    var id: String { rawValue }
+    var title: String {
+        switch self {
+        case .inner: return "Inner circle"
+        case .key: return "Key relationships"
+        case .wide: return "Wider network"
+        }
+    }
+    var cadence: String {
+        switch self {
+        case .inner: return "Every month"
+        case .key: return "Every quarter"
+        case .wide: return "Once a year"
+        }
+    }
+    var icon: String {
+        switch self {
+        case .inner: return "circle.inset.filled"
+        case .key: return "circle.circle"
+        case .wide: return "circle.dashed"
+        }
     }
 }
 
@@ -303,7 +337,7 @@ struct Facets: Decodable {
 }
 
 /// Mirrors the engine's filter object.
-struct Filters: Equatable {
+struct Filters: Equatable, Codable {
     var rel: Set<String> = []
     var seg: Set<String> = []
     var branch: Set<String> = []
@@ -330,6 +364,18 @@ struct Filters: Equatable {
          "sen": Array(sen), "func": Array(fn), "ind": Array(ind), "cert": Array(cert), "sig": Array(sig),
          "agency": agency, "company": company, "since": since, "removed": removed]
     }
+}
+
+/// A search you pinned to Home, like "Navy O-5 and up in Tampa".
+struct SavedSearch: Codable, Identifiable, Hashable {
+    var id = UUID().uuidString
+    var name: String
+    var text: String
+    var filters: Filters
+    var sort: String
+
+    static func == (a: SavedSearch, b: SavedSearch) -> Bool { a.id == b.id && a.name == b.name }
+    func hash(into h: inout Hasher) { h.combine(id) }
 }
 
 enum SortOrder: String, CaseIterable, Identifiable {

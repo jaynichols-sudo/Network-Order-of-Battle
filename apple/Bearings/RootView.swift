@@ -32,6 +32,9 @@ struct RootView: View {
         .sheet(isPresented: $model.showAddTarget) { AddTargetView() }
         .sheet(isPresented: $model.showPayoff) { PayoffView() }
         .sheet(isPresented: $model.showShareCard) { ShareCardSheet() }
+        .sheet(item: Binding(get: { model.introQuery.map { IntroFinderView.Wrapped(id: $0) } }, set: { model.introQuery = $0?.id })) { w in
+            IntroFinderView(query: w.id)
+        }
         .sheet(item: $model.shareFile) { f in ActivityView(items: [f.url]).ignoresSafeArea() }
         .fullScreenCover(isPresented: $model.showOnboarding) { OnboardingView() }
     }

@@ -95,6 +95,8 @@ final class AppModel {
     var showOnboarding = false
     var showPayoff = false
     var showShareCard = false
+    var introQuery: String?
+    private(set) var savedSearches: [SavedSearch] = []
     var shareFile: ShareFile?
     var pendingImportURL: URL?
 
@@ -239,6 +241,10 @@ final class AppModel {
             errorNote = ""
         } catch {
             errorNote = "Your saved network didn’t load (\(error.localizedDescription)). Close and reopen the app to try again."
+        }
+        if case .data(let t) = await store.read("lists.json"), let t, let d = t.data(using: .utf8),
+           let lists = try? JSONDecoder().decode([SavedSearch].self, from: d) {
+            savedSearches = lists
         }
         if case .data(let t) = await store.read("places.json"), let t, let d = t.data(using: .utf8),
            let f = try? JSONDecoder().decode(PlacesFile.self, from: d) {
@@ -453,6 +459,54 @@ final class AppModel {
         show("Marked as replied")
     }
 
+    // MARK: saved searches
+
+    func saveSearch(named name: String) async {
+        let item = SavedSearch(name: name, text: searchText, filters: filters, sort: sort.rawValue)
+        savedSearches.append(item)
+        await writeLists()
+        Haptic.success()
+        show("Pinned “\(name)” to Home")
+    }
+
+    func deleteSearch(_ s: SavedSearch) async {
+        savedSearches.removeAll { $0.id == s.id }
+        await writeLists()
+    }
+
+    private func writeLists() async {
+        guard let d = try? JSONEncoder().encode(savedSearches), let t = String(data: d, encoding: .utf8) else { return }
+        try? await store.write("lists.json", t)
+    }
+
+    /// The people a saved search finds right now.
+    func run(_ s: SavedSearch) async -> [String] {
+        let args: [String: Any] = ["text": s.text, "filters": s.filters.json, "sort": s.sort]
+        return (try? await engine.call("search", [args], as: SearchResult.self))?.keys ?? []
+    }
+
+    func apply(_ s: SavedSearch) {
+        Haptic.tap()
+        searchText = s.text
+        filters = s.filters
+        sort = SortOrder(rawValue: s.sort) ?? .new
+        paths[.people] = []
+        tab = .people
+    }
+
+    func setCircle(_ k: String, _ c: KeepCircle?) async {
+        Haptic.tap()
+        await edit(k, call: "setCircle", [k, c?.rawValue ?? ""])
+        if let c { show("\(c.title): \(c.cadence.lowercased())") }
+    }
+
+    /// "I talked to them": resets their keep-in-touch clock.
+    func touched(_ k: String) async {
+        Haptic.success()
+        await edit(k, call: "touch", [k])
+        if let p = byKey[k], !p.next.isEmpty { show("Logged. Next check-in \(Day.nice(p.next))") } else { show("Logged") }
+    }
+
     func addNote(_ k: String, _ text: String, source: String = "") async {
         await edit(k, call: "addNote", [k, text, source])
     }
@@ -520,6 +574,7 @@ final class AppModel {
     func industry(_ id: String) async -> IndustryDetail? { try? await engine.call("industry", [id], as: IndustryDetail.self) }
     func orgs() async -> Orgs? { try? await engine.call("orgs", [["text": "", "filters": Filters().json]], as: Orgs.self) }
     func addCandidates(_ q: String) async -> [NameCount] { (try? await engine.call("addTargetCandidates", [q], as: [NameCount].self)) ?? [] }
+    func introPaths(_ q: String) async -> IntroPaths? { try? await engine.call("introPaths", [q], as: IntroPaths.self) }
     func compass() async -> CompassData { (try? await engine.call("compass", [["text": "", "filters": Filters().json]], as: CompassData.self)) ?? .empty }
     func radar() async -> RadarData { (try? await engine.call("radar", [queryArgs], as: RadarData.self)) ?? .empty }
     func ranks() async -> RanksData? { try? await engine.call("ranks", [queryArgs], as: RanksData.self) }
