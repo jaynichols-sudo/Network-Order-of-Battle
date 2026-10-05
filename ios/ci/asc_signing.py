@@ -31,7 +31,11 @@ def token():
         key, algorithm="ES256", headers={"kid": os.environ["ASC_KEY_ID"], "typ": "JWT"})
 
 
-def call(method, path, body=None):
+class Busy(Exception):
+    pass
+
+
+def call(method, path, body=None, busy_ok=False):
     req = urllib.request.Request(API + path, method=method,
                                  data=json.dumps(body).encode() if body is not None else None,
                                  headers={"Authorization": "Bearer " + token(), "Content-Type": "application/json"})
@@ -40,7 +44,23 @@ def call(method, path, body=None):
             raw = r.read()
             return json.loads(raw) if raw else {}
     except urllib.error.HTTPError as e:
+        if busy_ok and e.code == 409:
+            raise Busy(e.read().decode()[:300])
         sys.exit(f"App Store Connect API {method} {path} failed: {e.code} {e.read().decode()[:800]}")
+
+
+def create_cert(kind, csr_pem):
+    """Apple allows only a few certificates of each kind at once. Another CI build
+    (iPhone and Mac can overlap) holds one until it finishes, so wait for it."""
+    for attempt in range(16):
+        try:
+            return call("POST", "/certificates", {"data": {"type": "certificates", "attributes": {
+                "certificateType": kind, "csrContent": csr_pem}}}, busy_ok=True)["data"]
+        except Busy as b:
+            print(f"Certificate slot busy ({kind}), waiting for another build to finish… {attempt + 1}/16", flush=True)
+            last = b
+            time.sleep(60)
+    sys.exit(f"No free {kind} certificate slot after 16 minutes: {last}. Revoke unused ones at developer.apple.com/account/resources/certificates.")
 
 
 def env_out(**kv):
@@ -60,8 +80,7 @@ def setup():
                                     x509.NameAttribute(NameOID.EMAIL_ADDRESS, "ci@example.invalid")]))
            .sign(key, hashes.SHA256()))
     csr_pem = csr.public_bytes(serialization.Encoding.PEM).decode()
-    cert = call("POST", "/certificates", {"data": {"type": "certificates", "attributes": {
-        "certificateType": "DISTRIBUTION", "csrContent": csr_pem}}})["data"]
+    cert = create_cert("DISTRIBUTION", csr_pem)
     cert_id = cert["id"]
     env_out(OOB_CERT_ID=cert_id)
     der = base64.b64decode(cert["attributes"]["certificateContent"])
@@ -133,8 +152,7 @@ def installer(kc, kc_pass, tmp, run):
     csr = (x509.CertificateSigningRequestBuilder()
            .subject_name(x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, f"Bearings CI installer {run}")]))
            .sign(key, hashes.SHA256()))
-    cert = call("POST", "/certificates", {"data": {"type": "certificates", "attributes": {
-        "certificateType": "MAC_INSTALLER_DISTRIBUTION", "csrContent": csr.public_bytes(serialization.Encoding.PEM).decode()}}})["data"]
+    cert = create_cert("MAC_INSTALLER_DISTRIBUTION", csr.public_bytes(serialization.Encoding.PEM).decode())
     env_out(OOB_INSTALLER_CERT_ID=cert["id"])
     certobj = x509.load_der_x509_certificate(base64.b64decode(cert["attributes"]["certificateContent"]))
     p12_pass = "ci-inst-" + str(int(time.time()))
