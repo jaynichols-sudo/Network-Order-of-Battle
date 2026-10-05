@@ -28,6 +28,7 @@ struct ImportView: View {
                     step(3, "Bring the file here", "Download the zip and choose it below, or open it from Mail or Files and share it to Bearings.")
                     Button {
                         if let u = URL(string: "https://www.linkedin.com/mypreferences/d/download-my-data") { openURL(u) }
+                        Task { await ExportReminder.requested() }
                     } label: { Label("Open LinkedIn’s data page", systemImage: "arrow.up.right.square") }
                 }
                 Section {
@@ -46,6 +47,21 @@ struct ImportView: View {
                     .disabled(reading || saving)
                     if reading { HStack { ProgressView(); Text("Reading \(fileName)…") } }
                     if !error.isEmpty { Text(error).foregroundStyle(Theme.bad) }
+                }
+                if model.info.isSample && plan == nil {
+                    Section {
+                        Button {
+                            dismiss()
+                            Task { @MainActor in
+                                try? await Task.sleep(nanoseconds: 400_000_000)
+                                model.showOnboarding = true
+                            }
+                        } label: {
+                            Label("No file yet? Start with your contacts", systemImage: "person.crop.circle.badge.checkmark")
+                        }
+                    } footer: {
+                        Text("See your network right away from the people in your phone, then add LinkedIn when the email arrives.")
+                    }
                 }
                 if let plan {
                     Section {
@@ -188,11 +204,22 @@ struct PayoffView: View {
                         }
                     }
                     Section {
-                        Button {
-                            dismiss()
-                            model.tab = .explore
-                        } label: { Text("See it on a map").frame(maxWidth: .infinity).fontWeight(.semibold) }
-                        .buttonStyle(.borderedProminent)
+                        VStack(spacing: 10) {
+                            Button {
+                                dismiss()
+                                Task { @MainActor in
+                                    try? await Task.sleep(nanoseconds: 450_000_000)
+                                    model.showShareCard = true
+                                }
+                            } label: { Label("Share a picture of it", systemImage: "square.and.arrow.up").frame(maxWidth: .infinity).fontWeight(.semibold) }
+                            .prominentGlassButton()
+                            Button {
+                                dismiss()
+                                model.tab = .explore
+                            } label: { Text("See it on a map").frame(maxWidth: .infinity).fontWeight(.semibold) }
+                            .glassButton()
+                        }
+                        .controlSize(.large)
                         .listRowBackground(Color.clear)
                     }
                 }

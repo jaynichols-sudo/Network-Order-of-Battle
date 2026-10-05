@@ -52,13 +52,14 @@ struct SettingsView: View {
 
     private var generalSection: some View {
         Section {
+            MyPhotoRow()
+            TextField("Your name", text: $name)
+                .textContentType(.name)
             Picker("Appearance", selection: $appearance) {
                 Text("Automatic").tag("system")
                 Text("Light").tag("light")
                 Text("Dark").tag("dark")
             }
-            TextField("Your first name (for the greeting)", text: $name)
-                .textContentType(.givenName)
         }
     }
 
@@ -249,68 +250,6 @@ struct SettingsView: View {
         guard var c = URLComponents(string: "mailto:" + AppInfo.supportEmail) else { return }
         c.queryItems = [URLQueryItem(name: "subject", value: "Bearings support"), URLQueryItem(name: "body", value: body)]
         if let u = c.url { openURL(u) }
-    }
-}
-
-struct OnboardingView: View {
-    @Environment(AppModel.self) private var model
-    @Environment(\.dismiss) private var dismiss
-    @State private var page = 0
-
-    private let pages: [(String, String, String)] = [
-        ("location.north.circle.fill", "See who you know, and where they are now", "Bearings turns your LinkedIn connections into a map you can search, sort and act on. Spot job changes, find who you know at any company, and never lose track of a follow-up."),
-        ("arrowshape.turn.up.left.circle.fill", "Know who’s waiting on you", "Add your LinkedIn messages and Bearings shows who wrote last, which relationships are going cold, and who you’re closest to."),
-        ("lock.circle.fill", "Private by design", "No account and no server. Your network stays on your devices and in your own iCloud."),
-    ]
-
-    var body: some View {
-        VStack(spacing: 0) {
-            TabView(selection: $page) {
-                ForEach(Array(pages.enumerated()), id: \.offset) { i, p in
-                    VStack(spacing: 22) {
-                        Spacer()
-                        if i == 0 {
-                            Image("BrandMark").resizable().scaledToFit().frame(width: 150, height: 150)
-                                .accessibilityLabel("Bearings")
-                        } else {
-                            Image(systemName: p.0)
-                                .font(.system(size: 88))
-                                .foregroundStyle(Theme.amber, Theme.violet)
-                                .symbolRenderingMode(.palette)
-                        }
-                        Text(p.1).geist(.title, .bold).multilineTextAlignment(.center)
-                        Text(p.2).font(Theme.geist(.body)).foregroundStyle(.secondary).multilineTextAlignment(.center)
-                        Spacer()
-                    }
-                    .padding(.horizontal, 32)
-                    .tag(i)
-                }
-            }
-            .tabViewStyle(.page)
-            .indexViewStyle(.page(backgroundDisplayMode: .always))
-            VStack(spacing: 12) {
-                Button {
-                    if page < pages.count - 1 { withAnimation { page += 1 } }
-                    else { finish(import: true) }
-                } label: {
-                    Text(page < pages.count - 1 ? "Continue" : "Import my connections")
-                        .font(Theme.geist(.headline))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 6)
-                }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
-                Button("Look around with sample data first") { finish(import: false) }
-                    .font(Theme.geist(.subheadline, .semibold))
-            }
-            .padding(24)
-        }
-    }
-
-    private func finish(import doImport: Bool) {
-        UserDefaults.standard.set(true, forKey: "onboarded")
-        dismiss()
-        if doImport { model.showImport = true }
     }
 }
 

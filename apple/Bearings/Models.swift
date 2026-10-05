@@ -38,6 +38,8 @@ struct EngineInfo: Decodable, Equatable {
     var empty: Bool?
 
     var isSample: Bool { mode == "sample" }
+    /// A starter network built from the phone's contacts, waiting for a LinkedIn export.
+    var isStarter: Bool { mode == "starter" }
     static let blank = EngineInfo(mode: "sample", count: 0, removed: 0, hasRel: false, lens: false, lensAuto: false, lastImport: "", relImport: "", rev: "", deckCount: 0, today: "", edits: 0, targets: 0, empty: true)
 }
 
@@ -473,6 +475,13 @@ struct ImportStats: Decodable {
 
 struct ImportPlan: Decodable {
     var stats: ImportStats
+    var wasSample: Bool
+    var wasStarter: Bool?
+}
+
+struct StarterResult: Decodable {
+    var count: Int
+    var companies: Int
     var wasSample: Bool
 }
 

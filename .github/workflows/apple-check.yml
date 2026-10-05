@@ -100,6 +100,11 @@ jobs:
             shoot $dev $p-09-filters -startTab people -demoOpen filters
             shoot $dev $p-10-settings -demoOpen settings
             shoot $dev $p-11-import -demoOpen import
+            shoot $dev $p-14-onboard-welcome -demoOpen onboarding
+            shoot $dev $p-15-onboard-purpose -demoOpen onboarding -onboardStep 1
+            shoot $dev $p-16-onboard-start -demoOpen onboarding -onboardStep 2
+            shoot $dev $p-17-onboard-linkedin -demoOpen onboarding -onboardStep 3
+            shoot $dev $p-18-share -demoOpen share
             xcrun simctl ui $dev appearance dark
             shoot $dev $p-12-home-dark
             shoot $dev $p-13-people-dark -startTab people

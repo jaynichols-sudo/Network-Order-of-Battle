@@ -31,6 +31,7 @@ struct RootView: View {
         .sheet(isPresented: $model.showSettings) { SettingsView() }
         .sheet(isPresented: $model.showAddTarget) { AddTargetView() }
         .sheet(isPresented: $model.showPayoff) { PayoffView() }
+        .sheet(isPresented: $model.showShareCard) { ShareCardSheet() }
         .sheet(item: $model.shareFile) { f in ActivityView(items: [f.url]).ignoresSafeArea() }
         .fullScreenCover(isPresented: $model.showOnboarding) { OnboardingView() }
     }
@@ -139,15 +140,7 @@ struct AccountButton: View {
             Divider()
             Button { model.showSettings = true } label: { Label("Settings", systemImage: "gearshape") }
         } label: {
-            Text(model.myInitials.isEmpty ? "" : model.myInitials)
-                .font(.custom("Geist-SemiBold", fixedSize: 13))
-                .foregroundStyle(.white)
-                .frame(width: 34, height: 34)
-                .background(Circle().fill(Theme.plum))
-                .overlay {
-                    if model.myInitials.isEmpty { Image(systemName: "person.fill").font(.system(size: 14, weight: .semibold)).foregroundStyle(.white) }
-                }
-                .overlay(Circle().strokeBorder(Theme.amber.opacity(0.8), lineWidth: 1.5))
+            MeAvatar(initials: model.myInitials, size: 34)
         }
         .accessibilityLabel("Account, refresh and settings")
     }

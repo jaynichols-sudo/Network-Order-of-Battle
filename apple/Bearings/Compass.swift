@@ -79,6 +79,8 @@ struct CompassView: View {
     /// 0 to 1: how far out the dots have appeared (for the first-run reveal).
     var reveal: Double = 1
     var initials: String = ""
+    /// Draw a single frame (for images): no animation, sweep parked at a flattering angle.
+    var still = false
     let onOpen: (String) -> Void
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -94,9 +96,15 @@ struct CompassView: View {
             let center = CGPoint(x: g.size.width / 2, y: g.size.height / 2)
             let z = zoom(r: r)
             ZStack {
-                TimelineView(.animation(paused: reduceMotion)) { tl in
-                    Canvas { ctx, _ in
-                        draw(&ctx, center: center, r: r, t: tl.date.timeIntervalSinceReferenceDate)
+                Group {
+                    if still {
+                        Canvas { ctx, _ in draw(&ctx, center: center, r: r, t: 4.6) }
+                    } else {
+                        TimelineView(.animation(paused: reduceMotion)) { tl in
+                            Canvas { ctx, _ in
+                                draw(&ctx, center: center, r: r, t: tl.date.timeIntervalSinceReferenceDate)
+                            }
+                        }
                     }
                 }
                 .scaleEffect(z.scale)
@@ -125,14 +133,8 @@ struct CompassView: View {
     }
 
     private var you: some View {
-        Text(initials.isEmpty ? "You" : initials)
-            .font(.custom("Geist-SemiBold", fixedSize: initials.isEmpty ? 12 : 15))
-            .foregroundStyle(.white)
-            .frame(width: 46, height: 46)
-            .background(Circle().fill(Theme.plum))
-            .overlay(Circle().strokeBorder(Theme.amber, lineWidth: 2))
+        MeAvatar(initials: initials, size: 46, ring: 2)
             .shadow(color: Theme.amber.opacity(0.35), radius: 10)
-            .accessibilityHidden(true)
     }
 
     // MARK: zoom
@@ -338,6 +340,21 @@ struct CompassCard: View {
                     .buttonStyle(.plain)
                     .glassCapsule()
                     .transition(.opacity.combined(with: .scale(scale: 0.9)))
+                }
+            }
+            .overlay(alignment: .topTrailing) {
+                if focus == nil {
+                    Button {
+                        Haptic.tap()
+                        model.showShareCard = true
+                    } label: {
+                        Image(systemName: "square.and.arrow.up")
+                            .font(.system(size: 15, weight: .semibold))
+                            .frame(width: 38, height: 38)
+                    }
+                    .buttonStyle(.plain)
+                    .glassCircle()
+                    .accessibilityLabel("Share a picture of your network")
                 }
             }
             .animation(.smooth, value: focus)

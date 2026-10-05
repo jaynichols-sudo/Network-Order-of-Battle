@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct HomeView: View {
     @Environment(AppModel.self) private var model
@@ -43,6 +44,7 @@ struct HomeView: View {
                     .lineLimit(1)
                 Text(model.info.isSample && !UserDefaults.standard.bool(forKey: "storeMode")
                      ? "You’re looking around a sample network."
+                     : model.info.isStarter ? "\(model.info.count.formatted()) people from your contacts"
                      : "\(model.info.count.formatted()) people\(model.info.lastImport.isEmpty ? "" : ", refreshed \(Day.nice(model.info.lastImport))")")
                     .foregroundStyle(.secondary)
                     .font(Theme.geist(.subheadline))
@@ -58,6 +60,19 @@ struct HomeView: View {
             Callout(icon: "exclamationmark.triangle.fill", tint: Theme.bad, title: "Couldn’t load", text: model.errorNote)
         } else if !model.syncNote.isEmpty {
             Callout(icon: "icloud.and.arrow.down", tint: Theme.info, title: "Syncing", text: model.syncNote)
+        } else if model.info.isStarter {
+            if let at = ExportReminder.requestedAt {
+                Callout(icon: "envelope.badge", tint: Theme.info, title: "Watch for LinkedIn’s email",
+                        text: "You asked for your LinkedIn data \(Day.ago(Day.fmt.string(from: at))). When the email arrives, download the file and share it to Bearings. Your notes and stars come along.",
+                        button: "I have the file") { model.showImport = true }
+            } else {
+                Callout(icon: "square.and.arrow.down", tint: Theme.accent, title: "This is your contacts. Add LinkedIn for the full picture",
+                        text: "LinkedIn adds everyone you’re connected to, who you message, and who changed jobs.",
+                        button: "Ask LinkedIn for my data") {
+                    if let u = URL(string: "https://www.linkedin.com/mypreferences/d/download-my-data") { UIApplication.shared.open(u) }
+                    Task { await ExportReminder.requested() }
+                }
+            }
         } else if model.info.isSample && !UserDefaults.standard.bool(forKey: "storeMode") {
             Callout(icon: "square.and.arrow.down", tint: Theme.accent, title: "See your own network",
                     text: "Import your LinkedIn connections. It takes about three minutes and stays private to you.",

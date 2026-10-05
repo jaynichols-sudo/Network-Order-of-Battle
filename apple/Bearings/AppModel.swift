@@ -94,6 +94,7 @@ final class AppModel {
     var showAddTarget = false
     var showOnboarding = false
     var showPayoff = false
+    var showShareCard = false
     var shareFile: ShareFile?
     var pendingImportURL: URL?
 
@@ -195,6 +196,8 @@ final class AppModel {
         case "unit":
             if let t = targets.first { paths[tab, default: []].append(.unit(t.name)) }
         case "settings": showSettings = true
+        case "onboarding": showOnboarding = true
+        case "share": showShareCard = true
         case "import": showImport = true
         case "filters": showFiltersOnLaunch = true
         default: break
@@ -671,6 +674,13 @@ final class AppModel {
                 if let j = await engine.fileJSON(n) { try await store.write(f, j) }
             }
         }
+        if plan.wasStarter == true {
+            // notes and stars made on the starter network were carried to the LinkedIn version of each person
+            for (n, f) in [("edits", "edits.json"), ("review", "review.json")] {
+                if let j = await engine.fileJSON(n) { try await store.write(f, j) }
+            }
+            ExportReminder.clear()
+        }
         prefs.set(true, forKey: "onboarded")
         await reload()
         if Locator.contactsAllowed() || !foundPlaces.isEmpty { await locate(askContacts: false) }
@@ -679,12 +689,38 @@ final class AppModel {
             _ = await CalendarService.shared.setHome(h)
         }
         Haptic.success()
-        if plan.wasSample || plan.stats.first {
+        if plan.wasSample || plan.stats.first || plan.wasStarter == true {
             tab = .home
             showPayoff = true
         } else {
             show("\(plan.stats.added.formatted()) new, \(plan.stats.changed.formatted()) changed jobs. Catch up from Home.")
         }
+    }
+
+    // MARK: starter network
+
+    /// Maps the people in the phone's contacts right away, so there's something real
+    /// to look at while the LinkedIn export is on its way.
+    func startFromContacts() async throws -> StarterResult {
+        guard await Locator.requestContacts() else {
+            throw Engine.Failure(message: "Bearings needs access to Contacts for this. You can turn it on in the Settings app under Bearings.")
+        }
+        let list = await StarterContacts.read()
+        guard !list.isEmpty else { throw Engine.Failure(message: "There’s no one in your contacts to map yet.") }
+        let r = try await engine.call("startFromContacts", [list], as: StarterResult.self)
+        guard let json = await engine.fileJSON("network") else { throw Engine.Failure(message: "Couldn’t save your starter network.") }
+        try await store.write("network.json", json)
+        if r.wasSample {
+            try await engine.run("clearNotes")
+            for (n, f) in [("edits", "edits.json"), ("review", "review.json"), ("targets", "targets.json"), ("industries", "industries.json")] {
+                if let j = await engine.fileJSON(n) { try await store.write(f, j) }
+            }
+        }
+        prefs.set(true, forKey: "onboarded")
+        await reload()
+        await locate(askContacts: false)
+        Haptic.success()
+        return r
     }
 
     // MARK: backup, restore, export

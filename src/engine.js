@@ -659,7 +659,47 @@ function importTexts(t, device){
   const out = plan.rows.map(stripRow).map(r => { delete r._new; return r; });
   plan.meta.count = out.length; plan.meta.rev = Date.now() + '-' + Math.random().toString(36).slice(2, 8); plan.meta.device = device || 'ios';
   S.pending = {meta: plan.meta, rows: out};
-  return {stats: plan.stats, wasSample: S.mode !== 'live'};
+  const wasStarter = S.mode === 'starter';
+  if (wasStarter) carryStarterNotes(out);
+  return {stats: plan.stats, wasSample: S.mode === 'sample', wasStarter};
+}
+
+/* ---------- starter network from the phone's contacts ---------- */
+// Instant value while the LinkedIn export is on its way. People come from the
+// address book (name, company, title, email); the LinkedIn import replaces them
+// later and carries any notes or stars across by email or name.
+function startFromContacts(list){
+  if (S.mode === 'live') throw new Error('You already have a network from LinkedIn.');
+  const seen = new Set(), rows = [];
+  for (const c of list || []){
+    const f = String(c.f || '').trim(), l = String(c.l || '').trim();
+    if (!f && !l) continue;
+    const r = {f, l, c: String(c.c || '').trim(), p: String(c.p || '').trim(), e: String(c.e || '').trim().toLowerCase(), fs: TODAY, fi: 1};
+    r.k = keyOf(r);
+    if (seen.has(r.k)) continue; seen.add(r.k);
+    rows.push(stripRow(r));
+  }
+  if (!rows.length) throw new Error('None of your contacts have a name to work with.');
+  const meta = {lastImport: TODAY, n: 1, count: rows.length, rev: Date.now() + '-' + Math.random().toString(36).slice(2, 8), device: 'ios', source: 'contacts'};
+  S.pending = {meta, rows};
+  return {count: rows.length, companies: new Set(rows.map(r => (r.c || '').toLowerCase()).filter(Boolean)).size, wasSample: S.mode === 'sample'};
+}
+function carryStarterNotes(incoming){
+  const nm = r => `${r.f || ''} ${r.l || ''}`.toLowerCase().replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, ' ').trim();
+  const byEmail = new Map(), byName = new Map();
+  for (const r of incoming){
+    if (r.e) byEmail.set(r.e.toLowerCase(), r.k);
+    const n = nm(r); if (!n) continue;
+    byName.set(n, byName.has(n) ? null : r.k);
+  }
+  const moved = {}, review = {};
+  for (const r of S.all){
+    const to = (r.e && byEmail.get(r.e.toLowerCase())) || byName.get(nm(r));
+    if (!to) continue;
+    if (S.edits[r.k]) moved[to] = Object.assign({}, S.edits[to] || {}, S.edits[r.k]);
+    if (S.review[r.k]) review[to] = S.review[r.k];
+  }
+  S.edits = moved; S.review = review;
 }
 
 /* ---------- backup, restore, export ---------- */
@@ -724,7 +764,7 @@ function info(){
     deckCount: deckCount(), today: TODAY, edits: Object.keys(S.edits).length, targets: S.targets.length};
 }
 function load(st){
-  S.mode = st.mode === 'sample' ? 'sample' : 'live';
+  S.mode = st.mode === 'sample' ? 'sample' : (st.meta && st.meta.source === 'contacts') ? 'starter' : 'live';
   S.meta = st.meta || {};
   S.edits = st.edits || {};
   S.review = st.review || {};
@@ -766,7 +806,7 @@ function constants(){
 }
 
 const api = {load, loadSample, loadFiles, clearNotes, clusters, placeClues, setCompanyLocation, companyPlaces, messages, matchAttendees, alsoAt, setLens, info, people, person, search, facets, home, payoff, targets, unit, addTargetCandidates, toggleTarget, setTargetNote, orgs,
-  industries, industry, setCompanyIndustry, setCompanyLink, ranks, deck, deckCount, reviewed, radar, compass, setEdit, followUp, markReplied, addNote,
+  industries, industry, setCompanyIndustry, setCompanyLink, ranks, deck, deckCount, reviewed, radar, compass, startFromContacts, setEdit, followUp, markReplied, addNote,
   importTexts, backup, restore, exportCSV, reminders, watch, constants};
 // Every call goes through here: JSON string in, JSON string out, errors as {error}.
 globalThis.Bearings = {
