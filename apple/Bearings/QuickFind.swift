@@ -17,7 +17,7 @@ struct QuickFind: View {
                     .focused($focused)
                     .autocorrectionDisabled()
                     .onSubmit { if let p = results.first { open(p.k) } }
-                if !q.isEmpty { Button { q = "" } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(.tertiary) }.buttonStyle(.plain) }
+                if !q.isEmpty { Button { q = "" } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(.tertiary) }.buttonStyle(.plain).accessibilityLabel("Clear") }
             }
             .padding(16)
             Divider()

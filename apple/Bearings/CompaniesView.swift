@@ -15,7 +15,8 @@ struct CompaniesView: View {
         .navigationTitle("Companies")
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
-                Button { model.introQuery = "" } label: { Label("Find a way in", systemImage: "point.3.connected.trianglepath.dotted") }
+                Button { model.introQuery = "" } label: { Text("Ways in").font(Theme.geist(.subheadline, .semibold)) }
+                    .accessibilityLabel("Find a way into a company")
             }
             MainToolbar()
         }

@@ -121,12 +121,10 @@ struct PersonRow: View {
                         .padding(.horizontal, 6).padding(.vertical, 2)
                         .background(Color(.tertiarySystemFill), in: Capsule())
                 } else if !person.indShort.isEmpty && person.cl.ind != "Unclassified" {
-                    Text(person.indShort)
-                        .font(Theme.geist(.caption, .medium))
-                        .foregroundStyle(Color(hex: person.indColor))
-                        .padding(.horizontal, 7).padding(.vertical, 3)
-                        .background(Color(hex: person.indColor).opacity(0.12), in: Capsule())
-                        .lineLimit(1)
+                    HStack(spacing: 4) {
+                        Circle().fill(Color(hex: person.indColor)).frame(width: 6, height: 6)
+                        Text(person.indShort).font(Theme.geist(.caption, .medium)).foregroundStyle(.secondary).lineLimit(1)
+                    }
                 }
             }
         }

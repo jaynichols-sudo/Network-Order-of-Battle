@@ -103,6 +103,7 @@ struct OnboardingView: View {
     @State private var working = false
     @State private var error = ""
     @State private var built: StarterResult?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var hasRealNetwork: Bool { !model.info.isSample && !model.info.isStarter }
 
@@ -117,7 +118,7 @@ struct OnboardingView: View {
                 default: linkedIn
                 }
             }
-            .transition(.asymmetric(insertion: .move(edge: .trailing).combined(with: .opacity), removal: .move(edge: .leading).combined(with: .opacity)))
+            .transition(reduceMotion ? .opacity : .asymmetric(insertion: .move(edge: .trailing).combined(with: .opacity), removal: .move(edge: .leading).combined(with: .opacity)))
         }
         .animation(.smooth(duration: 0.4), value: step)
         .task(id: model.info.rev + model.info.mode) { compass = await model.compass() }

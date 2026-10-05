@@ -11,6 +11,7 @@ struct SettingsView: View {
     @AppStorage("salesnav") private var salesNav = false
     @AppStorage("notify") private var notify = true
     @AppStorage("haptics") private var haptics = true
+    @AppStorage("sounds") private var sounds = true
     @AppStorage("contactPhotos") private var contactPhotos = true
     @State private var restoring = false
     @Environment(\.webAuthenticationSession) private var webAuth
@@ -60,6 +61,7 @@ struct SettingsView: View {
                 Text("Light").tag("light")
                 Text("Dark").tag("dark")
             }
+            AppIconPicker()
         }
     }
 
@@ -74,6 +76,7 @@ struct SettingsView: View {
             Toggle("Reminders", isOn: $notify)
                 .onChange(of: notify) { _, on in reschedule(on) }
             Toggle("Haptics", isOn: $haptics)
+            Toggle("Sounds", isOn: $sounds)
         } header: {
             Text("Your network")
         } footer: {

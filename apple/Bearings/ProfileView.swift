@@ -127,7 +127,17 @@ struct ProfileView: View {
     }
 
     private func actionRow(_ p: Person) -> some View {
-        HStack(spacing: 10) {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 10) { actionButtons(p) }
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 10) { actionButtons(p) }.padding(.horizontal, 16)
+            }
+        }
+        .padding(.top, 4)
+    }
+
+    @ViewBuilder private func actionButtons(_ p: Person) -> some View {
+        Group {
             RoundAction(title: "Message", icon: "square.and.pencil", tint: Theme.accent) { writing = true }
             RoundAction(title: p.starred ? "Starred" : "Star", icon: p.starred ? "star.fill" : "star", tint: Theme.amber, on: p.starred) {
                 Haptic.star()
@@ -174,7 +184,6 @@ struct ProfileView: View {
                     .disabled(sfBusy)
             }
         }
-        .padding(.top, 4)
     }
 
     private func sendToSalesforce(_ p: Person) {

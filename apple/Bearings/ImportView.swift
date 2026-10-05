@@ -164,6 +164,7 @@ struct PayoffView: View {
     @State private var p: Payoff?
     @State private var compass = CompassData.empty
     @State private var reveal: Double = 0
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         NavigationStack {
@@ -229,7 +230,7 @@ struct PayoffView: View {
                 p = await model.payoff()
                 compass = await model.compass()
                 try? await Task.sleep(nanoseconds: 350_000_000)
-                withAnimation(.easeOut(duration: 2.4)) { reveal = 1 }
+                if reduceMotion { reveal = 1 } else { withAnimation(.easeOut(duration: 2.4)) { reveal = 1 } }
                 Haptic.success()
             }
         }

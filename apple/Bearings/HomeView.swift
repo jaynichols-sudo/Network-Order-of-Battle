@@ -16,6 +16,13 @@ struct HomeView: View {
                 EventsStrip()
                 if !model.home.cards.isEmpty {
                     Text("Worth your time").font(Theme.geist(.title3, .bold)).padding(.top, 6)
+                } else if model.loaded && !model.info.isSample {
+                    Callout(icon: "checkmark.seal.fill", tint: Theme.good, title: "You’re all caught up",
+                            text: "Nobody’s waiting on you and no follow-ups are due. A good day to reach out to someone you haven’t talked to in a while.",
+                            button: "Find someone") {
+                        var f = Filters(); f.sig = ["cold"]
+                        model.searchText = ""; model.filters = f; model.paths[.people] = []; model.tab = .people
+                    }
                 }
                 LazyVStack(spacing: 12) {
                     ForEach(model.home.cards) { card in

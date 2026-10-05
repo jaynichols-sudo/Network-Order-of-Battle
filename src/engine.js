@@ -567,7 +567,8 @@ function compass(input){
     const f = isWaiting(r) ? 'w' : isOverdue(r) ? 'o' : r.movedNow ? 'j' : r.isNew ? 'n' : (r.ed && r.ed.star) ? 's' : '';
     if (f) { tally[f]++; w.flagged++; }
     if (rel && r.wm.score >= 60) { tally.close++; w.close++; }
-    dots.push({k: r.k, a: +t.toFixed(4), r: +rr.toFixed(4), c: w.color, f});
+    const dot = {k: r.k, a: +t.toFixed(3), r: +rr.toFixed(3), c: w.color}; if (f) dot.f = f;
+    dots.push(dot);
   }
   return {wedges: wedges.map(({i, ...w}) => w), dots, rings: RINGS.map(([r, label]) => ({r, label})), rel, total: dots.length, tally};
 }
@@ -845,7 +846,18 @@ function fileData(name){
 }
 function clearNotes(){ S.edits = {}; S.review = {}; S.targets = []; S.coInd = Object.create(null); S.coLink = Object.create(null); S.coLoc = Object.create(null); return true; }
 function setLens(pref){ S.lensPref = pref == null ? null : !!pref; applyLens(); return info(); }
-function people(){ return S.all.map(vm); }
+// Leaves out empty values so a big network crosses to the app quickly; the app fills in defaults.
+const lean = o => {
+  if (Array.isArray(o)) return o.map(lean);
+  if (!o || typeof o !== 'object') return o;
+  const out = {};
+  for (const [k, v] of Object.entries(o)){
+    if (v === '' || v === false || v == null || (Array.isArray(v) && !v.length)) continue;
+    out[k] = typeof v === 'object' ? lean(v) : v;
+  }
+  return out;
+};
+function people(){ return S.all.map(r => lean(vm(r))); }
 function person(k){ const r = S.byK.get(k); if (!r) return null; return Object.assign(vm(r, true), {links: {profile: links.person(r), salesNav: links.snPerson(r)}}); }
 function constants(){
   return {industries: INDUSTRIES.map(i => ({id: i.id, short: i.short, color: i.color})), seniority: SENIORITY, funcs: FUNCS, segs: SEGS.map(s => ({id: s.id, short: s.short, color: segColor(s.id)})),

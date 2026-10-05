@@ -210,15 +210,20 @@ struct EventView: View {
             VStack(alignment: .leading, spacing: 6) {
                 Text(e.name).font(Theme.geist(.title2, .bold))
                 Text([e.when, e.place].filter { !$0.isEmpty }.joined(separator: " · ")).font(Theme.geist(.subheadline)).foregroundStyle(.secondary)
-                HStack(spacing: 18) {
-                    stat(e.attending.count, "you know going")
-                    stat(e.met.count, "met")
-                    stat(model.toFollowUp(e).count, "to follow up")
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 18) { stats(e) }
+                    VStack(alignment: .leading, spacing: 8) { stats(e) }
                 }
                 .padding(.top, 6)
             }
             .listRowBackground(Color.clear)
         }
+    }
+
+    @ViewBuilder private func stats(_ e: NetEvent) -> some View {
+        stat(e.attending.count, "you know going")
+        stat(e.met.count, "met")
+        stat(model.toFollowUp(e).count, "to follow up")
     }
 
     private func stat(_ n: Int, _ l: String) -> some View {

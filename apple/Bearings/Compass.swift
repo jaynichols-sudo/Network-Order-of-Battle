@@ -81,6 +81,8 @@ struct CompassView: View {
     var initials: String = ""
     /// Draw a single frame (for images): no animation, sweep parked at a flattering angle.
     var still = false
+    /// Ping softly as the sweep passes people waiting on you (the first few turns only).
+    var pings = false
     let onOpen: (String) -> Void
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -119,9 +121,16 @@ struct CompassView: View {
         }
         .aspectRatio(1, contentMode: .fit)
         .animation(.smooth(duration: 0.55), value: focus)
+        .task(id: data.total) { await pingLoop() }
         .accessibilityElement()
         .accessibilityLabel(accessibilityText)
         .accessibilityHint("Tap a sector to zoom in, or a dot to open that person")
+        .accessibilityActions {
+            ForEach(data.wedges.sorted { $0.n > $1.n }.prefix(8)) { w in
+                Button("Zoom in on \(w.id), \(w.n) people") { focus = w.id }
+            }
+            if focus != nil { Button("Show the whole network") { focus = nil } }
+        }
     }
 
     private var accessibilityText: String {
@@ -135,6 +144,26 @@ struct CompassView: View {
     private var you: some View {
         MeAvatar(initials: initials, size: 46, ring: 2)
             .shadow(color: Theme.amber.opacity(0.35), radius: 10)
+    }
+
+    // MARK: sound
+
+    private func pingLoop() async {
+        guard pings, !still, !reduceMotion else { return }
+        let tau = 2 * Double.pi
+        let norm: (Double) -> Double = { a in let x = a.truncatingRemainder(dividingBy: tau); return x < 0 ? x + tau : x }
+        let targets = data.dots.filter { $0.f == "w" }.map { norm($0.a) }
+        guard !targets.isEmpty else { return }
+        try? await Task.sleep(nanoseconds: 1_200_000_000)
+        for _ in 0..<3 {
+            let s = norm(sweep(Date().timeIntervalSinceReferenceDate))
+            let ahead = targets.map { t -> Double in var d = t - s; if d < 0.02 { d += tau }; return d }.min() ?? tau
+            try? await Task.sleep(nanoseconds: UInt64(ahead / tau * 7 * 1_000_000_000))
+            if Task.isCancelled { return }
+            if focus == nil { SoundFX.ping() }
+            try? await Task.sleep(nanoseconds: 4_000_000_000)
+            if Task.isCancelled { return }
+        }
     }
 
     // MARK: zoom
@@ -330,7 +359,7 @@ struct CompassCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             ZStack(alignment: .topLeading) {
-                CompassView(data: data, focus: $focus, initials: model.myInitials) { k in model.open(.person(k)) }
+                CompassView(data: data, focus: $focus, initials: model.myInitials, pings: true) { k in model.open(.person(k)) }
                     .frame(maxWidth: 520)
                     .frame(maxWidth: .infinity)
                 if focus != nil {
@@ -380,8 +409,7 @@ struct CompassCard: View {
 
     private var signals: some View {
         let t = data.tally
-        return ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
+        return FlowLayout(spacing: 8) {
                 SignalChip(value: t.w, label: "waiting on you", dot: Theme.amber, glow: true) { model.perform(CardAction(kind: "filter", sig: ["waiting"])) }
                 if t.o > 0 {
                     SignalChip(value: t.o, label: "overdue", dot: Theme.violet, ring: true) { model.perform(CardAction(kind: "filter", sig: ["overdue"])) }
@@ -394,10 +422,7 @@ struct CompassCard: View {
                         model.searchText = ""; model.filters = f; model.paths[.people] = []; model.tab = .people
                     }
                 }
-            }
-            .padding(.horizontal, 1)
         }
-        .scrollClipDisabled()
     }
 
     private var sectors: some View {

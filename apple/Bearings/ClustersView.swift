@@ -7,6 +7,7 @@ import SwiftUI
 struct ClustersView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.colorScheme) private var scheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var data: ClustersData?
     @State private var zoom: CGFloat = 1
     @State private var pan: CGSize = .zero
@@ -35,7 +36,7 @@ struct ClustersView: View {
             settle = 0
             data = await model.clusters()
             if let d = data { year = Double(d.maxYear) }
-            withAnimation(.spring(response: 1.1, dampingFraction: 0.78)) { settle = 1 }
+            if reduceMotion { settle = 1 } else { withAnimation(.spring(response: 1.1, dampingFraction: 0.78)) { settle = 1 } }
         }
     }
 
@@ -170,7 +171,7 @@ struct ClustersView: View {
         let h = d.hubs[i]
         let span = (CGFloat(h.R) + 9 * CGFloat(ceil(Double(h.n) / 10)) + 40) * 2
         let target = min(6, min(size.width, size.height) / span)
-        withAnimation(.smooth(duration: 0.55)) {
+        withAnimation(reduceMotion ? nil : .smooth(duration: 0.55)) {
             focus = i
             zoom = target / fitScale
             pan = CGSize(width: -(CGFloat(h.x) - fitCenter.x) * target, height: -(CGFloat(h.y) - fitCenter.y) * target)
