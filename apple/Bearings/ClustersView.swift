@@ -17,6 +17,7 @@ struct ClustersView: View {
     @State private var playing = false
     @State private var fitScale: CGFloat = 1
     @State private var fitCenter: CGPoint = .zero
+    @State private var settle: CGFloat = 0
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -31,8 +32,10 @@ struct ClustersView: View {
             if let i = focus, let d = data, i < d.hubs.count { hubPanel(d.hubs[i]) }
         }
         .task(id: "\(model.people.count)-\(model.info.lens)-\(model.info.edits)") {
+            settle = 0
             data = await model.clusters()
             if let d = data { year = Double(d.maxYear) }
+            withAnimation(.spring(response: 1.1, dampingFraction: 0.78)) { settle = 1 }
         }
     }
 
@@ -41,9 +44,9 @@ struct ClustersView: View {
             let size = g.size
             let scale = fitScale * zoom * pinch
             let offset = CGSize(width: pan.width + drag.width - fitCenter.x * scale, height: pan.height + drag.height - fitCenter.y * scale)
-            Canvas { ctx, sz in
+            SettleCanvas(settle: settle) { ctx, sz, t in
                 guard let d = data else { return }
-                draw(&ctx, d: d, size: sz, scale: scale, offset: offset)
+                draw(&ctx, d: d, size: sz, scale: scale * (0.12 + 0.88 * t), offset: CGSize(width: offset.width * t, height: offset.height * t), fade: t)
             }
             .contentShape(Rectangle())
             .highPriorityGesture(
@@ -83,7 +86,8 @@ struct ClustersView: View {
         return d.people.reduce(0) { $0 + ($1.h == i && ($1.y0 == 0 || $1.y0 <= cut) ? 1 : 0) }
     }
 
-    private func draw(_ ctx: inout GraphicsContext, d: ClustersData, size: CGSize, scale: CGFloat, offset: CGSize) {
+    private func draw(_ ctx: inout GraphicsContext, d: ClustersData, size: CGSize, scale: CGFloat, offset: CGSize, fade: CGFloat) {
+        ctx.opacity = Double(max(0, min(1, fade * 1.4)))
         let center = screen(0, 0, size: size, scale: scale, offset: offset)
         let cut = Int(year)
         let line = Color.secondary.opacity(scheme == .dark ? 0.22 : 0.18)
@@ -96,7 +100,9 @@ struct ClustersView: View {
             let p = screen(h.x, h.y, size: size, scale: scale, offset: offset)
             let r = CGFloat(h.R) * scale
             let c = Color(hex: h.color)
-            ctx.fill(Path(ellipseIn: CGRect(x: p.x - r, y: p.y - r, width: r * 2, height: r * 2)), with: .color(c.opacity(focus == i ? 0.32 : 0.16)))
+            let halo = Path(ellipseIn: CGRect(x: p.x - r, y: p.y - r, width: r * 2, height: r * 2))
+            ctx.fill(halo, with: .radialGradient(Gradient(colors: [c.opacity(focus == i ? 0.42 : 0.28), c.opacity(0.08)]), center: p, startRadius: 0, endRadius: max(1, r)))
+            ctx.stroke(halo, with: .color(c.opacity(focus == i ? 0.8 : 0.35)), lineWidth: focus == i ? 1.5 : 0.8)
         }
         // people, batched by color
         let dotR = max(1.4, min(4.5, 2.2 * scale * 1.4))
@@ -120,18 +126,21 @@ struct ClustersView: View {
         for (rank, i) in order.enumerated() {
             let h = d.hubs[i]
             let r = CGFloat(h.R) * scale
-            guard rank < 8 || r > 16 || focus == i || scale > 1.6 else { continue }
+            guard rank < 6 || r > 22 || focus == i || scale > 1.8 else { continue }
             let n = visibleCount(d, hub: i)
             guard n > 0 else { continue }
             let p = screen(h.x, h.y, size: size, scale: scale, offset: offset)
             let name = h.name.count > 24 ? String(h.name.prefix(23)) + "…" : h.name
-            let w = CGFloat(name.count + 4) * 6.2
-            let anchor = CGPoint(x: p.x, y: p.y - r - 6)
-            let rect = CGRect(x: anchor.x - w / 2, y: anchor.y - 15, width: w, height: 15)
-            if focus != i && placed.contains(where: { $0.intersects(rect) }) { continue }
+            let label = ctx.resolve(Text(name).font(.custom("Geist-SemiBold", fixedSize: 11)).foregroundStyle(.primary)
+                + Text("  \(n)").font(.custom("GeistMono-Medium", fixedSize: 10)).foregroundStyle(.secondary))
+            let ts = label.measure(in: CGSize(width: 240, height: 30))
+            let anchor = CGPoint(x: p.x, y: p.y - r - 8)
+            let rect = CGRect(x: anchor.x - ts.width / 2 - 8, y: anchor.y - ts.height - 5, width: ts.width + 16, height: ts.height + 8)
+            if focus != i && placed.contains(where: { $0.insetBy(dx: -4, dy: -3).intersects(rect) }) { continue }
             placed.append(rect)
-            let label = Text("\(name)  \(n)").font(.system(size: 11, weight: .semibold)).foregroundStyle(.primary)
-            ctx.draw(label, at: anchor, anchor: .bottom)
+            ctx.fill(Path(roundedRect: rect, cornerRadius: rect.height / 2), with: .color(Color(.systemBackground).opacity(scheme == .dark ? 0.75 : 0.88)))
+            ctx.stroke(Path(roundedRect: rect, cornerRadius: rect.height / 2), with: .color(Color(hex: h.color).opacity(0.5)), lineWidth: 1)
+            ctx.draw(label, at: CGPoint(x: rect.midX, y: rect.midY), anchor: .center)
         }
     }
 
@@ -176,9 +185,9 @@ struct ClustersView: View {
                 Label("Whole network", systemImage: "arrow.down.right.and.arrow.up.left")
                     .font(Theme.geist(.footnote, .semibold))
                     .padding(.horizontal, 10).padding(.vertical, 6)
-                    .background(.regularMaterial, in: Capsule())
             }
             .buttonStyle(.plain)
+            .glassCapsule()
             .padding(10)
         }
     }
@@ -224,5 +233,20 @@ struct ClustersView: View {
         }
         .padding(14)
         .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+    }
+}
+
+/// A canvas that SwiftUI can animate through `settle`, so the clusters bloom outward from you.
+struct SettleCanvas: View, Animatable {
+    var settle: CGFloat
+    let render: (inout GraphicsContext, CGSize, CGFloat) -> Void
+
+    var animatableData: CGFloat {
+        get { settle }
+        set { settle = newValue }
+    }
+
+    var body: some View {
+        Canvas { ctx, size in render(&ctx, size, settle) }
     }
 }

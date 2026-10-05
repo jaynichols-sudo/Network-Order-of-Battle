@@ -64,7 +64,7 @@ jobs:
             xcrun simctl boot $dev || true
             xcrun simctl bootstatus $dev -b >/dev/null
             xcrun simctl status_bar $dev override --time 9:41 --batteryState charged --batteryLevel 100 --cellularBars 4 || true
-            xcrun simctl ui $dev appearance light
+            xcrun simctl ui $dev appearance dark
             xcrun simctl install $dev "$APP"
             python3 -c "import json; [print(n + ' ' + ' '.join(a)) for n, a, _ in json.load(open('store/listing.json'))['screens']]" | while read name args; do
               xcrun simctl terminate $dev com.jaynichols.networkoob >/dev/null 2>&1 || true

@@ -146,16 +146,23 @@ struct PayoffView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     @State private var p: Payoff?
+    @State private var compass = CompassData.empty
+    @State private var reveal: Double = 0
 
     var body: some View {
         NavigationStack {
             List {
                 if let p {
                     Section {
-                        VStack(alignment: .leading, spacing: 10) {
+                        VStack(alignment: .leading, spacing: 12) {
                             Text("Here’s your network").geist(.title, .bold)
-                            Text("\(p.total.formatted()) people at \(p.companies.formatted()) companies.").foregroundStyle(.secondary)
-                            AvatarStack(people: model.persons(p.sample), size: 36)
+                            RevealCompass(data: compass, reveal: reveal, initials: model.myInitials)
+                                .frame(maxWidth: 420)
+                                .frame(maxWidth: .infinity)
+                            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                                RevealCount(value: Double(p.total) * reveal)
+                                Text("people at \(p.companies.formatted()) companies").foregroundStyle(.secondary)
+                            }
                         }
                         .listRowBackground(Color.clear)
                     }
@@ -191,7 +198,13 @@ struct PayoffView: View {
                 }
             }
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Look around") { dismiss() } } }
-            .task { p = await model.payoff() }
+            .task {
+                p = await model.payoff()
+                compass = await model.compass()
+                try? await Task.sleep(nanoseconds: 350_000_000)
+                withAnimation(.easeOut(duration: 2.4)) { reveal = 1 }
+                Haptic.success()
+            }
         }
     }
 
@@ -201,5 +214,33 @@ struct PayoffView: View {
             Text(l).font(.caption).foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity)
+    }
+}
+
+/// The compass drawn out to `reveal`, animatable so people appear from the middle outward.
+struct RevealCompass: View, Animatable {
+    let data: CompassData
+    var reveal: Double
+    let initials: String
+
+    var animatableData: Double {
+        get { reveal }
+        set { reveal = newValue }
+    }
+
+    var body: some View {
+        CompassView(data: data, focus: .constant(nil), reveal: reveal, initials: initials) { _ in }
+            .allowsHitTesting(false)
+    }
+}
+
+struct RevealCount: View, Animatable {
+    var value: Double
+    var animatableData: Double {
+        get { value }
+        set { value = newValue }
+    }
+    var body: some View {
+        Text(Int(value).formatted()).font(Theme.mono(.title2, .semibold))
     }
 }

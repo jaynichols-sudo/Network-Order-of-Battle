@@ -169,7 +169,7 @@ struct CompassView: View {
     }
 
     private func drawGrid(_ ctx: inout GraphicsContext, center: CGPoint, r: CGFloat) {
-        let faint = Color.primary.opacity(scheme == .dark ? 0.10 : 0.08)
+        let faint = Color.primary.opacity(scheme == .dark ? 0.08 : 0.06)
         let disk = Path(ellipseIn: CGRect(x: center.x - r, y: center.y - r, width: r * 2, height: r * 2))
         ctx.fill(disk, with: .radialGradient(Gradient(colors: [Theme.amber.opacity(scheme == .dark ? 0.10 : 0.07), .clear]), center: center, startRadius: 0, endRadius: r))
         for (i, ring) in data.rings.enumerated() {
@@ -268,13 +268,22 @@ struct CompassView: View {
         guard focused == nil else { return }
         for ring in data.rings.dropLast() {
             let y = center.y - r * CGFloat(ring.r) + 2
-            ctx.draw(Text(ring.label.uppercased()).font(.custom("GeistMono-Medium", fixedSize: 8)).foregroundStyle(Color.secondary.opacity(0.85)),
+            ctx.draw(Text(ring.label.uppercased()).font(.custom("GeistMono-Medium", fixedSize: 9)).foregroundStyle(Color.secondary.opacity(0.85)),
                      at: CGPoint(x: center.x + 4, y: y), anchor: .topLeading)
         }
         let big = data.wedges.sorted { $0.n > $1.n }.prefix(6)
+        var placed: [CGRect] = []
         for w in big where w.span > 0.32 {
-            let p = point(center, w.mid, r * 0.9)
-            ctx.draw(Text(w.short).font(.custom("Geist-SemiBold", fixedSize: 10)).foregroundStyle(Color(hex: w.color)), at: p, anchor: .center)
+            let p = point(center, w.mid, r * 0.84)
+            let label = ctx.resolve(Text(w.short).font(.custom("Geist-SemiBold", fixedSize: 11)).foregroundStyle(Color(hex: w.color)))
+            let size = label.measure(in: CGSize(width: 200, height: 30))
+            let rect = CGRect(x: p.x - size.width / 2 - 7, y: p.y - size.height / 2 - 3, width: size.width + 14, height: size.height + 6)
+            if placed.contains(where: { $0.intersects(rect) }) { continue }
+            placed.append(rect)
+            let pill = Path(roundedRect: rect, cornerRadius: rect.height / 2)
+            ctx.fill(pill, with: .color(Color(.systemBackground).opacity(scheme == .dark ? 0.8 : 0.9)))
+            ctx.stroke(pill, with: .color(Color(hex: w.color).opacity(0.45)), lineWidth: 1)
+            ctx.draw(label, at: CGPoint(x: rect.midX, y: rect.midY), anchor: .center)
         }
     }
 
