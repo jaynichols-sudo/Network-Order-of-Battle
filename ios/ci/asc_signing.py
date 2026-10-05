@@ -144,7 +144,9 @@ def installer(kc, kc_pass, tmp, run):
     open(path, "wb").write(pkcs12.serialize_key_and_certificates(b"installer", key, certobj, None, enc))
     subprocess.run(["security", "import", path, "-k", kc, "-P", p12_pass, "-T", "/usr/bin/productbuild", "-T", "/usr/bin/codesign", "-T", "/usr/bin/security"], check=True)
     subprocess.run(["security", "set-key-partition-list", "-S", "apple-tool:,apple:,codesign:,productbuild:", "-s", "-k", kc_pass, kc], check=True)
-    print("Created installer certificate", cert["id"])
+    cn = certobj.subject.get_attributes_for_oid(NameOID.COMMON_NAME)[0].value
+    env_out(OOB_INSTALLER_NAME=cn)
+    print("Created installer certificate", cert["id"], cn)
 
 
 def cleanup():

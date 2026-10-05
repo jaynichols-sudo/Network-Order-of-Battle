@@ -86,12 +86,13 @@ jobs:
               "teamID": os.environ["APPLE_TEAM_ID"],
               "signingStyle": "manual",
               "signingCertificate": "Apple Distribution",
-              "installerSigningCertificate": "Mac Installer Distribution",
+              "installerSigningCertificate": os.environ.get("OOB_INSTALLER_NAME") or "Mac Installer Distribution",
               "provisioningProfiles": json.loads(os.environ["OOB_PROFILE_MAP"]),
               "manageAppVersionAndBuildNumber": False,
           }
           plistlib.dump(opts, open(os.path.join(os.environ["RUNNER_TEMP"], "ExportOptions.plist"), "wb"))
           PY
+          security find-identity -v "$OOB_KEYCHAIN" || true
           xcodebuild -exportArchive \
             -archivePath "$RUNNER_TEMP/Mac.xcarchive" \
             -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" \
