@@ -768,14 +768,21 @@ function carryStarterNotes(incoming){
     const n = nm(r); if (!n) continue;
     byName.set(n, byName.has(n) ? null : r.k);
   }
-  const moved = {}, review = {};
+  const moved = {}, review = {}, carried = new Set();
   for (const r of S.all){
     const to = (r.e && byEmail.get(r.e.toLowerCase())) || byName.get(nm(r));
     if (!to) continue;
+    carried.add(r.k);
     if (S.edits[r.k]) moved[to] = Object.assign({}, S.edits[to] || {}, S.edits[r.k]);
     if (S.review[r.k]) review[to] = S.review[r.k];
   }
+  // anything that didn't match stays too, so no note is ever thrown away
+  for (const [k, e] of Object.entries(S.edits)) if (!carried.has(k) && !moved[k]) moved[k] = e;
+  for (const [k, v] of Object.entries(S.review)) if (!carried.has(k) && !(k in review)) review[k] = v;
   S.edits = moved; S.review = review;
+  // contacts you'd written notes on who aren't LinkedIn connections stay in the network, marked
+  // as not in the export, so their notes are still there to find
+  for (const r of S.all) if (!carried.has(r.k) && moved[r.k]) incoming.push(Object.assign(stripRow(r), {x: TODAY}));
 }
 
 /* ---------- backup, restore, export ---------- */

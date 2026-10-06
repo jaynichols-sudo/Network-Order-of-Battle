@@ -391,10 +391,34 @@ export function mergeImport(incoming, prevRows, prevMeta){
   const seen = new Set(); let added = 0, changed = 0, back = 0;
   const out = [];
   const rel = incoming.rel;
-  for (const inc of incoming){
+  // A person's key comes from their profile URL, or their name and company when the export
+  // has no URL. If either changes, match them back to who they were (same email, or the only
+  // missing person with that name) so their notes, stars and industry don't get orphaned.
+  const rekey = new Map();
+  if (live){
+    const inKeys = new Set(incoming.map(r => r.k));
+    const nm = r => `${r.f || ''} ${r.l || ''}`.toLowerCase().replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, ' ').trim();
+    const gone = [...prev.values()].filter(o => !inKeys.has(o.k));
+    const byEmail = new Map(), byName = new Map();
+    for (const o of gone){
+      if (o.e) byEmail.set(o.e.toLowerCase(), o.k);
+      const n = nm(o); if (n) byName.set(n, byName.has(n) ? null : o.k);
+    }
+    const nameCount = new Map();
+    for (const r of incoming){ if (!prev.has(r.k)){ const n = nm(r); if (n) nameCount.set(n, (nameCount.get(n) || 0) + 1); } }
+    const taken = new Set();
+    for (const r of incoming){
+      if (prev.has(r.k)) continue;
+      let k = r.e && byEmail.get(r.e.toLowerCase());
+      if (!k){ const n = nm(r); if (n && nameCount.get(n) === 1) k = byName.get(n); }
+      if (k && !taken.has(k)){ taken.add(k); rekey.set(r, k); }
+    }
+  }
+  for (const inc0 of incoming){
+    const inc = rekey.has(inc0) ? Object.assign({}, inc0, {k: rekey.get(inc0)}) : inc0;
     if (seen.has(inc.k)) continue; seen.add(inc.k);
     const o = prev.get(inc.k);
-    if (!o){ const nr = Object.assign({}, inc, {fs: TODAY, fi: n}); if (rel && rel.has(inc.k)) nr.rx = rel.get(inc.k); out.push(nr); if (!first) added++; continue; }
+    if (!o){ const nr = Object.assign({}, inc, {fs: TODAY, fi: n}); if (rel && rel.has(inc0.k)) nr.rx = rel.get(inc0.k); out.push(nr); if (!first) added++; continue; }
     const r = Object.assign({}, o, {f: inc.f, l: inc.l, u: inc.u || o.u, e: inc.e || o.e, d: inc.d || o.d});
     if (r.x){ delete r.x; back++; }
     if ((o.c || '') !== (inc.c || '') || (o.p || '') !== (inc.p || '')){
@@ -402,7 +426,7 @@ export function mergeImport(incoming, prevRows, prevMeta){
       r.jc = TODAY; changed++;
     }
     r.c = inc.c; r.p = inc.p;
-    if (rel){ if (rel.has(inc.k)) r.rx = rel.get(inc.k); else delete r.rx; }
+    if (rel){ if (rel.has(inc0.k)) r.rx = rel.get(inc0.k); else delete r.rx; }
     out.push(r);
   }
   let removed = 0;
