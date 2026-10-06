@@ -7,12 +7,12 @@
   "Bearings: Know Your Network"
  ],
  "subtitle": "Your network, mapped",
- "promotionalText": "Know who changed jobs, who’s waiting on your reply, and who’s near where you’re headed. Private by design: no account, no server.",
- "keywords": "linkedin,network,contacts,crm,relationships,networking,sales,follow up,travel,salesforce,federal",
+ "promotionalText": "Who needs you this week, who changed jobs, and your best way into any company. Private by design: no account, no server.",
+ "keywords": "network,contacts,crm,relationships,networking,sales,follow up,travel,events,enrich,federal,linkedin",
  "supportUrl": "https://www.jaynichols.net/bearings/support.html",
  "marketingUrl": "https://www.jaynichols.net/bearings/index.html",
  "privacyPolicyUrl": "https://www.jaynichols.net/bearings/privacy.html",
- "description": "Bearings turns your LinkedIn export into a private, living map of the people you know, so you always know where you stand and who to reach out to.\n\nKNOW WHO TO CALL\n• Every Monday, five people worth reaching out to, each with a reason and a ready-made message\n• See who wrote last and is waiting on your reply\n• Spot good relationships that are going cold\n• Set follow-ups and get reminded, with Done and Snooze right from the notification\n• Catch up on new connections and job changes with a quick swipe\n\nSEE EVERY COMPANY\n• Who you know at each company, agency or command, at every level from executive to staff\n• Coverage gaps on your watchlist, like no director-level contact yet\n• The people who used to work there, often the best way in\n• Everyone sorted by industry, with a tap to fix anything\n\nTRAVEL SMARTER\n• A map of where your people are, worked out on your iPhone from your Contacts and their titles\n• Search a city or tap Near Me to see who’s within 25 to 250 miles\n• Trips found in your calendar, with a heads-up about who’s nearby before you go\n• Ready-made “I’ll be in town” messages\n\nWALK INTO MEETINGS PREPARED\n• A brief 30 minutes before meetings with people you know: how well you know them, your last conversation, your notes, and who else you know at their company\n\nEXPLORE YOUR NETWORK\n• Clusters: watch your network gather around companies and replay how it grew\n• Scope: see seniority at a glance\n• Plain-English search like “navy o-5 and up in cyber” or “close contacts at Duke Energy”\n• An optional federal and military view with branch, rank, agency and segment\n\nEVERYWHERE YOU ARE\n• iPhone, iPad and Mac, synced through your own iCloud\n• Apple Watch app and complications\n• Home Screen and Lock Screen widgets\n• Siri and Shortcuts: “Who’s waiting on me in Bearings?”\n• Your people in iPhone search\n\nWORKS WITH SALESFORCE\nSend contacts, follow-up tasks and notes to your organization’s Salesforce, signing in directly with Salesforce.\n\nPRIVATE BY DESIGN\nNo account and no Bearings server. Your network lives on your devices and in your own iCloud. Contacts, calendar and location are read on your device and never uploaded. No ads, no tracking.\n\nTo start, request your data from LinkedIn (Settings, Data privacy, Get a copy of your data) and open the zip in Bearings. It takes about three minutes.",
+ "description": "Bearings turns your LinkedIn export into a private, living map of the people you know, so you always know where you stand and who to reach out to.\n\nKNOW WHO NEEDS YOU\n• Today opens on the people worth your time this week, each with one reason and one tap to reply, congratulate or check in\n• See who wrote last and is waiting on your reply\n• Spot good relationships that are going cold\n• Keep-in-touch circles: monthly, quarterly or yearly, with a nudge when someone is overdue\n• Catch up on new connections and job changes with a quick swipe\n\nSEE EVERY COMPANY\n• Who you know at each company, agency or command, at every level from executive to staff\n• Coverage gaps on your watchlist, like no director-level contact yet\n• Ways in: your best paths into any company, with the intro ask drafted\n• Team packs: pool networks with teammates to find warm paths, never sharing notes or messages\n\nTRAVEL AND EVENTS\n• A map of where your people are, worked out on your iPhone\n• Trips from your calendar, with who you know nearby on your Lock Screen\n• Arrival alerts: land in a new city and see who you know there\n• Event mode: see who you know at a conference, scan cards, and work the follow-up list\n\nWALK INTO MEETINGS PREPARED\n• A brief 30 minutes before meetings with people you know, written on-device\n\nEXPLORE YOUR NETWORK\n• The compass: your whole network by sector and closeness\n• Plain-English search like “navy o-5 and up in cyber”\n• An optional federal and military view with branch, rank, agency and segment\n• Your year in review, ready to share\n\nENRICH WITH YOUR OWN DATA PROVIDER\n• Sign in with your Seamless.AI account, or add your ZoomInfo API login, to fill in work email, phone and city for the people you pick\n• Or import an enrichment file from any provider\n\nEVERYWHERE YOU ARE\n• iPhone, iPad and Mac, synced through your own iCloud\n• Apple Watch app, widgets and Siri\n\nBEARINGS PRO\nThe map, Today, search, Catch Up, reminders, widgets and Watch are free. Bearings Pro adds event mode, ways in, team packs, arrival alerts, ZoomInfo and Seamless.AI, account maps and Salesforce. Monthly or yearly subscriptions renew automatically until cancelled in your App Store settings; a one-time lifetime option is also available. Terms: https://www.apple.com/legal/internet-services/itunes/dev/stdeula/\n\nPRIVATE BY DESIGN\nNo account and no Bearings server. Your network lives on your devices and in your own iCloud. Contacts, calendar and location are read on your device and never uploaded. No ads, no tracking.\n\nTo start, request your data from LinkedIn (Settings, Data privacy, Get a copy of your data, then tick Connections, Messages and Invitations) and open the zip in Bearings. It usually takes about ten minutes.",
  "screens": [
   [
    "01-home",
@@ -28,6 +28,16 @@
     "person"
    ],
    "Every relationship, the whole story"
+  ],
+  [
+   "20-intro",
+   [
+    "-startTab",
+    "companies",
+    "-demoOpen",
+    "intro"
+   ],
+   "Your warmest way into any company"
   ],
   [
    "07a-compass",
@@ -46,6 +56,14 @@
     "people"
    ],
    "Search the way you think"
+  ],
+  [
+   "19-event",
+   [
+    "-demoOpen",
+    "event"
+   ],
+   "Built for the conference floor"
   ],
   [
    "07c-map",
@@ -76,14 +94,12 @@
    "Who you know at every company"
   ],
   [
-   "07b-clusters",
+   "29-year",
    [
-    "-startTab",
-    "explore",
-    "-exploreMode",
-    "clusters"
+    "-demoOpen",
+    "year"
    ],
-   "Watch your network take shape"
+   "Your year in networking, ready to share"
   ]
  ],
  "eyebrows": {
@@ -94,7 +110,10 @@
   "08-catchup": "SWIPE TO TRIAGE",
   "07b-clusters": "CLUSTERS",
   "05-unit": "COVERAGE",
-  "07a-compass": "THE COMPASS"
+  "07a-compass": "THE COMPASS",
+  "20-intro": "WAYS IN",
+  "19-event": "EVENT MODE",
+  "29-year": "YEAR IN REVIEW"
  },
  "review": {
   "contactFirstName": "Jay",
