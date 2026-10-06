@@ -75,7 +75,7 @@ jobs:
             -archivePath "$RUNNER_TEMP/Mac.xcarchive" \
             OTHER_CODE_SIGN_FLAGS="--keychain $OOB_KEYCHAIN" \
             CURRENT_PROJECT_VERSION="${{ github.run_number }}" \
-            LINKEDIN_CONNECT_URL="${{ vars.LINKEDIN_CONNECT_URL }}" \
+            CONNECT_URL="${{ vars.CONNECT_URL }}" \
             archive > "$RUNNER_TEMP/archive.log" 2>&1 || true
           if [ ! -d "$RUNNER_TEMP/Mac.xcarchive" ]; then
             msg=$( (grep -E "error:" "$RUNNER_TEMP/archive.log" || tail -40 "$RUNNER_TEMP/archive.log") | sed -E 's#/Users/runner/work/[^/]+/[^/]+/##' | awk '!s[$0]++' | head -60 | sed 's/%/%25/g' | awk 'BEGIN{ORS="%0A"}{print}')

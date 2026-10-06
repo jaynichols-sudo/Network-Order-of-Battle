@@ -1,4 +1,4 @@
-name: LinkedIn connect helper
+name: Sign-in helper (LinkedIn, Seamless)
 
 on:
   workflow_dispatch:
@@ -12,10 +12,14 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          workingDirectory: server/linkedin-connect
+          workingDirectory: server/connect
           secrets: |
             LINKEDIN_CLIENT_ID
             LINKEDIN_CLIENT_SECRET
+            SEAMLESS_CLIENT_ID
+            SEAMLESS_CLIENT_SECRET
         env:
           LINKEDIN_CLIENT_ID: ${{ secrets.LINKEDIN_CLIENT_ID }}
           LINKEDIN_CLIENT_SECRET: ${{ secrets.LINKEDIN_CLIENT_SECRET }}
+          SEAMLESS_CLIENT_ID: ${{ secrets.SEAMLESS_CLIENT_ID }}
+          SEAMLESS_CLIENT_SECRET: ${{ secrets.SEAMLESS_CLIENT_SECRET }}

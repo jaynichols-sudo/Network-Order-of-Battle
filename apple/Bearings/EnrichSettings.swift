@@ -9,6 +9,8 @@ struct EnrichSettingsSection: View {
     @State private var key = ""
     @State private var testing = false
     @State private var status = ""
+    @State private var seamlessSignedIn = SeamlessAuth.signedIn
+    @State private var showKey = !SeamlessAuth.available
 
     var body: some View {
         Section {
@@ -27,18 +29,39 @@ struct EnrichSettingsSection: View {
                     .textContentType(.password)
                 Button(testing ? "Checking…" : "Save and test") { saveZoomInfo() }.disabled(testing || user.isEmpty)
             } else if provider == .seamless {
-                SecureField(SecretStore.get("enrich.seamless.key") == nil ? "API key" : "API key (saved)", text: $key)
-                Button("Save") {
-                    SecretStore.set("enrich.seamless.key", key.trimmingCharacters(in: .whitespacesAndNewlines))
-                    key = ""
-                    status = "Saved. Look someone up from their profile to check it."
+                if SeamlessAuth.available {
+                    if seamlessSignedIn {
+                        LabeledContent("Seamless.AI", value: "Signed in")
+                        Button("Sign out of Seamless.AI", role: .destructive) { SeamlessAuth.signOut(); seamlessSignedIn = false; status = "Signed out." }
+                    } else {
+                        Button(testing ? "Opening Seamless.AI…" : "Sign in with Seamless.AI") {
+                            testing = true
+                            status = ""
+                            Task {
+                                do { try await SeamlessAuth.signIn(); seamlessSignedIn = true; status = "Connected to Seamless.AI." }
+                                catch is CancellationError {}
+                                catch { status = error.localizedDescription }
+                                testing = false
+                            }
+                        }
+                        .disabled(testing)
+                    }
                 }
-                .disabled(key.isEmpty)
+                DisclosureGroup("Use an API key instead", isExpanded: $showKey) {
+                    SecureField(SecretStore.get("enrich.seamless.key") == nil ? "API key" : "API key (saved)", text: $key)
+                    Button("Save key") {
+                        SecretStore.set("enrich.seamless.key", key.trimmingCharacters(in: .whitespacesAndNewlines))
+                        key = ""
+                        status = "Saved. Look someone up from their profile to check it."
+                    }
+                    .disabled(key.isEmpty)
+                }
             }
             if !status.isEmpty { Text(status).font(Theme.geist(.footnote)).foregroundStyle(Theme.text2) }
             if provider != .off && provider.configured {
                 Button("Remove saved credentials", role: .destructive) {
                     SecretStore.set("enrich.zoominfo.user", nil); SecretStore.set("enrich.zoominfo.pass", nil); SecretStore.set("enrich.seamless.key", nil)
+                    SeamlessAuth.signOut(); seamlessSignedIn = false
                     user = ""; status = "Removed."
                 }
             }
@@ -46,7 +69,7 @@ struct EnrichSettingsSection: View {
             Text("ZoomInfo and Seamless.AI")
         } footer: {
             Text(provider == .seamless
-                 ? "Uses your own Seamless.AI account: each person looked up uses one of your research credits. Only the names, companies and titles you choose to look up are sent to Seamless.AI. Your key stays in this device’s Keychain."
+                 ? "Uses your own Seamless.AI account: sign in on Seamless.AI’s page (Bearings never sees your password). Each person looked up uses one of your research credits. Only the names, companies and titles you choose to look up are sent to Seamless.AI. Your sign-in stays in this device’s Keychain."
                  : "Uses your own account to fill in work email, phone, current title and city for the people you choose. Only their names and companies are sent to the provider, and only when you ask. Your login stays in this device’s Keychain and is never synced. ZoomInfo’s API needs API access on your contract.")
         }
     }

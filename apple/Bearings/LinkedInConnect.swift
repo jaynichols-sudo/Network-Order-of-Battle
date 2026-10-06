@@ -14,15 +14,7 @@ enum LinkedInConnect {
     static let regions: Set<String> = ["AT", "BE", "BG", "HR", "CY", "CZ", "DK", "EE", "FI", "FR", "DE", "GR", "HU", "IE", "IT", "LV", "LT",
                                        "LU", "MT", "NL", "PL", "PT", "RO", "SK", "SI", "ES", "SE", "IS", "LI", "NO", "CH"]
     static let domains = ["CONNECTIONS", "INBOX", "INVITATIONS"]
-    /// The running sign-in; it has to be kept alive until LinkedIn answers.
-    @MainActor private static var session: ASWebAuthenticationSession?
-    @MainActor private static var presenter: Presenter?
-
-    static var helper: URL? {
-        guard let s = Bundle.main.object(forInfoDictionaryKey: "BearingsLinkedInConnectURL") as? String,
-              s.hasPrefix("https://") else { return nil }
-        return URL(string: s)
-    }
+    static var helper: URL? { ConnectHelper.base }
 
     /// Shown only when the helper is set up and the device is in a region LinkedIn allows.
     static var available: Bool {
@@ -37,35 +29,7 @@ enum LinkedInConnect {
     /// Opens LinkedIn's consent screen and returns an access token.
     @MainActor
     static func signIn() async throws -> String {
-        guard let helper else { throw Failure(message: "Connecting to LinkedIn isn’t set up in this version.") }
-        let state = UUID().uuidString.replacingOccurrences(of: "-", with: "") + String(Int.random(in: 1000...9999))
-        var start = URLComponents(url: helper.appendingPathComponent("start"), resolvingAgainstBaseURL: false)!
-        start.queryItems = [URLQueryItem(name: "state", value: state)]
-        let presenter = Presenter()
-        Self.presenter = presenter
-        defer { Self.session = nil; Self.presenter = nil }
-        let callback: URL = try await withCheckedThrowingContinuation { cont in
-            let session = ASWebAuthenticationSession(url: start.url!, callbackURLScheme: "bearings") { url, error in
-                if let url { cont.resume(returning: url); return }
-                if let e = error as? ASWebAuthenticationSessionError, e.code == .canceledLogin {
-                    cont.resume(throwing: CancellationError()); return
-                }
-                cont.resume(throwing: Failure(message: error?.localizedDescription ?? "LinkedIn sign-in didn’t finish."))
-            }
-            session.presentationContextProvider = presenter
-            session.prefersEphemeralWebBrowserSession = false
-            Self.session = session
-            if !session.start() { cont.resume(throwing: Failure(message: "Couldn’t open LinkedIn’s sign-in.")) }
-        }
-        // the helper puts the result in the fragment: #state=…&token=… or #state=…&error=…
-        var parts = URLComponents()
-        parts.query = callback.fragment
-        let items = Dictionary((parts.queryItems ?? []).map { ($0.name, $0.value ?? "") }, uniquingKeysWith: { a, _ in a })
-        guard items["state"] == state else { throw Failure(message: "The LinkedIn sign-in didn’t match. Please try again.") }
-        if let e = items["error"], !e.isEmpty {
-            if e.contains("cancel") { throw CancellationError() }
-            throw Failure(message: e)
-        }
+        let items = try await ConnectHelper.authorize("linkedin", name: "LinkedIn")
         guard let token = items["token"], !token.isEmpty else { throw Failure(message: "LinkedIn didn’t send access. Please try again.") }
         return token
     }
@@ -109,13 +73,6 @@ enum LinkedInConnect {
         return out
     }
 
-    private final class Presenter: NSObject, ASWebAuthenticationPresentationContextProviding {
-        func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
-            MainActor.assumeIsolated {
-                UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.flatMap(\.windows).first { $0.isKeyWindow } ?? ASPresentationAnchor()
-            }
-        }
-    }
 }
 
 extension AppModel {

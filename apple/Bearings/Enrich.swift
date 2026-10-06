@@ -45,7 +45,7 @@ enum EnrichProvider: String, CaseIterable, Identifiable {
         switch self {
         case .off: return false
         case .zoominfo: return !(SecretStore.get("enrich.zoominfo.user") ?? "").isEmpty && !(SecretStore.get("enrich.zoominfo.pass") ?? "").isEmpty
-        case .seamless: return !(SecretStore.get("enrich.seamless.key") ?? "").isEmpty
+        case .seamless: return SeamlessAuth.signedIn || !(SecretStore.get("enrich.seamless.key") ?? "").isEmpty
         }
     }
 }
@@ -178,11 +178,16 @@ enum ZoomInfo {
 enum Seamless {
     static let base = "https://api.seamless.ai/api/client/v1"
 
-    static func request(_ path: String, method: String = "GET", body: Any? = nil, key: String? = nil) throws -> URLRequest {
-        guard let key = key ?? SecretStore.get("enrich.seamless.key"), !key.isEmpty else { throw EnrichFailure(message: "Add your Seamless.AI API key in Settings.") }
+    static func request(_ path: String, method: String = "GET", body: Any? = nil, key: String? = nil) async throws -> URLRequest {
         var req = URLRequest(url: URL(string: base + path)!)
+        // signed in with Seamless (OAuth) wins; an API key is the fallback for admins
+        if key == nil, let bearer = try await SeamlessAuth.accessToken() {
+            req.setValue("Bearer \(bearer)", forHTTPHeaderField: "Authorization")
+        } else {
+            guard let key = key ?? SecretStore.get("enrich.seamless.key"), !key.isEmpty else { throw EnrichFailure(message: "Sign in with Seamless.AI in Settings first.") }
+            req.setValue(key, forHTTPHeaderField: "Token")
+        }
         req.httpMethod = method
-        req.setValue(key, forHTTPHeaderField: "Token")
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         if let body { req.httpBody = try JSONSerialization.data(withJSONObject: body) }
         return req
@@ -200,7 +205,7 @@ enum Seamless {
                 if !q.linkedIn.isEmpty { m["liProfileUrl"] = q.linkedIn }
                 return m
             }
-            let (status, body) = try await EnrichClient.json(try request("/contacts/research", method: "POST", body: ["contacts": contacts]))
+            let (status, body) = try await EnrichClient.json(try await request("/contacts/research", method: "POST", body: ["contacts": contacts]))
             guard status == 200 || status == 202, let ids = (body as? [String: Any])?["requestIds"] as? [String] else {
                 throw EnrichFailure(message: status == 401 ? "Seamless.AI didn’t accept that API key." : status == 402 || status == 403
                     ? "Seamless.AI says this needs more credits or API access on your plan." : "Seamless.AI returned an error (\(status)).")
@@ -211,7 +216,7 @@ enum Seamless {
             for _ in 0..<30 where !waiting.isEmpty {
                 try await Task.sleep(nanoseconds: 2_000_000_000)
                 let q = waiting.sorted().joined(separator: ",").addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
-                let (st, b) = try await EnrichClient.json(try request("/contacts/research/poll?requestIds=\(q)"))
+                let (st, b) = try await EnrichClient.json(try await request("/contacts/research/poll?requestIds=\(q)"))
                 guard st == 200 else { continue }
                 for item in (b as? [String: Any])?["data"] as? [[String: Any]] ?? [] {
                     guard let id = item["requestId"] as? String else { continue }

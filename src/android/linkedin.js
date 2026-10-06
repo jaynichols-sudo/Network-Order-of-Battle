@@ -4,8 +4,8 @@ import { CapacitorHttp } from '@capacitor/core';
 import { Browser } from '@capacitor/browser';
 import api from '../engine.js';
 
-/* global __LINKEDIN_CONNECT_URL__ */
-const HELPER = typeof __LINKEDIN_CONNECT_URL__ === 'string' ? __LINKEDIN_CONNECT_URL__.replace(/\/+$/, '') : '';
+/* global __CONNECT_URL__ */
+const HELPER = typeof __CONNECT_URL__ === 'string' ? __CONNECT_URL__.replace(/\/+$/, '') : '';
 const REGIONS = new Set(['AT', 'BE', 'BG', 'HR', 'CY', 'CZ', 'DK', 'EE', 'FI', 'FR', 'DE', 'GR', 'HU', 'IE', 'IT', 'LV', 'LT',
   'LU', 'MT', 'NL', 'PL', 'PT', 'RO', 'SK', 'SI', 'ES', 'SE', 'IS', 'LI', 'NO', 'CH']);
 const DOMAINS = ['CONNECTIONS', 'INBOX', 'INVITATIONS'];
@@ -37,7 +37,7 @@ function signIn(){
   const state = Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
   return new Promise((resolve, reject) => {
     pending = {state, resolve, reject};
-    Browser.open({url: `${HELPER}/start?state=${state}`}).catch(e => { pending = null; reject(e); });
+    Browser.open({url: `${HELPER}/linkedin/start?state=${state}`}).catch(e => { pending = null; reject(e); });
     // if the browser is closed without an answer, stop waiting
     Browser.addListener('browserFinished', () => setTimeout(() => { if (pending && pending.state === state){ pending = null; reject(new Error('cancelled')); } }, 800)).catch(() => {});
   });

@@ -32,7 +32,7 @@ jobs:
 
       - name: Build web core
         env:
-          LINKEDIN_CONNECT_URL: ${{ vars.LINKEDIN_CONNECT_URL }}
+          CONNECT_URL: ${{ vars.CONNECT_URL }}
         run: |
           npm ci
           npm run build
