@@ -47,7 +47,7 @@ extension AppModel {
         if m.followed { return true }
         guard let k = m.k, let p = person(k) else { return false }
         let since = Day.fmt.string(from: e.start)
-        return (p.rx?.t ?? "") >= since && p.rx?.dir == "o" || p.touch >= since
+        return (p.rx?.t ?? "") >= since && p.rx?.dir == "o" || (p.ed?.touched ?? "") >= since
     }
 }
 

@@ -28,7 +28,7 @@ The classification, scoring, search and import logic is shared. `src/core.js`, `
 |---|---|
 | `src/engine.js` | Headless engine for the native apps (JSON in, JSON out) |
 | `src/core.js`, `industry.js`, `nlq.js`, `companies.js` | Classifier, industries, plain-English search, known companies |
-| `src/app.js`, `index.html`, `styles.css` | The Android and web app |
+| `src/android/*` | The Android app (and browser build): screens on top of the shared engine in `src/engine.js` |
 | `apple/project.yml` | XcodeGen spec for the iPhone, iPad, Mac, Watch and widget targets |
 | `apple/Bearings/` | SwiftUI app. Includes the engine bridge, iCloud storage, map, calendar, Salesforce, Siri |
 | `apple/BearingsWatch/`, `apple/BearingsWidgets/`, `apple/BearingsHomeWidgets/` | Watch app, watch complications, home-screen widgets |

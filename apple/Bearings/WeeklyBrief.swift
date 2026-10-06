@@ -70,7 +70,8 @@ extension AppModel {
     func weeklyDone(_ k: String) -> Bool {
         guard let p = person(k) else { return false }
         let since = WeeklyBrief.weekStart
-        return p.touch >= since || ((p.rx?.t ?? "") >= since && p.rx?.dir == "o")
+        // only your own message or a logged touch counts; their message to you doesn't
+        return (p.ed?.touched ?? "") >= since || ((p.rx?.t ?? "") >= since && p.rx?.dir == "o")
     }
 }
 
