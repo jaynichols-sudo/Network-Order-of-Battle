@@ -3,7 +3,8 @@
 import api from '../engine.js';
 import JSZip from 'jszip';
 import { Store, prefs, savePrefs, ls, fx, askNotify, scheduleFollowUps, scheduleMonday, clearExportReminder, readStarterContacts, readContactCards, contactsAllowed, shareFile } from './platform.js';
-import { loadGeo, lookup, placesFromContacts } from '../geo.js';
+import { loadGeo, lookup, city, placesFromContacts } from '../geo.js';
+import { birthdaysFromContacts } from './eventkit.js';
 import { hash } from '../core.js';
 
 const B = () => globalThis.Bearings;
@@ -22,6 +23,7 @@ export const M = {
   q: {text: '', filters: blankFilters(), sort: 'new'}, results: [], chips: [],
   lists: ls.json('bearings.lists', []),
   places: {}, found: {}, placesBuilt: '', locating: false,
+  events: [], trips: ls.json('bearings.trips', []), births: {},
   error: '', loaded: false, version: 0,
 };
 export const isSample = () => M.info.mode === 'sample';
@@ -61,7 +63,8 @@ export async function reload(){
   }
   try { M.info = api.loadFiles(texts, prefs.lens); M.error = ''; }
   catch (e) { M.error = `Your saved network didn’t load (${(e && e.message) || e}). Close and reopen the app to try again.`; try { M.info = api.loadSample(); } catch {} }
-  try { const pf = JSON.parse((await Store.read('places.json')) || 'null'); M.found = (pf && pf.people) || {}; M.placesBuilt = (pf && pf.built) || ''; } catch { M.found = {}; }
+  try { const pf = JSON.parse((await Store.read('places.json')) || 'null'); M.found = (pf && pf.people) || {}; M.placesBuilt = (pf && pf.built) || ''; M.births = (pf && pf.births) || {}; } catch { M.found = {}; M.births = {}; }
+  try { const ev = JSON.parse((await Store.read('events.json')) || '[]'); M.events = Array.isArray(ev) ? ev.filter(e => e && e.id && e.start) : []; } catch { M.events = []; }
   if (!M.constants) M.constants = api.constants();
   refreshAll();
   M.loaded = true;
@@ -147,6 +150,18 @@ export async function touched(k){
   show(p && p.next ? `Logged. Next check-in ${niceDay(p.next)}` : 'Logged');
 }
 export async function addNote(k, text, source = ''){ await edit(k, () => api.addNote(k, text, source)); }
+/** You met someone at an event: a note on their timeline and a logged touch. */
+export async function metAt(k, text, source){ await edit(k, () => { api.addNote(k, text, source); api.touch(k); }); }
+
+/* ---------- events and trips ---------- */
+// Events live in events.json next to the other files (the iPhone app uses the same name);
+// trips you add yourself are a small list in local storage, like the iPhone's settings.
+export async function saveEvents(){
+  try { await Store.write('events.json', JSON.stringify(M.events)); }
+  catch (e) { show('Couldn’t save: ' + ((e && e.message) || e)); }
+  emit('events');
+}
+export function saveTrips(){ ls.set('bearings.trips', JSON.stringify(M.trips)); emit('trips'); }
 export async function setLocation(k, query){
   const q = (query || '').trim();
   if (!q){ await edit(k, () => api.setEdit(k, {loc: '', lat: null, lon: null})); show('Location cleared'); return true; }
@@ -220,8 +235,11 @@ export async function locate(){
     const [cards] = await Promise.all([readContactCards(), loadGeo()]);
     const rows = M.people.map(p => ({k: p.k, f: p.f, l: p.l, c: p.c, e: p.e, x: p.x}));
     const {places, matched} = placesFromContacts(rows, cards);
-    M.found = places; M.placesBuilt = new Date().toISOString().slice(0, 10);
-    await Store.write('places.json', JSON.stringify({v: 1, built: M.placesBuilt, matched, people: places})).catch(() => {});
+    // last resort, as on the iPhone: a city in someone's title or company, like "Greensboro, NC"
+    try { for (const [k, name, st] of api.placeClues()){ if (places[k]) continue; const c = city(name, st, 'US'); if (c) places[k] = {name: `${name}, ${st}`, lat: c.lat, lon: c.lon, prec: 'city', src: 'title'}; } } catch {}
+    const births = birthdaysFromContacts(rows, cards);
+    M.found = places; M.births = births; M.placesBuilt = new Date().toISOString().slice(0, 10);
+    await Store.write('places.json', JSON.stringify({v: 1, built: M.placesBuilt, matched, people: places, births})).catch(() => {});
     mergePlaces(); fx.success();
     show(`Found a location for ${Object.keys(M.places).length.toLocaleString()} people`);
   } catch (e) { show((e && e.message) || 'Couldn’t read contacts'); }
@@ -311,7 +329,7 @@ export async function readImport(file){
 }
 export async function commitImport(plan){
   await Store.write('network.json', B().fileJSON('network'));
-  if (plan.wasSample){ api.clearNotes(); await saveAll(); M.found = {}; await Store.write('places.json', JSON.stringify({v: 1, built: '', people: {}})).catch(() => {}); }
+  if (plan.wasSample){ api.clearNotes(); await saveAll(); M.found = {}; M.births = {}; await Store.write('places.json', JSON.stringify({v: 1, built: '', people: {}})).catch(() => {}); }
   if (plan.wasStarter){ await saveFile('edits', 'edits.json'); await saveFile('review', 'review.json'); clearExportReminder(); }
   ls.set('bearings.onboarded', '1');
   await reload();

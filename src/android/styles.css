@@ -700,3 +700,47 @@ input[type=range] { accent-color: var(--accent); }
 .wrow .avstack .av:first-child { margin-left: 0; }
 .card.pad > p { font-size: 15px; }
 .compass-card { overflow: hidden; }
+
+/* ================= events, trips, birthdays ================= */
+.bar-right { justify-self: end; display: flex; gap: 6px; }
+.bar-act { width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; background: var(--card); color: var(--text); box-shadow: var(--card-shadow), inset 0 0 0 1px var(--card-border); }
+.bar-act .i { width: 20px; height: 20px; stroke-width: 2.2; }
+.evlist { margin-top: 8px; }
+.evrow { align-items: center; }
+.evrow .chev { margin-top: 0; }
+.new-ev { margin-top: 14px; background: var(--card); box-shadow: var(--card-shadow), inset 0 0 0 1px var(--card-border); }
+.ev-head { padding: 10px 4px 14px; }
+.ev-head h1 { font-size: 26px; font-weight: 700; letter-spacing: -.02em; line-height: 1.15; text-wrap: balance; }
+.ev-head p { font-size: 15px; margin-top: 4px; }
+.ev-stats { margin-top: 0; }
+.ev-stats .stat span { font-size: 12px; }
+.ev-actions { margin-top: 12px; }
+.del-ev { margin-top: 26px; }
+.metrow { display: flex; align-items: flex-start; gap: 10px; padding: 12px 6px 12px 12px; }
+.list > .metrow + .metrow::before { left: 52px; }
+.tick { flex: none; width: 32px; height: 32px; display: grid; place-items: center; color: var(--text3); --on-fill: var(--card); }
+.tick .i { width: 26px; height: 26px; stroke-width: 1.6; }
+.metrow.done .tick { color: var(--good); }
+.met-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; padding-top: 4px; }
+.met-main b { font-size: 15px; font-weight: 600; }
+.metrow.done .met-main b { color: var(--text3); text-decoration: line-through; }
+.met-main > .muted { font-size: 13px; }
+.met-note { font-size: 13px; color: var(--text2); margin-top: 2px; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.met-links { display: flex; gap: 18px; margin-top: 4px; }
+.met-links .link { font-size: 14px; font-weight: 600; }
+.frow .date { border: 0; outline: 0; background: var(--card2); color: var(--text); border-radius: 10px; padding: 7px 10px; font-size: 15px; min-height: 36px; color-scheme: inherit; }
+.form .btn.block { margin-top: 14px; }
+.foot.first { margin: 6px 4px 0; font-size: 15px; }
+.trip-map { height: 220px; }
+.trip-leaflet { height: 100%; background: var(--fill); }
+.trip-radius { margin-top: 12px; }
+.trip-radius .seg { background: var(--soft); border-radius: 999px; padding: 3px; }
+.near-line { color: var(--text3) !important; font-size: 12px !important; }
+.good-text { color: var(--good) !important; }
+.bdays { margin-top: 14px; padding-bottom: 4px; }
+.bd-title { display: inline-flex; align-items: center; gap: 8px; color: var(--bad); }
+.bd-title .i { width: 19px; height: 19px; }
+.bdrow { gap: 10px; padding: 9px 16px; }
+.bdrow b { flex: 1; min-width: 0; font-size: 15px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bdrow .mono { font-size: 13px; }
+.list > .bdrow + .bdrow::before { left: 58px; }

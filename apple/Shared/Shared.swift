@@ -129,6 +129,10 @@ struct Glance: Codable {
     var sample: Bool
     /// The next few people to get back to, for the larger widgets.
     var next: [Item]? = nil
+    /// Changed jobs since the last refresh, and people you're close to (score 60+), for
+    /// the widgets' Today-style counts. Optional so older saved glances still decode.
+    var jobs: Int? = nil
+    var close: Int? = nil
 
     struct Item: Codable, Hashable {
         var k: String
@@ -152,7 +156,9 @@ struct Glance: Codable {
             + dueNow.prefix(4).map { Item(k: $0.k, n: $0.n, why: "Follow up \(Day.nice($0.due))", kind: "due") }
         return Glance(gen: s.gen, waiting: waiting.count, cold: s.people.filter { $0.has("c") }.count,
                       dues: s.people.compactMap { $0.due }.sorted(), nextName: name, nextWhy: why, sample: s.sample,
-                      next: Array(items.prefix(6)))
+                      next: Array(items.prefix(6)),
+                      jobs: s.people.filter { $0.has("j") }.count,
+                      close: s.people.filter { ($0.sc ?? 0) >= 60 }.count)
     }
 }
 
