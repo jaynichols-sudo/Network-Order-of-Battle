@@ -19,7 +19,7 @@ Based on the Android code as of October 2026. Bearings has no server and no anal
 ## Permissions to explain if asked
 
 - **Contacts (READ_CONTACTS):** optional. Used to start a network from contacts, add birthdays, and place people on the map. Read on the phone only.
-- **Location (coarse and fine):** optional. Used for "near me" on the map. Read on the phone only.
+- **Location (coarse and fine):** optional. Used for "near me" on the map and the optional arrival check, which runs only while the app is open (no background location). Read on the phone only.
 - **Notifications:** follow-up reminders and the Monday brief.
 
 ## Other App content answers
@@ -31,3 +31,5 @@ Based on the Android code as of October 2026. Bearings has no server and no anal
 - **Financial features:** None.
 - **Health:** None.
 - **Account deletion:** The app has no accounts.
+- **Enrichment lookups:** optional. Names, companies and titles the user picks are sent to the user's own ZoomInfo or Seamless.AI account. Same reasoning as on iOS: user-initiated, disclosed on screen, sent to a provider the user has their own contract with, never to the developer. Conservative fallback: declare Personal info > Name, shared, for App functionality, optional.
+- **Purchases:** handled by Google Play Billing; the app doesn't collect payment info.
