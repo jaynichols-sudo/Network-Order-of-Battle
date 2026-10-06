@@ -97,7 +97,7 @@ struct TeamView: View {
                             HStack {
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(p.owner).font(Theme.geist(.subheadline, .semibold))
-                                    Text("\(p.count.formatted()) people · shared \(Day.nice(p.made))").font(Theme.geist(.footnote)).foregroundStyle(Theme.text2)
+                                    Text("\(p.count.formatted()) \(p.count == 1 ? "person" : "people") · shared \(Day.nice(p.made))").font(Theme.geist(.footnote)).foregroundStyle(Theme.text2)
                                 }
                                 Spacer()
                                 Button("Remove") { Task { await model.removeTeamPack(p.owner); packs = await model.teamPacks() } }

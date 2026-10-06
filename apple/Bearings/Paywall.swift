@@ -17,12 +17,12 @@ struct PaywallView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
                     VStack(alignment: .leading, spacing: 6) {
-                        Text("Bearings Pro").font(Theme.geist(.largeTitle, .bold))
-                        Text(feature.map { "\($0.title) is part of Pro. " } ?? "")
-                            + Text("The map, Today, search and reminders stay free. Pro adds the tools for working your network.")
+                        Text("Bearings Pro").font(Theme.geist(.largeTitle, .bold)).foregroundStyle(.primary)
+                        (Text(feature.map { "\($0.title) is part of Pro. " } ?? "")
+                            + Text("The map, Today, search and reminders stay free. Pro adds the tools for working your network."))
+                            .font(Theme.geist(.subheadline))
+                            .foregroundStyle(Theme.text2)
                     }
-                    .font(Theme.geist(.subheadline))
-                    .foregroundStyle(Theme.text2)
                     .padding(.horizontal, 6)
 
                     VStack(spacing: 0) {
