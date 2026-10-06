@@ -25,6 +25,8 @@ struct ProfileView: View {
                 }
                 .padding(.horizontal, 16)
                 .padding(.bottom, 24)
+            .frame(maxWidth: 680)
+            .frame(maxWidth: .infinity)
             }
             .background(Theme.bg)
             .sheet(isPresented: $writing) { MessageSheet(k: p.k) }

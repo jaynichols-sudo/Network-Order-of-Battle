@@ -282,6 +282,8 @@ struct YouView: View {
             }
             .padding(.horizontal, 16)
             .padding(.bottom, 24)
+            .frame(maxWidth: 680)
+            .frame(maxWidth: .infinity)
         }
         .background(Theme.bg)
         .navigationTitle("You")
