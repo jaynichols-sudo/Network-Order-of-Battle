@@ -4,7 +4,7 @@
 import {
   fmt, isoDay, TODAY, daysAgo, niceDate, h01, hash,
   SEGS, SEGI, BRANCHES, STATUSES, TIERS, SENIORITY, FUNCS, SINCE, SIGNALS, GRADE_OPTS, CERTS,
-  classify, keyOf, stripRow, rowsFromCSV, relationsFromArchive, mergeImport, sampleNetwork, warmth,
+  classify, keyOf, stripRow, rowsFromCSV, relationsFromArchive, mergeImport, sampleNetwork, warmth, parseCSV, slugOf,
 } from './core.js';
 import { parseQuery, matchNL } from './nlq.js';
 import { INDUSTRIES, indColor, indShort, setIndustryOverrides, companyKey, UNCLASSIFIED, GOV_IND } from './industry.js';
@@ -767,6 +767,55 @@ function teamPaths(hit){
   return out.slice(0, 40);
 }
 
+/* ---------- enrichment files ---------- */
+// A CSV exported from ZoomInfo, Seamless.AI, Apollo or any other provider, matched to your
+// people by LinkedIn link, then email, then name and company. Read on the device only.
+const ENRICH_COLS = {
+  first: ['first name', 'firstname', 'contact first name', 'person first name'],
+  last: ['last name', 'lastname', 'contact last name', 'person last name'],
+  name: ['name', 'full name', 'contact name', 'contact full name', 'person name'],
+  email: ['email', 'email address', 'work email', 'business email', 'contact email', 'email 1', 'direct email', 'corporate email'],
+  phone: ['direct phone', 'direct phone number', 'direct dial', 'work direct phone', 'contact phone 1', 'phone', 'phone number', 'work phone', 'business phone', 'corporate phone'],
+  mobile: ['mobile', 'mobile phone', 'mobile phone number', 'cell', 'cell phone', 'contact mobile phone'],
+  title: ['title', 'job title', 'position', 'contact title'],
+  company: ['company', 'company name', 'account name', 'organization', 'company name for emails'],
+  city: ['city', 'person city', 'contact city', 'city (person)'],
+  state: ['state', 'person state', 'contact state', 'state abbr', 'state (person)', 'region'],
+  country: ['country', 'person country', 'contact country'],
+  linkedin: ['linkedin', 'linkedin url', 'linkedin profile', 'linkedin profile url', 'person linkedin url', 'li profile url', 'linkedin contact profile url', 'contact linkedin url'],
+};
+function matchEnrichment(text){
+  const grid = parseCSV(String(text || '').replace(/^\ufeff/, ''));
+  const norm = h => String(h || '').trim().toLowerCase().replace(/[_]+/g, ' ').replace(/\s+/g, ' ');
+  const hi = grid.findIndex(r => r.map(norm).some(c => ENRICH_COLS.first.includes(c) || ENRICH_COLS.name.includes(c)));
+  if (hi < 0) throw new Error('That file has no name columns. Export people from your provider as a CSV with first and last name, company and email.');
+  const H = grid[hi].map(norm);
+  const col = {}; for (const [k, names] of Object.entries(ENRICH_COLS)){ for (const n of names){ const i = H.indexOf(n); if (i >= 0){ col[k] = i; break; } } }
+  const nm = s => String(s || '').toLowerCase().replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, ' ').trim();
+  const bySlug = new Map(), byEmail = new Map(), byNameCo = new Map(), byName = new Map();
+  for (const r of S.all){
+    const sl = slugOf(r.u); if (sl) bySlug.set(sl, r.k);
+    if (r.e) byEmail.set(r.e.toLowerCase(), r.k);
+    const n = nm(`${r.f} ${r.l}`); if (!n) continue;
+    byNameCo.set(n + '|' + coKey(r.c), r.k);
+    byName.set(n, byName.has(n) ? null : r.k);
+  }
+  const out = {}; let rows = 0;
+  for (const g of grid.slice(hi + 1)){
+    const get = k => col[k] != null ? String(g[col[k]] || '').trim() : '';
+    const full = get('name') || `${get('first')} ${get('last')}`.trim();
+    if (!full && !get('email') && !get('linkedin')) continue;
+    rows++;
+    const email = get('email');
+    const k = bySlug.get(slugOf(get('linkedin'))) || (email && byEmail.get(email.toLowerCase())) || byNameCo.get(nm(full) + '|' + coKey(get('company'))) || byName.get(nm(full));
+    if (!k) continue;
+    const e = {email, phone: get('phone'), mobile: get('mobile'), title: get('title'), company: get('company'), city: get('city'), state: get('state'), country: get('country')};
+    for (const f of Object.keys(e)) if (!e[f]) delete e[f];
+    if (Object.keys(e).length) out[k] = Object.assign(out[k] || {}, e);
+  }
+  return {rows, matched: Object.keys(out).length, people: out};
+}
+
 /* ---------- year in review ---------- */
 // A shareable look back at the year: who joined your network, the job changes you caught,
 // who you talked with and who you reconnected with. Counts only, for the card.
@@ -970,7 +1019,7 @@ function constants(){
 
 const api = {load, loadSample, loadFiles, clearNotes, clusters, placeClues, setCompanyLocation, companyPlaces, messages, matchAttendees, alsoAt, setLens, info, people, person, search, facets, home, payoff, targets, unit, addTargetCandidates, toggleTarget, setTargetNote, orgs,
   industries, industry, setCompanyIndustry, setCompanyLink, ranks, deck, deckCount, reviewed, radar, compass, startFromContacts, introPaths, weekly, touch, setCircle, setEdit, followUp, markReplied, addNote,
-  importTexts, importSnapshot, yearInReview, teamPack, addTeamPack, removeTeamPack, teamList, backup, restore, exportCSV, reminders, watch, constants};
+  importTexts, importSnapshot, yearInReview, teamPack, addTeamPack, removeTeamPack, teamList, matchEnrichment, backup, restore, exportCSV, reminders, watch, constants};
 // Every call goes through here: JSON string in, JSON string out, errors as {error}.
 globalThis.Bearings = {
   call(name, argsJSON){

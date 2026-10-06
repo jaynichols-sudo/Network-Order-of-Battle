@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 import UIKit
 
 // Today's building blocks in the "Calm cards" design (docs/design-c.md): a small
@@ -231,6 +232,7 @@ struct EventsList: View {
 /// The You tab: your profile, your stuff, your data, and settings.
 struct YouView: View {
     @Environment(AppModel.self) private var model
+    @State private var importingEnrichment = false
 
     var body: some View {
         ScrollView {
@@ -271,6 +273,7 @@ struct YouView: View {
                     if !model.info.isSample {
                         row("Back up notes", icon: "externaldrive") { Task { await model.backup() } }
                     }
+                    row("Import an enrichment file", icon: "tablecells.badge.ellipsis") { importingEnrichment = true }
                 }
 
                 group(nil) {
@@ -294,6 +297,9 @@ struct YouView: View {
         .background(Theme.bg)
         .navigationTitle("You")
         .toolbar(.hidden, for: .navigationBar)
+        .fileImporter(isPresented: $importingEnrichment, allowedContentTypes: [.commaSeparatedText, .plainText]) { r in
+            if case .success(let url) = r { Task { await model.importEnrichment(url) } }
+        }
     }
 
     private func group<Content: View>(_ title: String?, @ViewBuilder content: () -> Content) -> some View {

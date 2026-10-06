@@ -206,3 +206,28 @@ test('year in review counts this year only', () => {
   assert.ok(y.topSectors.length <= 3 && y.topCompanies.length <= 3);
   assert.equal(call('yearInReview', 1990).joined, 0);
 });
+
+test('enrichment files from any provider match by LinkedIn link, email or name and company', () => {
+  const net = ['First Name,Last Name,URL,Email Address,Company,Position,Connected On',
+    'Ada,Lovelace,https://www.linkedin.com/in/ada,,Analytical Engines,Engineer,05 Oct 2020',
+    'Grace,Hopper,https://www.linkedin.com/in/grace,grace@navy.mil,US Navy,Admiral,01 Jan 2020',
+    'Katherine,Johnson,,,NASA,Mathematician,01 Jan 2019'].join('\n');
+  call('importTexts', { connections: net }, 'test');
+  call('loadFiles', { network: globalThis.Bearings.fileJSON('network') }, null);
+  const by = new Map(people().map(p => [p.f, p.k]));
+  const csv = [
+    'First Name,Last Name,Job Title,Company Name,Email Address,Direct Phone Number,Mobile phone,Person City,Person State,LinkedIn Contact Profile URL',
+    'A.,Lovelace,Chief Engineer,Analytical Engines,ada@x.com,555-0101,,Tampa,FL,https://www.linkedin.com/in/ada/',
+    'G,Hopper,CTO,Elsewhere,grace@navy.mil,,555-0199,Arlington,VA,',
+    'Katherine,Johnson,,NASA,,,,Hampton,Virginia,',
+    'Nobody,Atall,CEO,Nowhere Inc,n@x.com,,,,,',
+  ].join('\n');
+  const r = call('matchEnrichment', csv);
+  assert.equal(r.rows, 4);
+  assert.equal(r.matched, 3);
+  assert.equal(r.people[by.get('Ada')].email, 'ada@x.com', 'matched by LinkedIn link');
+  assert.equal(r.people[by.get('Ada')].city, 'Tampa');
+  assert.equal(r.people[by.get('Grace')].mobile, '555-0199', 'matched by email');
+  assert.equal(r.people[by.get('Katherine')].state, 'Virginia', 'matched by name and company');
+  assert.throws(() => call('matchEnrichment', 'foo,bar\n1,2'), /no name columns/);
+});

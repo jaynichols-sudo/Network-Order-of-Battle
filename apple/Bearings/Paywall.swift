@@ -41,6 +41,7 @@ struct PaywallView: View {
                                 Spacer(minLength: 0)
                             }
                             .padding(.vertical, 11)
+                            .accessibilityElement(children: .combine)
                         }
                     }
                     .padding(.horizontal, 16)
@@ -62,6 +63,7 @@ struct PaywallView: View {
                             .background(Theme.primary, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                     }
                     .buttonStyle(.plain)
+                    .accessibilityHint("Buys the plan you picked")
                     .disabled(buying || pro.owned)
 
                     if !note.isEmpty {
@@ -72,7 +74,7 @@ struct PaywallView: View {
                         Button("Restore purchases") { Task { await pro.restore(); if pro.owned { dismiss() } } }
                         Spacer()
                         Button("Terms") { if let u = URL(string: "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/") { openURL(u) } }
-                        Text("·").foregroundStyle(Theme.text3)
+                        Text("·").foregroundStyle(Theme.text3).accessibilityHidden(true)
                         Button("Privacy") { if let u = URL(string: "https://www.jaynichols.net/bearings/privacy.html") { openURL(u) } }
                     }
                     .font(Theme.geist(.footnote, .medium))
@@ -101,6 +103,7 @@ struct PaywallView: View {
                 Image(systemName: on ? "largecircle.fill.circle" : "circle")
                     .font(.system(size: 20))
                     .foregroundStyle(on ? Theme.primary : Theme.text3)
+                    .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 1) {
                     Text(title).font(Theme.geist(.subheadline, .semibold)).foregroundStyle(.primary)
                     Text(price).font(Theme.geist(.footnote)).foregroundStyle(Theme.text2)
@@ -117,6 +120,9 @@ struct PaywallView: View {
             .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(on ? Theme.primary : .clear, lineWidth: 1.5))
         }
         .buttonStyle(.plain)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel([title, price, badge].compactMap { $0 }.joined(separator: ", "))
+        .accessibilityAddTraits(on ? [.isButton, .isSelected] : .isButton)
     }
 
     private func buy() {

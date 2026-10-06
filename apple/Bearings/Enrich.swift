@@ -18,7 +18,7 @@ struct Enriched: Codable, Hashable {
     var state: String?
     var country: String?
 
-    var sourceName: String { src == "zoominfo" ? "ZoomInfo" : src == "seamless" ? "Seamless.AI" : src }
+    var sourceName: String { src == "zoominfo" ? "ZoomInfo" : src == "seamless" ? "Seamless.AI" : src == "file" ? "your enrichment file" : src }
     var location: String { [city, state].compactMap { $0?.isEmpty == false ? $0 : nil }.joined(separator: ", ") }
 
     /// A city on the map, when it's one Bearings knows (US cities offline).
@@ -44,7 +44,11 @@ enum EnrichProvider: String, CaseIterable, Identifiable {
     var configured: Bool {
         switch self {
         case .off: return false
-        case .zoominfo: return !(SecretStore.get("enrich.zoominfo.user") ?? "").isEmpty && !(SecretStore.get("enrich.zoominfo.pass") ?? "").isEmpty
+        case .zoominfo:
+            let user = !(SecretStore.get("enrich.zoominfo.user") ?? "").isEmpty
+            let pass = !(SecretStore.get("enrich.zoominfo.pass") ?? "").isEmpty
+            let pki = !(SecretStore.get("enrich.zoominfo.client") ?? "").isEmpty && !(SecretStore.get("enrich.zoominfo.key") ?? "").isEmpty
+            return user && (pass || pki)
         case .seamless: return SeamlessAuth.signedIn || !(SecretStore.get("enrich.seamless.key") ?? "").isEmpty
         }
     }
@@ -116,18 +120,29 @@ enum EnrichClient {
 enum ZoomInfo {
     private static var jwt: (token: String, until: Date)?
 
-    static func token(user: String? = nil, pass: String? = nil, fresh: Bool = false) async throws -> String {
+    /// Signs in with a username and either a password or, for PKI accounts, a client ID and private key.
+    static func token(user: String? = nil, pass: String? = nil, client: String? = nil, key: String? = nil, fresh: Bool = false) async throws -> String {
         if !fresh, let j = jwt, j.until > Date() { return j.token }
-        guard let user = user ?? SecretStore.get("enrich.zoominfo.user"), let pass = pass ?? SecretStore.get("enrich.zoominfo.pass"), !user.isEmpty, !pass.isEmpty
-        else { throw EnrichFailure(message: "Add your ZoomInfo API username and password in Settings.") }
+        let user = user ?? SecretStore.get("enrich.zoominfo.user") ?? ""
+        let pass = pass ?? SecretStore.get("enrich.zoominfo.pass") ?? ""
+        let client = client ?? SecretStore.get("enrich.zoominfo.client") ?? ""
+        let key = key ?? SecretStore.get("enrich.zoominfo.key") ?? ""
+        let pki = !client.isEmpty && !key.isEmpty
+        guard !user.isEmpty, pki || !pass.isEmpty
+        else { throw EnrichFailure(message: "Add your ZoomInfo API username and password, or client ID and private key, in Settings.") }
         var req = URLRequest(url: URL(string: "https://api.zoominfo.com/authenticate")!)
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        req.httpBody = try JSONSerialization.data(withJSONObject: ["username": user, "password": pass])
+        if pki {
+            req.setValue("Bearer \(try ZoomInfoPKI.clientJWT(user: user, client: client, pem: key))", forHTTPHeaderField: "Authorization")
+        } else {
+            req.httpBody = try JSONSerialization.data(withJSONObject: ["username": user, "password": pass])
+        }
         let (status, body) = try await EnrichClient.json(req)
         guard status == 200, let t = (body as? [String: Any])?["jwt"] as? String else {
             throw EnrichFailure(message: status == 401 || status == 403
-                ? "ZoomInfo didn’t accept that username and password. API access may need to be turned on for your account."
+                ? (pki ? "ZoomInfo didn’t accept that client ID and key. Check they belong to this username."
+                       : "ZoomInfo didn’t accept that username and password. API access may need to be turned on for your account.")
                 : "Couldn’t sign in to ZoomInfo (\(status)).")
         }
         jwt = (t, Date().addingTimeInterval(55 * 60))
@@ -170,6 +185,71 @@ enum ZoomInfo {
             }
         }
         return out
+    }
+}
+
+/// ZoomInfo's PKI sign-in: a short-lived token signed on this device with the account's private key (RS256).
+enum ZoomInfoPKI {
+    static func clientJWT(user: String, client: String, pem: String, now: Date = Date()) throws -> String {
+        let key = try privateKey(pem)
+        let iat = Int(now.timeIntervalSince1970)
+        let header = ["alg": "RS256", "typ": "JWT"]
+        let claims: [String: Any] = ["aud": "enterprise_api", "iss": "api-client@zoominfo.com", "username": user,
+                                     "client_id": client, "iat": iat, "exp": iat + 300]
+        let h = b64url(try JSONSerialization.data(withJSONObject: header, options: .sortedKeys))
+        let c = b64url(try JSONSerialization.data(withJSONObject: claims, options: .sortedKeys))
+        let input = Data("\(h).\(c)".utf8)
+        var err: Unmanaged<CFError>?
+        guard let sig = SecKeyCreateSignature(key, .rsaSignatureMessagePKCS1v15SHA256, input as CFData, &err) as Data? else {
+            throw EnrichFailure(message: "Couldn’t sign with that private key.")
+        }
+        return "\(h).\(c).\(b64url(sig))"
+    }
+
+    /// Accepts a PEM private key in PKCS#8 ("BEGIN PRIVATE KEY") or PKCS#1 ("BEGIN RSA PRIVATE KEY") form.
+    static func privateKey(_ pem: String) throws -> SecKey {
+        let body = pem.components(separatedBy: .newlines).filter { !$0.hasPrefix("-----") }.joined()
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard var der = Data(base64Encoded: body, options: .ignoreUnknownCharacters), !der.isEmpty else {
+            throw EnrichFailure(message: "That doesn’t look like a private key. Paste the whole key, including the BEGIN and END lines.")
+        }
+        if pem.contains("BEGIN PRIVATE KEY"), let inner = pkcs8Inner(der) { der = inner }
+        let attrs: [String: Any] = [kSecAttrKeyType as String: kSecAttrKeyTypeRSA, kSecAttrKeyClass as String: kSecAttrKeyClassPrivate]
+        var err: Unmanaged<CFError>?
+        guard let key = SecKeyCreateWithData(der as CFData, attrs as CFDictionary, &err) else {
+            throw EnrichFailure(message: "Couldn’t read that private key. ZoomInfo PKI keys are RSA keys in PEM form.")
+        }
+        return key
+    }
+
+    /// PKCS#8 wraps the PKCS#1 key: SEQUENCE { INTEGER, SEQUENCE { algorithm }, OCTET STRING { key } }.
+    static func pkcs8Inner(_ d: Data) -> Data? {
+        let b = [UInt8](d)
+        var i = 0
+        func length() -> Int? {
+            guard i < b.count else { return nil }
+            let first = Int(b[i]); i += 1
+            if first < 0x80 { return first }
+            let n = first & 0x7f
+            guard n > 0, n <= 4, i + n <= b.count else { return nil }
+            var len = 0
+            for _ in 0..<n { len = (len << 8) | Int(b[i]); i += 1 }
+            return len
+        }
+        func expect(_ tag: UInt8) -> Int? {
+            guard i < b.count, b[i] == tag else { return nil }
+            i += 1
+            return length()
+        }
+        guard expect(0x30) != nil else { return nil }          // outer SEQUENCE
+        guard let vl = expect(0x02) else { return nil }; i += vl // version
+        guard let al = expect(0x30) else { return nil }; i += al // algorithm
+        guard let kl = expect(0x04), i + kl <= b.count else { return nil }
+        return Data(b[i..<(i + kl)])
+    }
+
+    static func b64url(_ d: Data) -> String {
+        d.base64EncodedString().replacingOccurrences(of: "+", with: "-").replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: "=", with: "")
     }
 }
 
@@ -257,6 +337,35 @@ extension AppModel {
         } catch {
             show(error.localizedDescription)
             return nil
+        }
+    }
+}
+
+/// An enrichment CSV from any provider, matched to people by the engine.
+struct EnrichFileMatch: Decodable {
+    struct Row: Decodable { var email, phone, mobile, title, company, city, state, country: String? }
+    var rows: Int
+    var matched: Int
+    var people: [String: Row]
+}
+
+extension AppModel {
+    func importEnrichment(_ url: URL) async {
+        let access = url.startAccessingSecurityScopedResource()
+        defer { if access { url.stopAccessingSecurityScopedResource() } }
+        do {
+            let text = try String(contentsOf: url, encoding: .utf8)
+            let m = try await engine.call("matchEnrichment", [text], as: EnrichFileMatch.self)
+            var found: [String: Enriched] = [:]
+            for (k, r) in m.people {
+                found[k] = Enriched(src: "file", at: Day.today, email: r.email, phone: r.phone, mobile: r.mobile, title: r.title,
+                                    company: r.company, city: r.city, state: r.state, country: r.country)
+            }
+            await saveEnriched(found)
+            Haptic.success()
+            show("Matched \(m.matched.formatted()) of \(m.rows.formatted()) people in the file")
+        } catch {
+            show("Couldn’t read that file: \(error.localizedDescription)")
         }
     }
 }

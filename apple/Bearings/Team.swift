@@ -99,9 +99,11 @@ struct TeamView: View {
                                     Text(p.owner).font(Theme.geist(.subheadline, .semibold))
                                     Text("\(p.count.formatted()) \(p.count == 1 ? "person" : "people") · shared \(Day.nice(p.made))").font(Theme.geist(.footnote)).foregroundStyle(Theme.text2)
                                 }
+                                .accessibilityElement(children: .combine)
                                 Spacer()
                                 Button("Remove") { Task { await model.removeTeamPack(p.owner); packs = await model.teamPacks() } }
                                     .buttonStyle(PillButtonStyle(kind: .soft))
+                                    .accessibilityLabel("Remove \(p.owner)’s pack")
                             }
                             .padding(.vertical, 10)
                         }

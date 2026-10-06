@@ -57,6 +57,26 @@ jobs:
             echo "::error title=Mac build errors::$msg"
             exit 1
           fi
+      - name: UI tests
+        continue-on-error: true
+        run: |
+          UDID=$(xcrun simctl list devices available -j | python3 -c "
+          import json,sys,re
+          d=json.load(sys.stdin)['devices']
+          for rt in sorted(d, reverse=True):
+              for x in d[rt]:
+                  if re.fullmatch('iPhone 1[6-9] Pro', x['name']): print(x['udid']); sys.exit()
+          ")
+          xcodebuild -project apple/Bearings.xcodeproj -scheme Bearings -configuration Debug \
+            -destination "id=$UDID" -derivedDataPath build/ddtest CODE_SIGNING_ALLOWED=NO test > uitest.log 2>&1 || true
+          grep -E "Test Case .*(passed|failed)|\*\* TEST" uitest.log | tail -30
+          if ! grep -q "\*\* TEST SUCCEEDED" uitest.log; then
+            msg=$( (grep -E "error:|failed" uitest.log || tail -40 uitest.log) | sed -E 's#/Users/runner/work/[^/]+/[^/]+/##' | awk '!s[$0]++' | head -40 | sed 's/%/%25/g' | awk 'BEGIN{ORS="%0A"}{print}')
+            echo "::warning title=UI tests::$msg"
+          else
+            echo "::notice title=UI tests::All UI tests passed"
+          fi
+          xcrun simctl shutdown "$UDID" || true
       - name: Screenshots
         continue-on-error: true
         run: |

@@ -33,45 +33,68 @@ struct GlanceProvider: TimelineProvider {
     }
 }
 
+/// Calm cards on the watch face: amber for people waiting on you, night purple behind,
+/// and the same "N people to get back to" headline as the phone widgets.
+private enum Face {
+    static let amber = Color(.sRGB, red: 1, green: 0.69, blue: 0.125, opacity: 1)
+    static let violet = Color(.sRGB, red: 0.66, green: 0.57, blue: 1, opacity: 1)
+}
+
 struct GlanceView: View {
     @Environment(\.widgetFamily) private var family
+    @Environment(\.widgetRenderingMode) private var mode
     let entry: GlanceEntry
+
+    private var total: Int { entry.waiting + entry.due }
+    private var headline: String { total == 0 ? "All caught up" : "\(total) \(total == 1 ? "person" : "people") to get back to" }
+    private var tint: Color { mode == .fullColor ? Face.amber : .primary }
 
     var body: some View {
         switch family {
         case .accessoryCircular:
-            ZStack {
-                AccessoryWidgetBackground()
-                VStack(spacing: 0) {
-                    Image(systemName: "location.north.fill").font(.system(size: 11, weight: .bold))
-                    Text("\(entry.waiting + entry.due)").font(.system(size: 20, weight: .semibold, design: .rounded))
-                }
+            Gauge(value: Double(min(total, 10)), in: 0...10) {
+                Image(systemName: "location.north.fill")
+            } currentValueLabel: {
+                Text("\(total)").font(.system(.title3, design: .rounded).weight(.semibold))
             }
+            .gaugeStyle(.accessoryCircularCapacity)
+            .tint(tint)
             .widgetAccentable()
+            .accessibilityLabel(headline)
         case .accessoryCorner:
-            Image(systemName: "arrowshape.turn.up.left.fill")
-                .font(.system(size: 20, weight: .semibold))
-                .widgetLabel { Text("\(entry.waiting) to reply, \(entry.due) due") }
-        case .accessoryInline:
-            Text(entry.waiting + entry.due == 0 ? "Bearings: all caught up" : "\(entry.waiting) to reply · \(entry.due) to follow up")
-        default:
-            VStack(alignment: .leading, spacing: 1) {
-                HStack(spacing: 4) {
-                    Image(systemName: "location.north.circle.fill")
-                    Text("Bearings").fontWeight(.semibold)
-                }
-                .font(.headline)
+            Text("\(total)")
+                .font(.system(size: 22, weight: .semibold, design: .rounded))
+                .foregroundStyle(tint)
                 .widgetAccentable()
-                if entry.waiting + entry.due == 0 {
-                    Text("All caught up").font(.body)
-                } else {
-                    Text("\(entry.waiting) to reply · \(entry.due) due").font(.body)
+                .widgetLabel {
+                    Gauge(value: Double(min(entry.waiting, 10)), in: 0...10) { Text("") }
+                        .tint(tint)
+                }
+                .accessibilityLabel(headline)
+        case .accessoryInline:
+            Label(total == 0 ? "All caught up" : "\(total) to get back to", systemImage: "location.north.fill")
+        default:
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 4) {
+                    Image(systemName: "location.north.fill").foregroundStyle(tint)
+                    Text("BEARINGS").font(.system(.caption2, design: .rounded).weight(.bold)).tracking(0.6)
+                }
+                .widgetAccentable()
+                Text(headline)
+                    .font(.system(.headline, design: .rounded).weight(.semibold))
+                    .lineLimit(2).minimumScaleFactor(0.8)
+                if total > 0 {
                     if let n = entry.glance.nextName {
-                        Text("\(n), \(entry.glance.nextWhy ?? "")").font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                        Text("\(n), \(entry.glance.nextWhy ?? "")")
+                            .font(.system(.caption, design: .rounded)).foregroundStyle(.secondary).lineLimit(1)
+                    } else {
+                        Text("\(entry.waiting) waiting · \(entry.due) due")
+                            .font(.system(.caption, design: .rounded)).foregroundStyle(.secondary)
                     }
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilityElement(children: .combine)
         }
     }
 }
@@ -84,7 +107,7 @@ struct BearingsWidgets: Widget {
                 .containerBackground(.fill.tertiary, for: .widget)
         }
         .configurationDisplayName("Bearings")
-        .description("Who’s waiting on a reply and which follow-ups are due.")
+        .description("How many people to get back to, and who’s next.")
         .supportedFamilies([.accessoryCircular, .accessoryRectangular, .accessoryInline, .accessoryCorner])
     }
 }

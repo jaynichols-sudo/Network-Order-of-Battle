@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// Settings: connect your own ZoomInfo or Seamless.AI account.
 struct EnrichSettingsSection: View {
@@ -11,6 +12,9 @@ struct EnrichSettingsSection: View {
     @State private var status = ""
     @State private var seamlessSignedIn = SeamlessAuth.signedIn
     @State private var showKey = !SeamlessAuth.available
+    @State private var ziClient = SecretStore.get("enrich.zoominfo.client") ?? ""
+    @State private var ziKey = ""
+    @State private var usePKI = !(SecretStore.get("enrich.zoominfo.client") ?? "").isEmpty
 
     var body: some View {
         Section {
@@ -25,8 +29,22 @@ struct EnrichSettingsSection: View {
             if provider == .zoominfo {
                 TextField("API username", text: $user)
                     .textContentType(.username).textInputAutocapitalization(.never).autocorrectionDisabled()
-                SecureField(SecretStore.get("enrich.zoominfo.pass") == nil ? "API password" : "API password (saved)", text: $pass)
-                    .textContentType(.password)
+                Picker("Sign in with", selection: $usePKI) {
+                    Text("Password").tag(false)
+                    Text("Client ID and key").tag(true)
+                }
+                .pickerStyle(.segmented)
+                if usePKI {
+                    TextField("Client ID", text: $ziClient)
+                        .textInputAutocapitalization(.never).autocorrectionDisabled()
+                    TextField(SecretStore.get("enrich.zoominfo.key") == nil ? "Private key (paste the whole PEM)" : "Private key (saved)", text: $ziKey, axis: .vertical)
+                        .lineLimit(3...6)
+                        .font(.system(.footnote, design: .monospaced))
+                        .textInputAutocapitalization(.never).autocorrectionDisabled()
+                } else {
+                    SecureField(SecretStore.get("enrich.zoominfo.pass") == nil ? "API password" : "API password (saved)", text: $pass)
+                        .textContentType(.password)
+                }
                 Button(testing ? "Checking…" : "Save and test") { saveZoomInfo() }.disabled(testing || user.isEmpty)
             } else if provider == .seamless {
                 if SeamlessAuth.available {
@@ -60,9 +78,10 @@ struct EnrichSettingsSection: View {
             if !status.isEmpty { Text(status).font(Theme.geist(.footnote)).foregroundStyle(Theme.text2) }
             if provider != .off && provider.configured {
                 Button("Remove saved credentials", role: .destructive) {
-                    SecretStore.set("enrich.zoominfo.user", nil); SecretStore.set("enrich.zoominfo.pass", nil); SecretStore.set("enrich.seamless.key", nil)
+                    for k in ["user", "pass", "client", "key"] { SecretStore.set("enrich.zoominfo.\(k)", nil) }
+                    SecretStore.set("enrich.seamless.key", nil)
                     SeamlessAuth.signOut(); seamlessSignedIn = false
-                    user = ""; status = "Removed."
+                    user = ""; ziClient = ""; ziKey = ""; status = "Removed."
                 }
             }
         } header: {
@@ -70,21 +89,33 @@ struct EnrichSettingsSection: View {
         } footer: {
             Text(provider == .seamless
                  ? "Uses your own Seamless.AI account: sign in on Seamless.AI’s page (Bearings never sees your password). Each person looked up uses one of your research credits. Only the names, companies and titles you choose to look up are sent to Seamless.AI. Your sign-in stays in this device’s Keychain."
-                 : "Uses your own account to fill in work email, phone, current title and city for the people you choose. Only their names and companies are sent to the provider, and only when you ask. Your login stays in this device’s Keychain and is never synced. ZoomInfo’s API needs API access on your contract.")
+                 : "Uses your own account to fill in work email, phone, current title and city for the people you choose. Only their names and companies are sent to the provider, and only when you ask. Your login stays in this device’s Keychain and is never synced. ZoomInfo’s API needs API access on your contract. No account? Export a CSV from any provider (ZoomInfo, Seamless.AI, Apollo) and use Import an enrichment file on the You tab; it’s matched on this device.")
         }
     }
 
     private func saveZoomInfo() {
         let u = user.trimmingCharacters(in: .whitespacesAndNewlines)
         let p = pass.isEmpty ? (SecretStore.get("enrich.zoominfo.pass") ?? "") : pass
+        let c = ziClient.trimmingCharacters(in: .whitespacesAndNewlines)
+        let k = ziKey.isEmpty ? (SecretStore.get("enrich.zoominfo.key") ?? "") : ziKey.trimmingCharacters(in: .whitespacesAndNewlines)
         testing = true
         status = ""
         Task {
             do {
-                _ = try await ZoomInfo.token(user: u, pass: p, fresh: true)
+                if usePKI {
+                    _ = try await ZoomInfo.token(user: u, pass: "", client: c, key: k, fresh: true)
+                    SecretStore.set("enrich.zoominfo.client", c)
+                    SecretStore.set("enrich.zoominfo.key", k)
+                    SecretStore.set("enrich.zoominfo.pass", nil)
+                    ziKey = ""
+                } else {
+                    _ = try await ZoomInfo.token(user: u, pass: p, client: "", key: "", fresh: true)
+                    SecretStore.set("enrich.zoominfo.pass", p)
+                    SecretStore.set("enrich.zoominfo.client", nil)
+                    SecretStore.set("enrich.zoominfo.key", nil)
+                    pass = ""
+                }
                 SecretStore.set("enrich.zoominfo.user", u)
-                SecretStore.set("enrich.zoominfo.pass", p)
-                pass = ""
                 status = "Connected to ZoomInfo."
             } catch {
                 status = error.localizedDescription
@@ -138,6 +169,8 @@ struct EnrichPersonSection: View {
             LabeledContent { Text(value).foregroundStyle(Theme.primary) } label: { Label(label, systemImage: icon) }
         }
         .contextMenu { Button("Copy") { UIPasteboard.general.string = value } }
+        .accessibilityLabel("\(label), \(value)")
+        .accessibilityHint(icon == "envelope" ? "Writes an email" : "Calls this number")
     }
 
     private func call(_ number: String) {

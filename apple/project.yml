@@ -125,7 +125,22 @@ targets:
         copy:
           destination: productsDirectory
           subpath: $(CONTENTS_FOLDER_PATH)/Watch
-    scheme: {}
+    scheme:
+      testTargets:
+        - BearingsUITests
+
+  BearingsUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: BearingsUITests
+    dependencies:
+      - target: Bearings
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.jaynichols.networkoob.uitests
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_TARGET_NAME: Bearings
 
   BearingsWatch:
     type: application

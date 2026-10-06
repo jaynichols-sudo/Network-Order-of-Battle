@@ -143,6 +143,7 @@ struct YearInReviewView: View {
                             .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
                             .shadow(color: .black.opacity(0.2), radius: 18, y: 8)
                             .padding(.horizontal, 36)
+                            .accessibilityLabel(review.map(Self.spoken) ?? "Your year in networking")
                         Label("Only counts and sectors. No names.", systemImage: "lock.fill")
                             .font(Theme.geist(.footnote, .medium)).foregroundStyle(Theme.text2)
                         ShareLink(item: Image(uiImage: image), subject: Text("My year in networking"),
@@ -172,8 +173,10 @@ struct YearInReviewView: View {
                                         }
                                         Spacer()
                                         Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(Theme.text3)
+                                            .accessibilityHidden(true)
                                     }
                                     .padding(.vertical, 9)
+                                    .accessibilityElement(children: .combine)
                                 }
                                 .buttonStyle(.plain)
                             }
@@ -197,5 +200,14 @@ struct YearInReviewView: View {
                 if let review { image = YearCardView.render(review, sample: model.info.isSample) }
             }
         }
+    }
+
+    /// What VoiceOver reads for the card image.
+    static func spoken(_ r: YearReview) -> String {
+        var parts = ["Your \(r.year) in networking", "\(r.joined) new connections", "\(r.moved) job changes caught"]
+        if r.hasRel { parts.append("\(r.talked) people you talked with") }
+        if r.reconnected > 0 { parts.append("\(r.reconnected) people you reconnected with") }
+        if !r.topSectors.isEmpty { parts.append("Grew most in " + r.topSectors.map(\.id).joined(separator: ", ")) }
+        return parts.joined(separator: ". ")
     }
 }
