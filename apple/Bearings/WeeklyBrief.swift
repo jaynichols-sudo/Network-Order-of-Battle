@@ -109,7 +109,7 @@ struct WeeklyCard: View {
                     Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(.tertiary)
                 }
                 .padding(14)
-                .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .card(18)
                 .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Theme.amber.opacity(done >= picks.count ? 0 : 0.45), lineWidth: 1.5))
             }
             .buttonStyle(.plain)
@@ -143,11 +143,13 @@ struct WeeklyBriefView: View {
                 }
                 .padding()
             }
-            .background(Color(.systemGroupedBackground))
+            .background(Theme.bg)
             .navigationTitle("This week")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
-            .navigationDestination(for: Route.self) { r in if case .person(let k) = r { ProfileView(k: k) } }
+            .navigationDestination(for: Route.self) { r in
+                if case .person(let k) = r { ProfileView(k: k) } else if case .about(let k) = r { PersonAboutView(k: k) }
+            }
             .sheet(item: $writing) { p in MessageSheet(k: p.k) }
             .task(id: model.info.edits) {
                 picks = await model.weeklyPicks()
@@ -204,7 +206,7 @@ struct WeeklyBriefView: View {
                 }
             }
             .padding(16)
-            .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .card(20)
             .opacity(isDone ? 0.7 : 1)
             .animation(.smooth, value: isDone)
         }

@@ -1,75 +1,30 @@
-// Home: greeting, the Monday brief, the compass, pinned lists, a nudge banner,
-// and the "worth your time" cards. Ports HomeView.swift, Compass.swift (CompassCard),
-// WeeklyBrief.swift (WeeklyCard) and SavedSearches.swift.
-import { M, isSample, isStarter, firstName, myInitials, persons, weeklyPicks, weeklyDone, runList, deleteSearch, reload, lastBackup, setQuery } from './model.js';
-import { esc, fmt, icon, stack, ring, animateRings, meAvatar, callout, toneVar, Day, menu, $, $$, plural } from './ui.js';
+// Today: the date and how many people need you, a callout when there is one, the
+// compass card (tap it for Explore), the week's five as a "Needs you" card, a row of
+// chips (catch up, your lists), and the "worth your time" cards. Ports HomeView.swift,
+// Compass.swift (CompassCard), WeeklyBrief.swift (WeeklyCard) and SavedSearches.swift.
+import { M, isSample, isStarter, myInitials, person, persons, weeklyPicks, weeklyDone, runList, deleteSearch, reload, lastBackup, setQuery } from './model.js';
+import { esc, fmt, icon, avatar, stack, meAvatar, callout, toneVar, ring, animateRings, Day, menu, $, plural } from './ui.js';
 import { createCompass } from './compass.js';
-import { perform, showPeople, showSector, openPerson, openIndustry, open, GOV_SEGS } from './actions.js';
+import { perform, showPeople, openPerson, open, openToday } from './actions.js';
+import { go } from './nav.js';
 import { exportRequested, exportRequestedAt, openURL, fx, prefs } from './platform.js';
 
 const LINKEDIN_EXPORT = 'https://www.linkedin.com/mypreferences/d/download-my-data';
 let compass = null, compassData = null, compassVersion = -1;
 
-function greeting(){
-  const h = new Date().getHours();
-  const base = h < 5 ? 'Good evening' : h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
-  return firstName() ? `${base}, ${firstName()}` : base;
+const WORDS = ['No', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten'];
+export function headline(open){
+  if (open <= 0) return 'You’re all caught up.';
+  if (open === 1) return 'One person needs you this week.';
+  return `${open <= 10 ? WORDS[open] : fmt(open)} people need you this week.`;
 }
-function subline(){
-  if (isSample()) return 'You’re looking around a sample network.';
-  if (isStarter()) return `${fmt(M.info.count)} people from your contacts`;
-  return `${fmt(M.info.count)} people${M.info.lastImport ? `, refreshed ${Day.nice(M.info.lastImport)}` : ''}`;
-}
+const dateLine = () => new Date().toLocaleDateString('en-US', {weekday: 'long', month: 'long', day: 'numeric'});
 
-export function accountMenu(t){
-  menu(t, [
-    {label: isSample() ? 'Import connections' : 'Refresh connections', icon: 'download', run: () => open('import')},
-    ...(isSample() ? [] : [{label: 'Back up notes', icon: 'drive', run: () => open('backup')}]),
-    'sep',
-    {label: 'Settings', icon: 'gear', run: () => open('settings')},
-  ]);
-}
-export const accountButton = () => `<button type="button" class="me-btn" data-a="account" aria-label="Account, refresh and settings">${meAvatar(myInitials(), 34)}</button>`;
+/** The avatar button on Today and elsewhere: it opens the You tab. */
+export const accountButton = () => `<button type="button" class="me-btn" data-a="account" aria-label="You: refresh, backup and settings">${meAvatar(myInitials(), 40)}</button>`;
+export function accountMenu(){ go('you'); }
 
 /* ---------- pieces ---------- */
-function weeklyCard(){
-  const picks = weeklyPicks();
-  if (!picks.length) return '';
-  const done = picks.filter(p => weeklyDone(p.k)).length, all = done >= picks.length;
-  const names = persons(picks.filter(p => !weeklyDone(p.k)).map(p => p.k)).slice(0, 3).map(p => p.f);
-  const C = 2 * Math.PI * 20, off = C * (1 - done / Math.max(1, picks.length));
-  return `<button type="button" class="card weekly ${all ? '' : 'hot'}" data-a="weekly">
-    <span class="wk-ring"><svg viewBox="0 0 48 48"><circle cx="24" cy="24" r="20" class="ring-bg"/><circle cx="24" cy="24" r="20" class="wk-arc" stroke-dasharray="${C.toFixed(1)}" stroke-dashoffset="${off.toFixed(1)}"/></svg><b class="mono">${done}/${picks.length}</b></span>
-    <span class="wk-text"><b>${all ? 'Your week is done' : `Your week: ${picks.length - done} to reach out to`}</b><span>${esc(all ? 'Nice work. A new five arrive Monday morning.' : names.join(', ') + '. A reason and a draft for each.')}</span></span>
-    ${icon('chevR', 'chev')}</button>`;
-}
-
-function signals(d){
-  const t = d.tally || {};
-  const chip = (v, label, color, kind, act) => `<button type="button" class="sig ${v ? '' : 'off'}" data-a="sig" data-v="${act}" ${v ? '' : 'disabled'} aria-label="${fmt(v)} ${label}"><span class="sig-dot ${kind}" style="--dc:${color}"><i></i></span><b class="mono">${fmt(v)}</b><span>${label}</span></button>`;
-  return `<div class="sigs">${chip(t.w, 'waiting on you', 'var(--amber)', 'glow', 'waiting')}${t.o ? chip(t.o, 'overdue', 'var(--violet)', 'ring', 'overdue') : ''}${chip(t.j, 'new jobs', 'var(--info)', 'ring', 'jcw')}${chip(t.n, 'new connections', 'var(--accent)', 'ring', 'new')}${d.rel ? chip(t.close, 'close', 'var(--good)', '', 'close') : ''}</div>`;
-}
-function sectorPanel(d, w){
-  const parts = [];
-  if (d.rel) parts.push(w.close === 0 ? 'No one close yet' : `${w.close} close`);
-  if (w.flagged > 0) parts.push(`${w.flagged} worth a look now`);
-  const line = parts.length ? parts.join(', ') + '.' : 'Closer to the middle means more senior.';
-  return `<div class="sector-panel"><div class="sp-head"><i class="dot lg" style="background:${esc(w.color)}"></i><h3>${esc(w.id)}</h3><span class="mono muted">${fmt(w.n)}</span></div>
-    <p class="muted">${esc(line)}</p>
-    <div class="btn-row"><button type="button" class="btn prominent" data-a="sectorPeople" data-v="${esc(w.id)}">${icon('people')}See everyone</button>${GOV_SEGS.includes(w.id) ? '' : `<button type="button" class="btn" data-a="sectorCos" data-v="${esc(w.id)}">${icon('building')}Companies</button>`}</div>
-    <p class="hint">Tap a dot to open someone.</p></div>`;
-}
-function sectorStrip(d){
-  const f = compass && compass.focus();
-  return `<div class="strip">${d.wedges.slice().sort((a, b) => b.n - a.n).map(w => `<button type="button" class="pill ${f === w.id ? 'on' : ''}" style="--pc:${esc(w.color)}" data-a="sector" data-v="${esc(w.id)}"><i class="dot" style="background:${esc(w.color)}"></i><b>${esc(w.short)}</b><span class="mono">${fmt(w.n)}</span></button>`).join('')}</div>`;
-}
-function listsStrip(){
-  if (!M.lists.length) return '';
-  return `<section><h2 class="h2">Your lists</h2><div class="strip lists">${M.lists.map(s => {
-    const keys = runList(s), ps = persons(keys.slice(0, 4));
-    return `<div class="card list-card" data-a="list" data-v="${esc(s.id)}" role="button" tabindex="0"><b class="lc-name">${esc(s.name)}</b><span class="lc-n mono">${fmt(keys.length)}</span>${ps.length ? stack(ps, 22) : '<span class="muted small">No one yet</span>'}<button type="button" class="lc-more" data-a="listMenu" data-v="${esc(s.id)}" aria-label="More">${icon('more')}</button></div>`;
-  }).join('')}</div></section>`;
-}
 function banner(){
   if (M.error) return callout({ic: 'warn', tint: 'var(--bad)', title: 'Couldn’t load', text: M.error});
   if (isStarter()){
@@ -82,81 +37,104 @@ function banner(){
   if (days != null && days >= 7) return callout({ic: 'refresh', tint: 'var(--accent)', title: 'Time for a refresh', text: `It’s been ${days} days. A new LinkedIn export picks up job changes and new connections.`, button: 'Refresh now', act: 'import'});
   return '';
 }
-function homeCard(c, i){
+
+function stats(d){
+  const t = d.tally || {};
+  const stat = (v, label, act, cls = '') => `<button type="button" class="tstat ${cls}" data-a="sig" data-v="${act}" ${v ? '' : 'disabled'} aria-label="${fmt(v)} ${label}"><b class="mono">${fmt(v)}</b><span>${label}</span></button>`;
+  return `${stat(t.w, 'waiting on you', 'waiting', 'big')}<div class="tstat-row">${stat(t.j, 'new jobs', 'jcw')}${d.rel ? stat(t.close, 'close', 'close') : stat(t.n, 'new', 'new')}</div>`;
+}
+
+const ACTION = {reply: 'Reply', congrats: 'Congrats', due: 'Follow up', new: 'Thank', circle: 'Say hi', cold: 'Say hi', anniv: 'Say hi', checkin: 'Say hi'};
+function needsYou(){
+  const picks = weeklyPicks();
+  if (!picks.length) return '';
+  const done = picks.filter(p => weeklyDone(p.k)).length;
+  const rows = picks.map(w => {
+    const p = person(w.k); if (!p) return '';
+    const d = weeklyDone(w.k), label = ACTION[w.kind] || 'Write';
+    return `<div class="nrow ${d ? 'done' : ''}"><button type="button" class="nrow-main" data-a="open" data-v="${esc(p.k)}">${avatar(p, 40, {star: false})}<span class="nrow-text"><b>${esc(p.full)}</b><span>${esc(w.why)}</span></span></button>
+      ${d ? `<span class="pill-btn good">${icon('check')}Done</span>` : `<button type="button" class="pill-btn ${w.kind === 'reply' ? 'primary' : 'soft'}" data-a="write" data-v="${esc(p.k)}">${esc(label)}</button>`}</div>`;
+  }).join('');
+  return `<section class="card needs"><button type="button" class="card-head" data-a="weekly"><h2>Needs you</h2><span class="card-meta">${done} of ${picks.length} done${icon('chevR', 'chev')}</span></button>${rows}</section>`;
+}
+
+function chips(){
+  const out = [];
+  const n = M.info.deckCount || 0;
+  out.push(`<button type="button" class="tchip" data-a="catchup">${icon('stack')}${n ? `<b>${fmt(n)}</b> to catch up` : 'Catch up'}</button>`);
+  for (const s of M.lists){
+    const k = runList(s).length;
+    out.push(`<button type="button" class="tchip" data-a="list" data-v="${esc(s.id)}">${icon('pin')}${esc(s.name)} <span class="mono">· ${fmt(k)}</span></button>`);
+  }
+  return `<div class="tchips">${out.join('')}</div>`;
+}
+
+const CARD_ICONS = {'circle.circle': 'circleKey', 'rectangle.stack': 'stack', bell: 'bell', 'arrowshape.turn.up.left': 'reply', snowflake: 'snow', briefcase: 'briefcase', 'person.badge.plus': 'personPlus', flag: 'flag', scope: 'scope', gift: 'gift', star: 'star', 'square.grid.2x2': 'grid', tag: 'tag', externaldrive: 'drive', 'chart.pie': 'pie'};
+function worthRow(c, i){
   const ps = persons((c.people || []).slice(0, 6));
   const bars = c.bars && c.bars.length ? (() => { const total = Math.max(1, c.bars.reduce((a, b) => a + b[1], 0)); return `<span class="bars">${c.bars.map(([, n, col]) => `<i style="flex:${n / total};background:${esc(col)}"></i>`).join('')}</span>`; })() : '';
-  return `<button type="button" class="card hcard ${c.hero ? 'hero' : ''}" style="--tone:${toneVar(c.tone)}" data-a="card" data-v="${i}">
+  return `<button type="button" class="row wrow" style="--tone:${toneVar(c.tone)}" data-a="card" data-v="${i}">
     <span class="hc-ic">${icon(CARD_ICONS[c.icon] || 'sparkles')}</span>
-    <span class="hc-main"><b>${esc(c.title)}</b><span class="muted">${esc(c.body)}</span>${ps.length ? stack(ps, 26) : ''}${bars}</span>
-    ${c.ring != null ? ring(c.ring, 46) : icon('chevR', 'chev')}</button>`;
+    <span class="wrow-main"><b>${esc(c.title)}</b><span>${esc(c.body)}</span>${ps.length ? stack(ps, 26) : ''}${bars}</span>
+    ${c.ring != null ? ring(c.ring, 38) : icon('chevR', 'chev')}</button>`;
 }
-const CARD_ICONS = {'circle.circle': 'circleKey', 'rectangle.stack': 'stack', bell: 'bell', 'arrowshape.turn.up.left': 'reply', snowflake: 'snow', briefcase: 'briefcase', 'person.badge.plus': 'personPlus', flag: 'flag', scope: 'scope', gift: 'gift', star: 'star', 'square.grid.2x2': 'grid', tag: 'tag', externaldrive: 'drive', 'chart.pie': 'pie'};
+function worth(){
+  const cards = M.home.cards || [];
+  if (cards.length) return `<section class="card list worth"><div class="card-head static"><h2>Worth your time</h2></div>${cards.map(worthRow).join('')}</section>`;
+  return M.loaded && !isSample() ? callout({ic: 'checkCircle', tint: 'var(--good)', title: 'Nothing else waiting', text: 'No follow-ups are due. A good day to reach out to someone you haven’t talked to in a while.', button: 'Find someone', act: 'findCold'}) : '';
+}
 
 /* ---------- the view ---------- */
 export const HomeView = {
   mount(el){
     el.innerHTML = `<div class="scr home">
-      <header class="home-head"><div><h1 class="greet"></h1><p class="muted sub"></p></div>${accountButton()}</header>
-      <div class="weekly-slot"></div>
-      <section class="card compass-card"><div class="compass-wrap">
-        <button type="button" class="glass-chip whole" data-a="whole" hidden>${icon('collapse')}Whole network</button>
-        <button type="button" class="glass-circle share-btn" data-a="share" aria-label="Share a picture of your network">${icon('share')}</button>
-      </div><div class="compass-under"></div><div class="compass-strip"></div></section>
-      <div class="lists-slot"></div><div class="banner-slot"></div><div class="cards-slot"></div></div>`;
-    compass = createCompass({initials: myInitials(), onOpen: k => { fx.tap(); openPerson(k); }, onTapSector: () => fx.tap(), onFocus: () => this.compassUI(el)});
-    $('.compass-wrap', el).prepend(compass.el);
+      <header class="today-head"><div><p class="date-line"></p><h1 class="headline"></h1></div>${accountButton()}</header>
+      <div class="banner-slot"></div>
+      <section class="card compass-card mini"><button type="button" class="mini-compass" data-a="explore" aria-label="Open Explore"></button><div class="tstats"></div></section>
+      <div class="needs-slot"></div><div class="chips-slot"></div><div class="cards-slot"></div></div>`;
+    compass = createCompass({initials: myInitials(), interactive: false, labels: false});
+    $('.mini-compass', el).appendChild(compass.el);
     this.ptr(el);
     this.update(el);
   },
   update(el, what){
-    $('.greet', el).textContent = greeting();
-    $('.sub', el).textContent = subline();
-    $('.home-head .me-btn', el).outerHTML = accountButton();
-    $('.weekly-slot', el).innerHTML = weeklyCard();
+    const picks = weeklyPicks(), open = picks.filter(p => !weeklyDone(p.k)).length;
+    $('.date-line', el).textContent = dateLine();
+    $('.headline', el).textContent = headline(open);
+    $('.today-head .me-btn', el).outerHTML = accountButton();
+    $('.banner-slot', el).innerHTML = banner();
     if (compassVersion !== M.version){ compassVersion = M.version; compassData = M.api.compass({}); compass.setData(compassData); compass.setInitials(myInitials()); }
     if (what === 'theme') compass.retheme();
-    this.compassUI(el);
-    $('.lists-slot', el).innerHTML = listsStrip();
-    $('.banner-slot', el).innerHTML = banner();
-    const cards = M.home.cards || [];
-    $('.cards-slot', el).innerHTML = cards.length
-      ? `<h2 class="h2">Worth your time</h2><div class="cards">${cards.map(homeCard).join('')}</div>`
-      : (M.loaded && !isSample() ? callout({ic: 'checkCircle', tint: 'var(--good)', title: 'You’re all caught up', text: 'Nobody’s waiting on you and no follow-ups are due. A good day to reach out to someone you haven’t talked to in a while.', button: 'Find someone', act: 'findCold'}) : '');
+    $('.tstats', el).innerHTML = stats(compassData);
+    $('.needs-slot', el).innerHTML = needsYou();
+    $('.chips-slot', el).innerHTML = chips();
+    $('.cards-slot', el).innerHTML = worth();
     animateRings(el);
-  },
-  compassUI(el){
-    if (!compassData) return;
-    const f = compass.focus(), w = f && compassData.wedges.find(x => x.id === f);
-    $('.whole', el).hidden = !w; $('.share-btn', el).hidden = !!w;
-    $('.compass-under', el).innerHTML = w ? sectorPanel(compassData, w) : signals(compassData);
-    const strip = $('.compass-strip', el), sl = strip.firstElementChild ? strip.firstElementChild.scrollLeft : 0;
-    strip.innerHTML = sectorStrip(compassData);
-    strip.firstElementChild.scrollLeft = sl;
   },
   onShow(){ if (compass) compass.retheme(); },
   ptr(el){
-    // pull down at the top of Home to reload from disk
+    // pull down at the top of Today to reload from disk
     let y0 = null, dy = 0;
     const ind = document.createElement('div'); ind.className = 'ptr'; ind.innerHTML = icon('refresh'); el.prepend(ind);
-    el.addEventListener('touchstart', e => { y0 = el.scrollTop <= 0 && !e.target.closest('.compass, .strip') ? e.touches[0].clientY : null; dy = 0; }, {passive: true});
+    el.addEventListener('touchstart', e => { y0 = el.scrollTop <= 0 && !e.target.closest('.tchips') ? e.touches[0].clientY : null; dy = 0; }, {passive: true});
     el.addEventListener('touchmove', e => { if (y0 == null) return; dy = e.touches[0].clientY - y0; if (dy <= 0) return; const p = Math.min(1, dy / 90); ind.style.opacity = p; ind.style.transform = `translateY(${p * 46}px) rotate(${p * 270}deg)`; }, {passive: true});
     el.addEventListener('touchend', async () => { if (y0 == null) return; y0 = null; if (dy >= 90){ fx.tap(); ind.classList.add('spin'); await reload(); } ind.classList.remove('spin'); ind.style.opacity = 0; ind.style.transform = ''; });
   },
   handlers: {
-    account: (_, t) => accountMenu(t),
+    account: () => go('you'),
+    explore: () => { fx.tap(); openToday('explore'); },
+    catchup: () => { fx.tap(); openToday('catchup'); },
     weekly: () => open('weekly'),
-    share: () => { fx.tap(); open('share'); },
-    whole: () => { fx.tap(); compass.setFocus(null); },
-    sector: v => { fx.tap(); compass.setFocus(compass.focus() === v ? null : v); },
-    sectorPeople: v => showSector(v),
-    sectorCos: v => openIndustry(v),
+    open: k => openPerson(k),
+    write: k => open('message', k),
     sig: v => { fx.tap(); if (v === 'close') showPeople({rel: ['Close']}); else perform({kind: 'filter', sig: [v]}); },
     card: i => perform((M.home.cards[+i] || {}).act),
     import: () => open('import'),
     askLinkedIn: () => { openURL(LINKEDIN_EXPORT); exportRequested(); HomeView.update(document.querySelector('.screen[data-tab="home"]')); },
     findCold: () => showPeople({sig: ['cold']}),
-    list(id){ const s = M.lists.find(x => x.id === id); if (!s) return; fx.tap(); showPeople(s.filters, s.text); setQuery({sort: s.sort}); },
-    listMenu(id, t, e){ e.stopPropagation(); const s = M.lists.find(x => x.id === id); if (s) menu(t, [{label: `Unpin “${s.name}”`, icon: 'pin', danger: true, run: () => deleteSearch(id)}]); },
+    list(id){ runSavedList(id); },
   },
 };
-export { prefs, lastBackup };
+export function runSavedList(id){ const s = M.lists.find(x => x.id === id); if (!s) return; fx.tap(); showPeople(s.filters, s.text); setQuery({sort: s.sort}); }
+export function listMenu(id, t){ const s = M.lists.find(x => x.id === id); if (s) menu(t, [{label: `Unpin “${s.name}”`, icon: 'pin', danger: true, run: () => deleteSearch(id)}]); }
+export { prefs, lastBackup, plural };

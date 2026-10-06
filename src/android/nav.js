@@ -1,12 +1,12 @@
-// Navigation: five tabs, each with its own stack of pushed pages, plus bottom
-// sheets on top. Views are plain objects: {title, mount(el), update(el, what), handlers}.
+// Navigation: four tabs (Today, People, Companies, You), each with its own stack of
+// pushed pages (Explore and Catch Up are pushed from Today), plus bottom sheets on top. Views are plain objects: {title, mount(el), update(el, what), handlers}.
 import { $, $$, esc, icon, closeMenu, REDUCED } from './ui.js';
 import { fx, ls } from './platform.js';
 
-export const TABS = [['home', 'Home', 'home'], ['people', 'People', 'search'], ['companies', 'Companies', 'building'], ['explore', 'Explore', 'scope'], ['catchup', 'Catch Up', 'stack']];
+export const TABS = [['home', 'Today', 'sun'], ['people', 'People', 'people'], ['companies', 'Companies', 'building'], ['you', 'You', 'user']];
 const roots = {};          // tab -> view
 const routes = {};         // route kind -> (arg) => view
-export const N = {tab: 'home', stacks: {home: [], people: [], companies: [], explore: [], catchup: []}, sheets: []};
+export const N = {tab: 'home', stacks: {home: [], people: [], companies: [], you: []}, sheets: []};
 
 export const registerTab = (name, view) => { roots[name] = view; };
 export const registerRoute = (kind, factory) => { routes[kind] = factory; };
@@ -55,6 +55,7 @@ const screenEl = t => $(`.screen[data-tab="${t}"]`, shell);
 const dirty = new Set();
 export function go(tab, {fromBar = false} = {}){
   closeMenu();
+  if (!roots[tab]) tab = 'home';
   if (fromBar && tab === N.tab){
     // second tap: back to the top of the tab
     if (N.stacks[tab].length){ while (N.stacks[tab].length) popPage(true); }
@@ -83,8 +84,9 @@ export function push(kind, arg){
   $('.bar-back', el).addEventListener('click', () => popPage());
   $('#pages', shell).appendChild(el);
   const prevTop = N.stacks[N.tab][N.stacks[N.tab].length - 1];
-  N.stacks[N.tab].push({v, el});
+  N.stacks[N.tab].push({v, el, kind});
   const body = $('.page-body', el);
+  if (v.cls) body.classList.add(...v.cls.split(' '));
   wire(el, v.handlers || {});
   v.mount(body, el);
   setPageTitle(el, v.title);

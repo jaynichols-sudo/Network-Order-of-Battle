@@ -65,7 +65,7 @@ struct MeetingRow: View {
             Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(.tertiary)
         }
         .padding(12)
-        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .card(18)
         .accessibilityElement(children: .combine)
     }
 }
@@ -91,7 +91,7 @@ struct TripRow: View {
             Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(.tertiary)
         }
         .padding(12)
-        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .card(18)
         .accessibilityElement(children: .combine)
     }
 }

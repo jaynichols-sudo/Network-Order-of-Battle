@@ -93,6 +93,7 @@ jobs:
             shoot $dev $p-04-companies -startTab companies
             shoot $dev $p-05-unit -startTab companies -demoOpen unit
             shoot $dev $p-06-industries -startTab companies -startCompanies industries
+            shoot $dev $p-07a-compass -startTab explore -exploreMode compass
             shoot $dev $p-07-explore -startTab explore -exploreMode scope
             shoot $dev $p-07b-clusters -startTab explore -exploreMode clusters
             shoot $dev $p-07c-map -startTab explore -exploreMode map
@@ -108,6 +109,8 @@ jobs:
             shoot $dev $p-19-event -demoOpen event
             shoot $dev $p-20-intro -startTab companies -demoOpen intro
             shoot $dev $p-25-weekly -demoOpen weekly
+            shoot $dev $p-26-you -startTab you
+            shoot $dev $p-27-about -startTab people -demoOpen about
             xcrun simctl ui $dev content_size accessibility-large
             shoot $dev $p-21-home-xl
             shoot $dev $p-22-profile-xl -startTab people -demoOpen person
@@ -117,6 +120,8 @@ jobs:
             xcrun simctl ui $dev appearance dark
             shoot $dev $p-12-home-dark
             shoot $dev $p-13-people-dark -startTab people
+            shoot $dev $p-13b-profile-dark -startTab people -demoOpen person
+            shoot $dev $p-13c-you-dark -startTab you
             xcrun simctl terminate $dev com.jaynichols.networkoob >/dev/null 2>&1 || true
             xcrun simctl launch $dev com.jaynichols.networkoob -onboarded NO >/dev/null; sleep 6
             xcrun simctl io $dev screenshot "shots/$p-00-welcome-dark.png" >/dev/null 2>&1

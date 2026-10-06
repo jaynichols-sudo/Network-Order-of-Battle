@@ -106,7 +106,7 @@ struct WhoIsNearbyIntent: AppIntent {
         let m = AppModel.shared
         await m.start()
         UserDefaults.standard.set("map", forKey: "exploreMode")
-        m.tab = .explore
+        m.go("explore")
         return .result()
     }
 }

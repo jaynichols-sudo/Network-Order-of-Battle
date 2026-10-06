@@ -26,6 +26,22 @@ enum Theme {
     static let violet = Color.dynamic("#7556E8", "#A992FF")
     static let plum = Color(hex: "#2A2448")
 
+    // "Calm cards" (docs/design-c.md): light gray screens with white cards, the
+    // brand's deep plum for main actions; dark keeps the night-sky purple and amber.
+    static let bg = Color.dynamic("#F3F3F6", "#0D0A17")
+    static let card = Color.dynamic("#FFFFFF", "#17132A")
+    static let card2 = Color.dynamic("#F3F3F6", "#221C38")
+    static let line = Color.dynamic("#F0EFF4", "#26203A")
+    static let text2 = Color.dynamic("#7A7590", "#9C95B8")
+    static let text3 = Color.dynamic("#9A96AC", "#6F6890")
+    static let primary = Color.dynamic("#2A2448", "#FFB020")
+    static let onPrimary = Color.dynamic("#FFFFFF", "#1B1830")
+    static let soft = Color.dynamic("#EEEDF4", "#2A2440")
+    static let needs = Color.dynamic("#C77700", "#FFB020")
+    static let needsSoft = Color.dynamic("#FFF1D6", "#3A2C12")
+    static let goodSoft = Color.dynamic("#E4F3EE", "#173A33")
+    static let infoSoft = Color.dynamic("#E9EFF9", "#1E2638")
+
     static func tone(_ t: String) -> Color {
         switch t {
         case "coral": return bad
@@ -125,8 +141,54 @@ extension View {
         if #available(iOS 26.0, *) { self.buttonStyle(.glassProminent) } else { self.buttonStyle(.borderedProminent) }
     }
 
+    /// A white card on the gray screen: rounded, with a soft shadow in light mode and a hairline in dark.
+    func card(_ radius: CGFloat = 20, padding: CGFloat? = nil) -> some View {
+        modifier(CardStyle(radius: radius, padding: padding))
+    }
+
     func geist(_ style: Font.TextStyle, _ weight: Font.Weight = .regular) -> some View {
         font(Theme.geist(style, weight))
+    }
+}
+
+struct CardStyle: ViewModifier {
+    let radius: CGFloat
+    let padding: CGFloat?
+    @Environment(\.colorScheme) private var scheme
+
+    func body(content: Content) -> some View {
+        let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
+        content
+            .padding(padding ?? 0)
+            .background(Theme.card, in: shape)
+            .overlay(shape.strokeBorder(Color.white.opacity(scheme == .dark ? 0.06 : 0), lineWidth: 1))
+            .shadow(color: Color(red: 20/255, green: 16/255, blue: 40/255).opacity(scheme == .dark ? 0 : 0.05), radius: 1, y: 1)
+            .shadow(color: Color(red: 20/255, green: 16/255, blue: 40/255).opacity(scheme == .dark ? 0 : 0.05), radius: 10, y: 6)
+    }
+}
+
+/// A rounded pill button: primary (filled), soft (tinted), or done (green).
+struct PillButtonStyle: ButtonStyle {
+    enum Kind { case primary, soft, done, plain }
+    var kind: Kind = .soft
+
+    func makeBody(configuration: Configuration) -> some View {
+        let (bg, fg): (Color, Color) = {
+            switch kind {
+            case .primary: return (Theme.primary, Theme.onPrimary)
+            case .soft: return (Theme.soft, Theme.primary)
+            case .done: return (Theme.goodSoft, Theme.good)
+            case .plain: return (Theme.card, .primary)
+            }
+        }()
+        configuration.label
+            .font(Theme.geist(.footnote, .semibold))
+            .lineLimit(1)
+            .padding(.horizontal, 14)
+            .frame(minHeight: 32)
+            .foregroundStyle(fg)
+            .background(bg, in: Capsule())
+            .opacity(configuration.isPressed ? 0.7 : 1)
     }
 }
 
@@ -201,7 +263,7 @@ struct AvatarStack: View {
         HStack(spacing: -size * 0.3) {
             ForEach(people.prefix(5)) { p in
                 Avatar(person: p, size: size)
-                    .background(Circle().fill(Color(.secondarySystemGroupedBackground)).padding(-2))
+                    .background(Circle().fill(Theme.card).padding(-2))
             }
             if people.count > 5 {
                 Text("+\(people.count - 5)")

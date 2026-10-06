@@ -249,7 +249,7 @@ export function setLens(on){
 const writeLists = () => ls.set('bearings.lists', JSON.stringify(M.lists));
 export function saveSearch(name){
   M.lists.push({id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), name, text: M.q.text, filters: JSON.parse(JSON.stringify(M.q.filters)), sort: M.q.sort});
-  writeLists(); fx.success(); show(`Pinned “${name}” to Home`); emit('lists');
+  writeLists(); fx.success(); show(`Pinned “${name}” to Today`); emit('lists');
 }
 export function deleteSearch(id){ M.lists = M.lists.filter(s => s.id !== id); writeLists(); emit('lists'); }
 export function runList(s){ try { return api.search({text: s.text, filters: Object.assign(blankFilters(), s.filters), sort: s.sort}).keys; } catch { return []; } }

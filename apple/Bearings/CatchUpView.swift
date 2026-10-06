@@ -46,9 +46,8 @@ struct CatchUpView: View {
             }
         }
         .padding(.vertical)
-        .background(Color(.systemGroupedBackground))
+        .background(Theme.bg)
         .navigationTitle("Catch Up")
-        .toolbar { MainToolbar() }
         .task(id: "\(mode)-\(model.info.lastImport)-\(model.info.mode)") { await build() }
     }
 
@@ -235,9 +234,9 @@ struct CatchUpFinished: View {
                     .controlSize(.large)
                 }
                 Button {
-                    model.tab = .home
+                    model.paths[.home] = []
                     onClose()
-                } label: { Text("Back to Home").frame(maxWidth: .infinity) }
+                } label: { Text("Back to Today").frame(maxWidth: .infinity) }
                 .glassButton()
                 .controlSize(.large)
             }
@@ -302,7 +301,7 @@ struct DeckCard: View {
         }
         .padding(24)
         .frame(maxWidth: 460, maxHeight: 600, alignment: .topLeading)
-        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 32, style: .continuous))
+        .card(32)
         .overlay(RoundedRectangle(cornerRadius: 32, style: .continuous).strokeBorder(Color.primary.opacity(0.06), lineWidth: 1))
         .shadow(color: .black.opacity(0.12), radius: 24, y: 10)
     }

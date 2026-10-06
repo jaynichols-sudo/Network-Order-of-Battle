@@ -109,17 +109,16 @@ struct BriefCard: View {
             HStack(spacing: 6) {
                 Image(systemName: Brief.aiAvailable ? "apple.intelligence" : "text.alignleft")
                     .foregroundStyle(Brief.aiAvailable ? AnyShapeStyle(LinearGradient(colors: [Theme.amber, Theme.violet, Theme.info], startPoint: .leading, endPoint: .trailing)) : AnyShapeStyle(Theme.accent))
-                Text("BRIEF").font(Theme.mono(.caption, .semibold)).foregroundStyle(.secondary)
+                Text("Brief").font(Theme.geist(.footnote, .semibold)).foregroundStyle(Theme.text2)
                 Spacer()
                 if loading { ProgressView().controlSize(.small) }
             }
             Text(aiText ?? Brief.template(person, model: model))
-                .font(Theme.geist(.body))
+                .font(Theme.geist(.subheadline))
                 .fixedSize(horizontal: false, vertical: true)
                 .contentTransition(.opacity)
                 .animation(.smooth, value: aiText)
         }
-        .padding(.vertical, 4)
         .task(id: person.k + person.touch + (person.rx?.t ?? "") + (person.ed?.updated ?? "")) {
             guard Brief.aiAvailable else { return }
             loading = true

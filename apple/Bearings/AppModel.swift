@@ -6,24 +6,22 @@ import CoreLocation
 import WidgetKit
 
 enum AppTab: String, Hashable, CaseIterable {
-    case home, people, companies, explore, catchup
+    case home, people, companies, you
 
     var title: String {
         switch self {
-        case .home: return "Home"
+        case .home: return "Today"
         case .people: return "People"
         case .companies: return "Companies"
-        case .explore: return "Explore"
-        case .catchup: return "Catch Up"
+        case .you: return "You"
         }
     }
     var icon: String {
         switch self {
-        case .home: return "house"
+        case .home: return "safari"
         case .people: return "person.2"
         case .companies: return "building.2"
-        case .explore: return "scope"
-        case .catchup: return "rectangle.stack"
+        case .you: return "person.crop.circle"
         }
     }
 }
@@ -36,6 +34,10 @@ enum Route: Hashable {
     case trip(String)
     case trips
     case event(String)
+    case explore
+    case catchup
+    case events
+    case about(String)
 }
 
 enum CompaniesMode: String, CaseIterable, Identifiable {
@@ -222,12 +224,15 @@ final class AppModel {
 
     /// Launch arguments used by CI to capture screenshots, e.g. -startTab people -demoOpen person.
     private func applyDemoArguments() {
-        if let t = prefs.string(forKey: "startTab"), let tab = AppTab(rawValue: t) { self.tab = tab }
+        if let t = prefs.string(forKey: "startTab") { go(t) }
         if let m = prefs.string(forKey: "startCompanies"), let mode = CompaniesMode(rawValue: m) { companiesMode = mode }
         switch prefs.string(forKey: "demoOpen") ?? "" {
         case "person":
             let k = (people.filter { !$0.waiting && $0.rx != nil }.max { $0.score < $1.score } ?? people.first)?.k
             if let k { paths[tab, default: []].append(.person(k)) }
+        case "about":
+            let k = (people.filter { !$0.waiting && $0.rx != nil }.max { $0.score < $1.score } ?? people.first)?.k
+            if let k { paths[tab, default: []].append(contentsOf: [.person(k), .about(k)]) }
         case "unit":
             if let t = targets.first { paths[tab, default: []].append(.unit(t.name)) }
         case "settings": showSettings = true
@@ -590,7 +595,7 @@ final class AppModel {
         savedSearches.append(item)
         await writeLists()
         Haptic.success()
-        show("Pinned “\(name)” to Home")
+        show("Pinned “\(name)” to Today")
     }
 
     func deleteSearch(_ s: SavedSearch) async {
@@ -771,7 +776,7 @@ final class AppModel {
         Haptic.tap()
         switch a.kind {
         case "tab":
-            if let t = a.tab, let tab = AppTab(rawValue: t) { self.tab = tab }
+            if let t = a.tab { go(t) }
         case "filter":
             var f = Filters()
             f.sig = Set(a.sig ?? [])
@@ -798,6 +803,15 @@ final class AppModel {
 
     func open(_ route: Route) { paths[tab, default: []].append(route) }
 
+    /// Goes to a tab by name. Explore and Catch Up used to be tabs; they now open from Today.
+    func go(_ name: String) {
+        switch name {
+        case "explore": tab = .home; paths[.home] = [.explore]
+        case "catchup": tab = .home; paths[.home] = [.catchup]
+        default: tab = AppTab(rawValue: name) ?? .home
+        }
+    }
+
     /// bearings://person/<key>, bearings://tab/<name>, from widgets.
     func openDeepLink(_ url: URL) {
         guard loaded else { pendingDeepLink = url; return }
@@ -809,7 +823,7 @@ final class AppModel {
                 paths[.people] = [.person(k)]
             }
         case "tab":
-            if let t = parts.first, let at = AppTab(rawValue: t) { tab = at }
+            if let t = parts.first { go(t) }
         case "meeting":
             if let id = parts.first?.removingPercentEncoding { tab = .home; paths[.home] = [.meeting(id)] }
         case "trip":
@@ -818,7 +832,7 @@ final class AppModel {
             if let sig = parts.first { perform(CardAction(kind: "filter", tab: nil, name: nil, sig: [sig], seg: nil, status: nil)) }
         case "map":
             UserDefaults.standard.set("map", forKey: "exploreMode")
-            tab = .explore
+            go("explore")
         case "event":
             if let id = parts.first?.removingPercentEncoding { tab = .home; paths[.home] = [.event(id)] }
         default:
@@ -879,7 +893,7 @@ final class AppModel {
             tab = .home
             showPayoff = true
         } else {
-            show("\(plan.stats.added.formatted()) new, \(plan.stats.changed.formatted()) changed jobs. Catch up from Home.")
+            show("\(plan.stats.added.formatted()) new, \(plan.stats.changed.formatted()) changed jobs. Catch up from Today.")
         }
     }
 

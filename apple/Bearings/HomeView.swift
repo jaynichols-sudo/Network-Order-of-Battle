@@ -3,41 +3,54 @@ import UIKit
 
 struct HomeView: View {
     @Environment(AppModel.self) private var model
+    @State private var picks: [WeeklyPick] = []
+    @State private var picksLoaded = false
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
+            VStack(alignment: .leading, spacing: 12) {
                 header
-                WeeklyCard()
-                CompassCard()
-                SavedSearchStrip()
                 banner
+                TodayCompassCard()
+                NeedsYouCard(picks: picks)
+                TodayChips()
                 ComingUp()
                 BirthdaysCard()
-                EventsStrip()
                 if !model.home.cards.isEmpty {
-                    Text("Worth your time").font(Theme.geist(.title3, .bold)).padding(.top, 6)
-                } else if model.loaded && !model.info.isSample {
-                    Callout(icon: "checkmark.seal.fill", tint: Theme.good, title: "You’re all caught up",
-                            text: "Nobody’s waiting on you and no follow-ups are due. A good day to reach out to someone you haven’t talked to in a while.",
-                            button: "Find someone") {
-                        var f = Filters(); f.sig = ["cold"]
-                        model.searchText = ""; model.filters = f; model.paths[.people] = []; model.tab = .people
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text("Worth your time").font(Theme.geist(.headline, .bold)).padding(.top, 14).padding(.bottom, 4)
+                        ForEach(Array(model.home.cards.enumerated()), id: \.element.id) { i, card in
+                            if i > 0 { Theme.line.frame(height: 1) }
+                            HomeCardView(card: card)
+                        }
                     }
-                }
-                LazyVStack(spacing: 12) {
-                    ForEach(model.home.cards) { card in
-                        HomeCardView(card: card)
-                    }
+                    .padding(.horizontal, 16)
+                    .card()
                 }
             }
-            .padding(.horizontal)
+            .padding(.horizontal, 16)
             .padding(.bottom, 24)
         }
-        .background(Color(.systemGroupedBackground))
-        .navigationTitle("Home")
+        .background(Theme.bg)
+        .navigationTitle("Today")
         .toolbar(.hidden, for: .navigationBar)
         .refreshable { await model.reload() }
+        .task(id: "\(model.info.rev)-\(model.info.edits)-\(model.showWeekly)") {
+            picks = await model.weeklyPicks()
+            picksLoaded = true
+        }
+    }
+
+    private var openCount: Int { picks.filter { !model.weeklyDone($0.k) }.count }
+
+    /// "Five people need you this week." Spelled out, since it reads as a sentence.
+    private var headline: String {
+        let n = openCount
+        if !picksLoaded { return greeting }
+        if n == 0 { return picks.isEmpty ? "You’re all caught up." : "Your week is done." }
+        if n == 1 { return "One person needs you this week." }
+        let words = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten"]
+        return "\(n <= 10 ? words[n] : String(n)) people need you this week."
     }
 
     private var greeting: String {
@@ -46,24 +59,30 @@ struct HomeView: View {
         return model.firstName.isEmpty ? base : "\(base), \(model.firstName)"
     }
 
+    private var subline: String {
+        let date = Date().formatted(.dateTime.weekday(.wide).month(.wide).day())
+        if model.info.isSample && !UserDefaults.standard.bool(forKey: "storeMode") { return "\(date). A sample network" }
+        return date
+    }
+
     private var header: some View {
-        HStack(alignment: .top) {
+        HStack(alignment: .top, spacing: 12) {
             VStack(alignment: .leading, spacing: 4) {
-                Text(greeting)
-                    .font(Theme.geist(.largeTitle, .bold))
-                    .minimumScaleFactor(0.7)
-                    .lineLimit(1)
-                Text(model.info.isSample && !UserDefaults.standard.bool(forKey: "storeMode")
-                     ? "You’re looking around a sample network."
-                     : model.info.isStarter ? "\(model.info.count.formatted()) people from your contacts"
-                     : "\(model.info.count.formatted()) people\(model.info.lastImport.isEmpty ? "" : ", refreshed \(Day.nice(model.info.lastImport))")")
-                    .foregroundStyle(.secondary)
-                    .font(Theme.geist(.subheadline))
+                Text(subline)
+                    .font(Theme.geist(.footnote, .medium))
+                    .foregroundStyle(Theme.text2)
+                Text(headline)
+                    .font(Theme.geist(.title, .bold))
+                    .fixedSize(horizontal: false, vertical: true)
+                    .contentTransition(.opacity)
+                    .animation(.smooth, value: headline)
             }
-            Spacer()
+            Spacer(minLength: 0)
             AccountButton()
         }
+        .padding(.horizontal, 6)
         .padding(.top, 8)
+        .padding(.bottom, 4)
     }
 
     @ViewBuilder private var banner: some View {
@@ -115,14 +134,14 @@ struct Callout: View {
                 Text(text).font(Theme.geist(.subheadline)).foregroundStyle(.secondary)
                 if let button, let action {
                     Button(button, action: action)
-                        .buttonStyle(.borderedProminent)
+                        .buttonStyle(PillButtonStyle(kind: .primary))
                         .padding(.top, 2)
                 }
             }
             Spacer(minLength: 0)
         }
-        .padding(14)
-        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .padding(16)
+        .card()
     }
 }
 
@@ -149,7 +168,7 @@ struct StatsStrip: View {
                         }
                         .frame(minWidth: 118, alignment: .leading)
                         .padding(12)
-                        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .card(18)
                     }
                     .buttonStyle(.plain)
                 }
@@ -172,15 +191,15 @@ struct HomeCardView: View {
                     .font(.system(size: 17, weight: .semibold))
                     .foregroundStyle(Theme.tone(card.tone))
                     .frame(width: 38, height: 38)
-                    .background(Theme.tone(card.tone).opacity(0.14), in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+                    .background(Theme.tone(card.tone).opacity(0.14), in: Circle())
                 VStack(alignment: .leading, spacing: 6) {
                     Text(card.title)
-                        .font(Theme.geist(.headline))
+                        .font(Theme.geist(.subheadline, .semibold))
                         .foregroundStyle(.primary)
                         .multilineTextAlignment(.leading)
                     Text(card.body)
-                        .font(Theme.geist(.subheadline))
-                        .foregroundStyle(.secondary)
+                        .font(Theme.geist(.footnote))
+                        .foregroundStyle(Theme.text2)
                         .multilineTextAlignment(.leading)
                     let ps = model.persons(Array(card.people.prefix(6)))
                     if !ps.isEmpty {
@@ -212,14 +231,9 @@ struct HomeCardView: View {
                         .padding(.top, 4)
                 }
             }
-            .padding(14)
+            .padding(.vertical, 12)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-            .overlay {
-                if card.hero == true {
-                    RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Theme.tone(card.tone).opacity(0.5), lineWidth: 1.5)
-                }
-            }
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
     }

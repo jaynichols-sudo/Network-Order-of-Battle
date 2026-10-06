@@ -40,7 +40,7 @@ function buildCache(data, cx, cy, r, dot){
  * Draws one frame. `view` is {scale, ox, oy} (the zoom), `focus` a wedge or null.
  * Coordinates are CSS pixels; the caller has already scaled the context for the screen.
  */
-export function drawCompass(ctx, data, size, {t = 0, still = false, reduced = false, focus = null, view = {scale: 1, ox: 0, oy: 0}, pal = palette(), cache = null, reveal = 1}){
+export function drawCompass(ctx, data, size, {t = 0, still = false, reduced = false, focus = null, view = {scale: 1, ox: 0, oy: 0}, pal = palette(), cache = null, reveal = 1, labels = true}){
   const cx = size / 2, cy = size / 2, r = size / 2 - 6;
   const dot = dotSize(data.total);
   cache = cache || buildCache(data, cx, cy, r, dot);
@@ -139,7 +139,7 @@ export function drawCompass(ctx, data, size, {t = 0, still = false, reduced = fa
   }
 
   // labels: ring names, and pills for the biggest sectors
-  if (!focus){
+  if (!focus && labels){
     ctx.font = '500 9px "Geist Mono", ui-monospace, monospace'; ctx.textBaseline = 'top'; ctx.textAlign = 'left';
     ctx.fillStyle = rgba(pal.text2, 0.85);
     for (const ring of data.rings.slice(0, -1)) ctx.fillText(ring.label.toUpperCase(), cx + 4, cy - r * ring.r + 2);
@@ -163,7 +163,7 @@ export function drawCompass(ctx, data, size, {t = 0, still = false, reduced = fa
 }
 
 /** The interactive compass element: canvas, the "you" avatar, zoom and taps. */
-export function createCompass({initials = '', interactive = true, onOpen = () => {}, onFocus = () => {}, onTapSector = null} = {}){
+export function createCompass({initials = '', interactive = true, labels = true, onOpen = () => {}, onFocus = () => {}, onTapSector = null} = {}){
   const el = document.createElement('div');
   el.className = 'compass';
   el.innerHTML = `<canvas></canvas><div class="compass-me">${meAvatar(initials, 46, 2)}</div>`;
@@ -197,7 +197,7 @@ export function createCompass({initials = '', interactive = true, onOpen = () =>
     const key = `${data.total}|${data.dots.length && data.dots[0].k}|${size}`;
     if (key !== cacheKey) { cache = null; cacheKey = key; }
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, size, size);
-    cache = drawCompass(ctx, data, size, {t: now / 1000, reduced: REDUCED(), focus: focused(), view, pal, cache});
+    cache = drawCompass(ctx, data, size, {t: now / 1000, reduced: REDUCED(), focus: focused(), view, pal, cache, labels});
   }
   function loop(now){ raf = 0; if (!alive) return; frame(now); if (running()) raf = requestAnimationFrame(loop); }
   const running = () => visible && !document.hidden && (!REDUCED() || anim);

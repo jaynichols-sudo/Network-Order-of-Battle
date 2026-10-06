@@ -14,7 +14,7 @@ struct BearingsApp: App {
             RootView()
                 .environment(model)
                 .font(Theme.geist(.body))
-                .tint(Theme.accent)
+                .tint(Theme.primary)
                 .preferredColorScheme(appearance == "light" ? .light : appearance == "dark" ? .dark : nil)
                 .task {
                     await model.start()
@@ -85,6 +85,9 @@ struct BearingsCommands: Commands {
             Button("Find a Way In…") { model.introQuery = "" }
                 .keyboardShortcut("i", modifiers: [.command, .shift])
             Button("New Event…") { model.newEvent = true }
+            Button("Explore") { model.go("explore") }
+                .keyboardShortcut("e", modifiers: [.command, .shift])
+            Button("Catch Up") { model.go("catchup") }
             Button("Trips") { model.tab = .home; model.paths[.home] = [.trips] }
                 .keyboardShortcut("t", modifiers: [.command, .shift])
             Button("Add to Watchlist…") { model.tab = .companies; model.companiesMode = .watchlist; model.showAddTarget = true }

@@ -13,6 +13,10 @@ export const open = (name, ...args) => later[name] && later[name](...args);
 export const openPerson = k => push('person', k);
 export const openUnit = name => push('unit', name);
 export const openIndustry = id => push('industry', id);
+/** Explore and Catch Up are pages on Today's stack. */
+export function openToday(kind){ if (N.tab !== 'home') go('home'); const st = N.stacks.home, top = st[st.length - 1]; if (!top || top.kind !== kind) push(kind); }
+later.explore = () => openToday('explore');
+later.catchup = () => openToday('catchup');
 
 /** Jump to People with a fresh filter. */
 export function showPeople(patch = {}, text = ''){
@@ -31,7 +35,7 @@ export function perform(a){
   if (!a) return;
   fx.tap();
   switch (a.kind){
-    case 'tab': if (a.tab) go(a.tab); break;
+    case 'tab': if (a.tab === 'explore' || a.tab === 'catchup') openToday(a.tab); else if (a.tab) go(a.tab); break;
     case 'filter': showPeople({sig: a.sig || [], seg: a.seg || [], status: a.status || []}); break;
     case 'unit': if (a.name) openUnit(a.name); break;
     case 'addTarget': later.companiesMode && later.companiesMode('watchlist'); go('companies'); open('addTarget'); break;

@@ -1,12 +1,13 @@
 // Bearings for Android: boots the shell, loads the saved network through the shared
 // engine, and wires up the device (back button, incoming files, notifications).
 import { M, reload, setToast, onChange, isSample, refreshAll, person, followUp } from './model.js';
-import { mountShell, registerTab, go, refreshVisible, setBadge, back, toast, N } from './nav.js';
+import { mountShell, registerTab, go, push, refreshVisible, back, toast, N } from './nav.js';
 import { HomeView } from './home.js';
 import { PeopleView } from './people.js';
 import { CompaniesView } from './companies.js';
-import { ExploreView } from './explore.js';
-import { CatchUpView } from './catchup.js';
+import { YouView } from './you.js';
+import './explore.js';
+import './catchup.js';
 import './profile.js';
 import './sheets.js';
 import { applyTheme, openImport, openOnboarding } from './setup.js';
@@ -22,18 +23,19 @@ async function boot(){
   registerTab('home', HomeView);
   registerTab('people', PeopleView);
   registerTab('companies', CompaniesView);
-  registerTab('explore', ExploreView);
-  registerTab('catchup', CatchUpView);
+  registerTab('you', YouView);
   setToast(toast);
-  onChange(what => { setBadge('catchup', M.info.deckCount); refreshVisible(what); });
+  onChange(what => refreshVisible(what));
 
   const mig = await migrate();
   if (mig.ran && Object.values(mig.files).includes('unreadable')) console.warn('Some saved files could not be read', mig.files);
   await reload();
-  setBadge('catchup', M.info.deckCount);
 
   const start = new URLSearchParams(location.search);
-  go(start.get('tab') || ls.get('bearings.tab') || 'home');
+  // Explore and Catch Up used to be tabs; now they're pages pushed from Today
+  const tab = start.get('tab') || ls.get('bearings.tab') || 'home';
+  if (tab === 'explore' || tab === 'catchup'){ go('home'); push(tab); }
+  else go(tab);
   if (start.get('person')){ const k = start.get('person') === 'top' ? M.people.slice().sort((a, b) => b.score - a.score)[0].k : start.get('person'); if (person(k)) openPerson(k); }
   if (start.get('open')) open(start.get('open'));
 

@@ -48,7 +48,7 @@ struct IntroFinderView: View {
             .autocorrectionDisabled()
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
             .navigationDestination(for: Route.self) { r in
-                if case .person(let k) = r { ProfileView(k: k) }
+                if case .person(let k) = r { ProfileView(k: k) } else if case .about(let k) = r { PersonAboutView(k: k) }
             }
             .task(id: query) {
                 try? await Task.sleep(nanoseconds: 250_000_000)

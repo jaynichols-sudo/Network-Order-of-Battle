@@ -36,7 +36,7 @@ struct SavedSearchCard: View {
             }
             .padding(12)
             .frame(width: 150, height: 132, alignment: .topLeading)
-            .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .card(18)
         }
         .buttonStyle(.plain)
         .contextMenu {
@@ -61,7 +61,7 @@ struct PinSearchAlert: ViewModifier {
             }
             .alert("Name this list", isPresented: $asking) {
                 TextField("Navy O-5 and up", text: $name)
-                Button("Pin to Home") {
+                Button("Pin to Today") {
                     let n = name.trimmingCharacters(in: .whitespaces)
                     Task { await model.saveSearch(named: n.isEmpty ? "My list" : n) }
                 }

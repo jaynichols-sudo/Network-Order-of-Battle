@@ -9,6 +9,10 @@ struct PeopleView: View {
     var body: some View {
         @Bindable var model = model
         List {
+            QuickFilters()
+                .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
             if !model.chips.isEmpty || !model.filters.isEmpty {
                 ActiveFilters()
                     .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
@@ -40,12 +44,17 @@ struct PeopleView: View {
                         .tint(Theme.violet)
                     }
                     .contextMenu { PersonMenu(person: p) }
+                    .listRowBackground(Theme.card)
+                    .listRowSeparatorTint(Theme.line)
                 }
             } header: {
                 Text("\(model.results.count.formatted()) \(model.results.count == 1 ? "person" : "people")")
             }
         }
         .listStyle(.insetGrouped)
+        .listSectionSpacing(8)
+        .scrollContentBackground(.hidden)
+        .background(Theme.bg)
         .navigationTitle("People")
         .searchable(text: $model.searchText, placement: .navigationBarDrawer(displayMode: .always), prompt: "Names, companies, or “navy o-5 and up”")
         .autocorrectionDisabled()
@@ -60,7 +69,7 @@ struct PeopleView: View {
                         }
                     }
                     Divider()
-                    Button { pinning = true } label: { Label("Pin this search to Home", systemImage: "pin") }
+                    Button { pinning = true } label: { Label("Pin this search to Today", systemImage: "pin") }
                         .disabled(model.searchText.isEmpty && model.filters.isEmpty)
                     Button {
                         Task { await model.exportCSV(keys: model.results.map(\.k)) }
@@ -156,14 +165,14 @@ struct PersonRow: View {
 
     @ViewBuilder private var avatar: some View {
         if let zoom {
-            Avatar(person: person, size: 46).matchedTransitionSource(id: person.k, in: zoom)
+            Avatar(person: person, size: 40).matchedTransitionSource(id: person.k, in: zoom)
         } else {
-            Avatar(person: person, size: 46)
+            Avatar(person: person, size: 40)
         }
     }
 
     @ViewBuilder private var flags: some View {
-        if person.waiting { Flag(text: "Reply", color: Theme.bad) }
+        if person.waiting { Flag(text: "Reply", color: Theme.needs) }
         else if person.due { Flag(text: "Follow up", color: Theme.violet) }
         else if person.over { Flag(text: "Overdue", color: Theme.violet) }
         else if person.moved { Flag(text: "New job", color: Theme.info) }
@@ -217,6 +226,48 @@ struct PersonMenu: View {
                 Label("Copy email", systemImage: "doc.on.doc")
             }
         }
+    }
+}
+
+/// One-tap filters at the top of People: the questions people ask most.
+struct QuickFilters: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                pill("Waiting", sig: "waiting")
+                pill("New jobs", sig: "jcw")
+                if model.info.hasRel { relPill("Close") }
+                pill("Starred", sig: "star")
+                pill("Going cold", sig: "cold")
+                pill("New", sig: "new")
+            }
+            .padding(.vertical, 2)
+        }
+        .scrollClipDisabled()
+    }
+
+    private func pill(_ title: String, sig: String) -> some View {
+        let on = model.filters.sig == [sig] && model.filters.activeCount == 1
+        return Button(title) {
+            Haptic.tap()
+            var f = Filters()
+            if !on { f.sig = [sig] }
+            model.filters = f
+        }
+        .buttonStyle(PillButtonStyle(kind: on ? .primary : .plain))
+    }
+
+    private func relPill(_ band: String) -> some View {
+        let on = model.filters.rel == [band] && model.filters.activeCount == 1
+        return Button(band) {
+            Haptic.tap()
+            var f = Filters()
+            if !on { f.rel = [band] }
+            model.filters = f
+        }
+        .buttonStyle(PillButtonStyle(kind: on ? .primary : .plain))
     }
 }
 

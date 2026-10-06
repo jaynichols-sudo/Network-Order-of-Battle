@@ -2,7 +2,7 @@ import SwiftUI
 
 struct ExploreView: View {
     @Environment(AppModel.self) private var model
-    @AppStorage("exploreMode") private var mode = "scope"
+    @AppStorage("exploreMode") private var mode = "compass"
     @State private var radar = RadarData.empty
     @State private var ranks: RanksData?
 
@@ -10,13 +10,16 @@ struct ExploreView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 Picker("View", selection: $mode) {
+                    Text("Compass").tag("compass")
                     Text("Scope").tag("scope")
                     Text("Clusters").tag("clusters")
                     Text("Map").tag("map")
                     if model.info.lens { Text("Ranks").tag("ranks") }
                 }
                 .pickerStyle(.segmented)
-                if mode == "ranks" && model.info.lens {
+                if mode == "compass" {
+                    CompassCard()
+                } else if mode == "ranks" && model.info.lens {
                     RanksGrid(data: ranks)
                 } else if mode == "clusters" {
                     ClustersView()
@@ -32,11 +35,11 @@ struct ExploreView: View {
                     legend
                 }
             }
-            .padding()
+            .padding(16)
         }
-        .background(Color(.systemGroupedBackground))
+        .background(Theme.bg)
         .navigationTitle("Explore")
-        .toolbar { MainToolbar() }
+        .navigationBarTitleDisplayMode(.inline)
         .task(id: "\(model.people.count)-\(model.info.lens)-\(model.info.edits)-\(mode)") {
             if mode == "ranks" { ranks = await model.ranks() } else if mode == "scope" { radar = await model.radar() }
         }
@@ -66,7 +69,7 @@ struct ExploreView: View {
                 Divider().padding(.leading, 38)
             }
         }
-        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .card(18)
     }
 }
 
@@ -208,7 +211,7 @@ struct RanksGrid: View {
                 }
                 .padding()
             }
-            .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .card(18)
         } else {
             ProgressView().frame(maxWidth: .infinity)
         }

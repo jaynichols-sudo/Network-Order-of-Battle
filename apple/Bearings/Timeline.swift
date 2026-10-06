@@ -152,3 +152,51 @@ struct TimelineSection: View {
         return out
     }
 }
+
+/// The timeline as a card: what happened on the left, when on the right.
+struct TimelineCard: View {
+    let person: Person
+    @State private var all = false
+
+    var body: some View {
+        let events = TimelineSection.events(for: person)
+        if !events.isEmpty {
+            VStack(alignment: .leading, spacing: 0) {
+                Text("Timeline").font(Theme.geist(.footnote, .semibold)).foregroundStyle(Theme.text2).padding(.top, 14).padding(.bottom, 4)
+                ForEach(Array(events.prefix(all ? events.count : 5).enumerated()), id: \.element.id) { i, e in
+                    if i > 0 { Theme.line.frame(height: 1) }
+                    HStack(alignment: .firstTextBaseline, spacing: 12) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(e.title).font(Theme.geist(.subheadline, .semibold))
+                            if !e.detail.isEmpty {
+                                Text(e.detail).font(Theme.geist(.footnote)).foregroundStyle(Theme.text2).lineLimit(3)
+                            }
+                        }
+                        Spacer(minLength: 8)
+                        Text(Self.when(e.date)).font(Theme.geist(.footnote)).foregroundStyle(Theme.text3)
+                    }
+                    .padding(.vertical, 10)
+                    .accessibilityElement(children: .combine)
+                }
+                if events.count > 5 && !all {
+                    Theme.line.frame(height: 1)
+                    Button("Show all \(events.count)") { withAnimation(.smooth) { all = true } }
+                        .font(Theme.geist(.footnote, .semibold))
+                        .foregroundStyle(Theme.primary)
+                        .padding(.vertical, 12)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 16)
+            .padding(.bottom, 4)
+            .card()
+        }
+    }
+
+    /// "Sep 27" this year, "Aug 2025" before that.
+    static func when(_ ymd: String) -> String {
+        guard let d = Day.date(ymd) else { return ymd }
+        let sameYear = Calendar.current.component(.year, from: d) == Calendar.current.component(.year, from: Date())
+        return sameYear ? d.formatted(.dateTime.month(.abbreviated).day()) : d.formatted(.dateTime.month(.abbreviated).year())
+    }
+}

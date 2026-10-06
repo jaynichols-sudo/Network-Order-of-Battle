@@ -3,7 +3,7 @@
 // ProfileView.swift, Timeline.swift and Brief.swift (the template brief; no AI here).
 import { M, full, isSample, toggleStar, followUp, setCircle, touched, markReplied, setLocation, saveProfile, CIRCLES } from './model.js';
 import { esc, fmt, icon, avatar, flag, bandLabel, bandVar, Day, menu, $, empty } from './ui.js';
-import { registerRoute, setPageTitle } from './nav.js';
+import { registerRoute, setPageTitle, push } from './nav.js';
 import { openUnit, open } from './actions.js';
 import { openURL, copy, fx, prefs } from './platform.js';
 import { show } from './model.js';
@@ -51,9 +51,9 @@ export function timelineEvents(p){
 }
 function timeline(p){
   const ev = timelineEvents(p); if (!ev.length) return '';
-  return `<p class="sec-h">Timeline</p><div class="card tl">${ev.map((e, i) => `<div class="tl-row ${i === 0 ? 'first' : ''} ${i === ev.length - 1 ? 'last' : ''}">
-    <span class="tl-rail"><i class="tl-line top"></i><span class="tl-ic" style="--tc:${e.color}">${icon(e.icon)}</span><i class="tl-line bot"></i></span>
-    <span class="tl-body"><span class="mono tl-date">${esc(Day.nice(e.date).toUpperCase())}</span><b>${esc(e.title)}</b>${e.detail ? `<span class="muted">${esc(e.detail)}</span>` : ''}</span></div>`).join('')}</div>`;
+  return `<section class="card tl"><div class="card-head static"><h2>Timeline</h2></div>${ev.map(e => `<div class="tl-row">
+    <span class="tl-ic" style="--tc:${e.color}">${icon(e.icon)}</span>
+    <span class="tl-body"><b>${esc(e.title)}</b>${e.detail ? `<span>${esc(e.detail)}</span>` : ''}</span><span class="tl-date">${esc(Day.nice(e.date))}</span></div>`).join('')}</section>`;
 }
 
 /* ---------- pieces ---------- */
@@ -66,23 +66,25 @@ function relSummary(x){
   if (!parts.length) return '';
   const s = parts.join(', '); return s[0].toUpperCase() + s.slice(1) + '.';
 }
-function badges(p){
-  const out = [];
-  if (p.waiting) out.push(['Waiting on your reply', 'var(--amber)']);
-  if (p.moved) out.push(['New job', 'var(--info)']);
-  if (p.isNew) out.push(['New connection', 'var(--accent)']);
-  if (p.due) out.push(['Follow-up due', 'var(--violet)']);
-  const c = p.ed && CIRCLES[p.ed.circle];
-  if (p.over && c) out.push([`${c.title}: overdue`, 'var(--violet)']);
-  if (M.info.hasRel && p.rx) out.push([bandLabel(p.band), bandVar(p.band)]);
-  return out.slice(0, 3).map(([t, c]) => flag(t, c)).join('');
+function tags(p){
+  const out = [], c = p.ed && CIRCLES[p.ed.circle], cl = p.cl;
+  if (cl.ind && cl.ind !== 'Unclassified') out.push(`<span class="tag"><i class="dot" style="background:${esc(p.indColor)}"></i>${esc(cl.ind)}</span>`);
+  if (M.info.hasRel && p.rx) out.push(`<span class="tag" style="--fc:${bandVar(p.band)}">${esc(bandLabel(p.band))} · <span class="mono">${p.score}</span></span>`);
+  if (c) out.push(`<span class="tag">${icon(c.icon)}${esc(c.title)}</span>`);
+  const fl = [];
+  if (p.waiting) fl.push(['Waiting on your reply', 'var(--amber)']);
+  if (p.moved) fl.push(['New job', 'var(--info)']);
+  if (p.isNew) fl.push(['New connection', 'var(--good)']);
+  if (p.due) fl.push(['Follow-up due', 'var(--violet)']);
+  if (p.over && c) fl.push(['Overdue', 'var(--violet)']);
+  return out.join('') + fl.slice(0, 3).map(([t, col]) => flag(t, col)).join('');
 }
-const roundAction = (a, title, ic, tint, on = false, v = '') => `<button type="button" class="ract ${on ? 'on' : ''}" style="--rt:${tint}" data-a="${a}" data-v="${esc(v)}"><span class="ract-ic">${icon(ic)}</span><span class="ract-l">${esc(title)}</span></button>`;
+const sqAction = (a, title, ic, tint, on = false) => `<button type="button" class="sqact ${on ? 'on' : ''}" style="--rt:${tint}" data-a="${a}" aria-label="${esc(title)}">${icon(ic)}<span>${esc(title)}</span></button>`;
 const PLACE_SRC = {you: 'Set by you', company: 'From the location you set for their company', address: 'From their address in your contacts', phone: 'From their phone number in your contacts', sample: 'Sample data'};
 const labeled = (k, v) => v ? `<div class="lrow"><span class="muted">${esc(k)}</span><span>${v}</span></div>` : '';
 
 /* ---------- the page ---------- */
-registerRoute('person', k => {
+function personView(k, part){
   const st = {k, loadedFor: '', note: '', tags: '', ind: '', forCo: true, seg: '', branch: '', status: '', grade: '', rank: '', placeEdit: false, placeQ: ''};
   const fill = p => {
     if (st.loadedFor === p.k) return; st.loadedFor = p.k;
@@ -97,43 +99,44 @@ registerRoute('person', k => {
       const p = full(k);
       if (!p){ body.innerHTML = empty('user', 'Not found', 'This person isn’t in your network anymore.'); return; }
       fill(p);
-      this.title = p.f;
-      const pg = body.closest('.page'); if (pg) setPageTitle(pg, p.f);
+      this.title = part === 'main' ? p.f : `About ${p.f}`;
+      const pg = body.closest('.page'); if (pg) setPageTitle(pg, this.title);
       const L = M.info.lens, cl = p.cl, x = p.rx, ed = p.ed || {}, c = CIRCLES[ed.circle];
       const profile = (p.links && p.links.profile) || '';
       const pl = M.places[p.k];
-      const C = 2 * Math.PI * 57, off = C * (1 - p.score / 100);
       const industries = (M.constants.industries || []).filter(i => i.id !== M.constants.unclassified);
       const sel = (name, value, opts, auto = 'Automatic') => `<div class="select"><select data-ch="field" data-f="${name}" aria-label="${name}"><option value="">${esc(auto)}</option>${opts.map(o => `<option value="${esc(o[0])}" ${value === o[0] ? 'selected' : ''}>${esc(o[1])}</option>`).join('')}</select>${icon('chevD')}</div>`;
       const st0 = body.closest('.page-body') ? body.scrollTop : 0;
-      body.innerHTML = `<div class="prof">
-        <div class="prof-head">
-          <span class="prof-av">${M.info.hasRel ? `<svg class="prof-ring" viewBox="0 0 118 118"><circle cx="59" cy="59" r="57" class="ring-bg"/><circle cx="59" cy="59" r="57" stroke="${bandVar(p.band)}" class="ring-arc" stroke-dasharray="${C.toFixed(1)}" stroke-dashoffset="${off.toFixed(1)}"/></svg>` : ''}${avatar(p, 104)}</span>
+      const header = `<section class="card prof-head">
+          ${avatar(p, 76)}
           <h1>${esc(p.full)}</h1>
           ${p.p ? `<p class="prof-title">${esc(p.p)}</p>` : ''}
           ${p.c ? `<button type="button" class="prof-co" data-a="unit" data-v="${esc(p.c)}">${esc(p.c)}${icon('chevR')}</button>` : ''}
-          <div class="flags">${badges(p)}</div>
-          <div class="ractions">
-            ${roundAction('message', 'Message', 'pencil', 'var(--accent)')}
-            ${roundAction('star', p.starred ? 'Starred' : 'Star', p.starred ? 'starFill' : 'star', 'var(--amber)', p.starred)}
-            ${roundAction('remind', 'Remind', ed.due ? 'bellFill' : 'bell', 'var(--violet)', !!ed.due)}
-            ${roundAction('circle', !c ? 'Circle' : p.over ? 'Overdue' : 'In touch', c ? c.icon : 'circleWide', p.over ? 'var(--violet)' : 'var(--good)', !!c)}
-            ${profile ? roundAction('linkedin', 'LinkedIn', 'link', 'var(--info)', false, profile) : ''}
+          <div class="tags">${tags(p)}</div>
+          <div class="sqactions">
+            <button type="button" class="sqact primary" data-a="message">${icon('pencil')}<span>Message</span></button>
+            ${sqAction('star', p.starred ? 'Starred' : 'Star', p.starred ? 'starFill' : 'star', 'var(--amber)', p.starred)}
+            ${sqAction('remind', 'Remind', ed.due ? 'bellFill' : 'bell', 'var(--violet)', !!ed.due)}
+            ${sqAction('circle', !c ? 'Circle' : p.over ? 'Overdue' : 'In touch', c ? c.icon : 'circleWide', p.over ? 'var(--violet)' : 'var(--good)', !!c)}
           </div>
-        </div>
-
-        <div class="card brief"><p class="eyebrow mono">${icon('text')}BRIEF</p><p>${esc(briefText(p))}</p></div>
-
+        </section>`;
+      const brief = `<section class="card brief"><p class="label">Brief</p><p>${esc(briefText(p))}</p>
+          ${p.waiting ? `<button type="button" class="pill-btn soft" data-a="replied">${icon('reply')}I replied</button>` : ''}
+          ${ed.due ? `<div class="due-line"><span>${ed.due <= Day.today() ? '<b class="violet">Follow up now.</b> ' : ''}You planned to follow up on ${esc(Day.nice(ed.due))}.</span><button type="button" class="pill-btn soft" data-a="dueDone">Done</button></div>` : ''}</section>`;
+      if (part === 'main'){
+        body.innerHTML = `<div class="prof">${header}${brief}${timeline(p)}
+          <section class="card list"><button type="button" class="row act more-row" data-a="details">${icon('text')}<span>Details, location and notes</span>${icon('chevR', 'chev')}</button></section>
+          ${isSample() ? '<p class="foot">Sample data: changes aren’t saved.</p>' : ''}</div>`;
+        body.scrollTop = st0;
+        return;
+      }
+      body.innerHTML = `<div class="prof">
         ${M.info.hasRel ? `<p class="sec-h">Relationship</p><div class="card pad">${x ? `
           ${x.t ? `<p><b>${esc(x.dir === 'i' ? `${p.f} wrote you ${Day.ago(x.t)}` : `You wrote ${Day.ago(x.t)}`)}</b></p>${x.s ? `<p class="muted quote">“${esc(x.s)}”</p>` : ''}` : ''}
           ${relSummary(x) ? `<p class="muted small">${esc(relSummary(x))}</p>` : ''}
           ${x.invn ? `<p class="muted small">Invite note: “${esc(x.invn)}”</p>` : ''}
           ${p.waiting ? `<button type="button" class="btn tint-bad" data-a="replied">${icon('reply')}Waiting on your reply. I replied</button>` : ''}`
           : `<p class="muted">You haven’t messaged ${esc(p.f)} on LinkedIn. A short hello is an easy start.</p>`}</div>` : ''}
-
-        ${timeline(p)}
-
-        ${ed.due ? `<p class="sec-h">Follow up</p><div class="card pad row-between"><div>${ed.due <= Day.today() ? '<b class="violet">Follow up now</b><br>' : ''}<span>You planned to follow up on ${esc(Day.nice(ed.due))}.</span></div><button type="button" class="btn" data-a="dueDone">Done</button></div>` : ''}
 
         <p class="sec-h">Location</p><div class="card pad">${st.placeEdit ? `
             <input type="text" class="field" data-in="placeQ" data-enter="savePlace" value="${esc(st.placeQ)}" placeholder="City, like Tampa, FL or London" autocomplete="off" enterkeyhint="done">
@@ -142,13 +145,14 @@ registerRoute('person', k => {
             <div class="btn-row left"><button type="button" class="link" data-a="editPlace">${pl.src === 'you' ? 'Change location' : 'Not right? Set it'}</button>${pl.src === 'you' ? '<button type="button" class="link danger" data-a="clearPlace">Clear location</button>' : ''}</div>`
           : `<p class="muted">Not known yet. LinkedIn doesn’t share locations.</p><button type="button" class="link" data-a="editPlace">Set location</button>`}</div>
 
-        <div class="card list actions">
+        <p class="sec-h">Contact and ways in</p><div class="card list actions">
+          ${profile ? `<button type="button" class="row act" data-a="linkedin" data-v="${esc(profile)}">${icon('link')}<span>Open LinkedIn profile</span></button>` : ''}
           ${prefs.salesnav && p.links && p.links.salesNav ? `<button type="button" class="row act" data-a="url" data-v="${esc(p.links.salesNav)}">${icon('globe')}<span>Sales Navigator</span></button>` : ''}
           ${p.e ? `<button type="button" class="row act" data-a="copyEmail">${icon('copy')}<span>Copy email</span></button>` : ''}
           ${p.c ? `<button type="button" class="row act" data-a="unit" data-v="${esc(p.c)}">${icon('building')}<span>More at ${esc(p.c)}</span>${icon('chevR', 'chev')}</button>
                    <button type="button" class="row act" data-a="ways" data-v="${esc(p.c)}">${icon('waysIn')}<span>Other ways into ${esc(p.c)}</span></button>` : ''}
+          <button type="button" class="row act" data-a="message">${icon('pencil')}<span>Write a message</span></button>
         </div>
-
         <p class="sec-h">Details</p><div class="card list details">
           ${labeled('Industry', `<i class="dot sm" style="background:${esc(p.indColor)}"></i>${esc(cl.ind + (cl.indHow === 'you' ? ' (set by you)' : cl.indHow === 'guess' ? ' (best guess)' : ''))}`)}
           ${labeled('Seniority', esc(cl.sen))}
@@ -181,6 +185,7 @@ registerRoute('person', k => {
     },
     handlers: {
       unit: v => openUnit(v),
+      details: () => push('personDetails', k),
       ways: v => open('intro', v),
       message: () => open('message', k),
       star: () => toggleStar(k),
@@ -221,4 +226,6 @@ registerRoute('person', k => {
     },
   };
   return view;
-});
+}
+registerRoute('person', k => personView(k, 'main'));
+registerRoute('personDetails', k => personView(k, 'details'));

@@ -414,7 +414,7 @@ struct CompassCard: View {
             sectors
         }
         .padding(16)
-        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .card(24)
         .task(id: "\(model.people.count)-\(model.info.lens)-\(model.info.edits)-\(model.info.rev)") {
             data = await model.compass()
         }

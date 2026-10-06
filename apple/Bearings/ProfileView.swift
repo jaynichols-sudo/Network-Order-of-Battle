@@ -3,6 +3,181 @@ import SwiftUI
 struct ProfileView: View {
     @Environment(AppModel.self) private var model
     let k: String
+    @State private var writing = false
+
+    var body: some View {
+        if let p = model.person(k) {
+            ScrollView {
+                VStack(spacing: 12) {
+                    header(p)
+                    briefCard(p)
+                    TimelineCard(person: p)
+                    NavigationLink(value: Route.about(p.k)) {
+                        HStack {
+                            Text("Details, location and notes").font(Theme.geist(.subheadline, .medium)).foregroundStyle(.primary)
+                            Spacer()
+                            Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(Theme.text3)
+                        }
+                        .padding(.horizontal, 16).padding(.vertical, 15)
+                        .card()
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.horizontal, 16)
+                .padding(.bottom, 24)
+            }
+            .background(Theme.bg)
+            .sheet(isPresented: $writing) { MessageSheet(k: p.k) }
+            .navigationTitle(p.f)
+            .navigationBarTitleDisplayMode(.inline)
+            .task(id: k) { await model.loadFull(k) }
+        } else {
+            ContentUnavailableView("Not found", systemImage: "person.crop.circle.badge.xmark", description: Text("This person isn’t in your network anymore."))
+        }
+    }
+
+    private func header(_ p: Person) -> some View {
+        VStack(spacing: 12) {
+            Avatar(person: p, size: 76)
+            VStack(spacing: 3) {
+                Text(p.fullName)
+                    .font(Theme.geist(.title2, .bold))
+                    .multilineTextAlignment(.center)
+                if !p.p.isEmpty {
+                    Text(p.p).font(Theme.geist(.subheadline)).foregroundStyle(Theme.text2).multilineTextAlignment(.center).lineLimit(3)
+                }
+                if !p.c.isEmpty {
+                    Button { model.open(.unit(p.c)) } label: {
+                        HStack(spacing: 4) {
+                            Text(p.c).font(Theme.geist(.subheadline, .semibold)).multilineTextAlignment(.center)
+                            Image(systemName: "chevron.right").font(.caption2.weight(.bold)).foregroundStyle(Theme.text3)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            tags(p)
+            actions(p).padding(.top, 4)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, 16).padding(.top, 20).padding(.bottom, 16)
+        .card()
+    }
+
+    private struct Tag: Hashable { let text: String; let fg: Color; let bg: Color }
+
+    private func tagList(_ p: Person) -> [Tag] {
+        var out: [Tag] = []
+        if p.waiting { out.append(Tag(text: "Waiting on you", fg: Theme.needs, bg: Theme.needsSoft)) }
+        if p.moved { out.append(Tag(text: "New job", fg: Theme.info, bg: Theme.infoSoft)) }
+        if let b = model.nextBirthday(p.k), b.timeIntervalSinceNow < 14 * 86400 {
+            out.append(Tag(text: Calendar.current.isDateInToday(b) ? "Birthday today" : "Birthday \(b.formatted(.dateTime.month(.abbreviated).day()))", fg: Theme.bad, bg: Theme.bad.opacity(0.12)))
+        }
+        out.append(Tag(text: p.cl.ind, fg: Color(hex: p.indColor), bg: Color(hex: p.indColor).opacity(0.14)))
+        if model.info.hasRel && p.rx != nil { out.append(Tag(text: "\(Band.label(p.band)) · \(p.score)", fg: Band.color(p.band), bg: Band.color(p.band).opacity(0.14))) }
+        if let c = p.circle { out.append(Tag(text: p.over ? "\(c.title), overdue" : c.title, fg: Theme.primary, bg: Theme.soft)) }
+        if p.isNew { out.append(Tag(text: "New connection", fg: Theme.primary, bg: Theme.soft)) }
+        return Array(out.prefix(4))
+    }
+
+    @ViewBuilder private func tags(_ p: Person) -> some View {
+        let items = tagList(p)
+        if !items.isEmpty {
+            FlowLayout(spacing: 6) {
+                ForEach(items, id: \.self) { t in
+                    Text(t.text)
+                        .font(Theme.geist(.caption, .semibold))
+                        .foregroundStyle(t.fg)
+                        .padding(.horizontal, 10).padding(.vertical, 4)
+                        .background(t.bg, in: Capsule())
+                }
+            }
+        }
+    }
+
+    private func actions(_ p: Person) -> some View {
+        HStack(spacing: 8) {
+            Button { writing = true } label: {
+                Text("Message").font(Theme.geist(.subheadline, .semibold)).frame(maxWidth: .infinity, minHeight: 44)
+                    .foregroundStyle(Theme.onPrimary)
+                    .background(Theme.primary, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            }
+            .buttonStyle(.plain)
+            Button {
+                Haptic.star()
+                Task { await model.toggleStar(p.k) }
+            } label: { small(p.starred ? "Starred" : "Star", icon: p.starred ? "star.fill" : "star", on: p.starred) }
+            .buttonStyle(.plain)
+            Menu {
+                ForEach([(7, "In a week"), (14, "In 2 weeks"), (30, "In a month"), (90, "In 3 months")], id: \.0) { d, l in
+                    Button(l) { Task { await model.followUp(p.k, days: d) } }
+                }
+                if let due = p.ed?.due, !due.isEmpty {
+                    Divider()
+                    Button("Clear reminder", role: .destructive) { Task { await model.followUp(p.k, days: 0) } }
+                }
+            } label: { small("Remind", icon: (p.ed?.due ?? "").isEmpty ? "bell" : "bell.badge.fill", on: !(p.ed?.due ?? "").isEmpty) }
+            .buttonStyle(.plain)
+            Menu {
+                Section("Keep in touch") {
+                    ForEach(KeepCircle.allCases) { c in
+                        Button {
+                            Task { await model.setCircle(p.k, c) }
+                        } label: {
+                            Label("\(c.title) · \(c.cadence.lowercased())", systemImage: p.circle == c ? "checkmark" : c.icon)
+                        }
+                    }
+                    if p.circle != nil {
+                        Button("Remove from circle", role: .destructive) { Task { await model.setCircle(p.k, nil) } }
+                    }
+                }
+                Button {
+                    Task { await model.touched(p.k) }
+                } label: { Label("I was in touch today", systemImage: "checkmark.bubble") }
+            } label: { small(p.circle == nil ? "Circle" : "In touch", icon: p.circle?.icon ?? "circle.dashed", on: p.circle != nil) }
+            .buttonStyle(.plain)
+        }
+    }
+
+    private func small(_ title: String, icon: String, on: Bool) -> some View {
+        VStack(spacing: 2) {
+            Image(systemName: icon).font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(on ? Theme.needs : Theme.primary)
+                .contentTransition(.symbolEffect(.replace))
+            Text(title).font(Theme.geist(.caption2, .medium)).foregroundStyle(.primary).lineLimit(1).minimumScaleFactor(0.8)
+        }
+        .frame(width: 64, height: 44)
+        .background(Theme.card2, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .accessibilityElement(children: .combine)
+    }
+
+    private func briefCard(_ p: Person) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            BriefCard(person: p)
+            if p.waiting {
+                Button { Task { await model.markReplied(p.k) } } label: { Label("I already replied", systemImage: "arrowshape.turn.up.left") }
+                    .buttonStyle(PillButtonStyle(kind: .soft))
+            }
+            if let due = p.ed?.due, !due.isEmpty {
+                HStack {
+                    Text(due <= Day.today ? "Follow-up due now" : "Follow up on \(Day.nice(due))")
+                        .font(Theme.geist(.footnote, .semibold)).foregroundStyle(due <= Day.today ? Theme.violet : Theme.text2)
+                    Spacer()
+                    Button("Done") { Task { await model.followUp(p.k, days: 0) } }
+                        .buttonStyle(PillButtonStyle(kind: .soft))
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(16)
+        .card()
+    }
+}
+
+/// Everything else about someone: relationship detail, location, links, details, notes and corrections.
+struct PersonAboutView: View {
+    @Environment(AppModel.self) private var model
+    let k: String
     @State private var links: PersonLinks?
     @State private var note = ""
     @State private var tags = ""
@@ -16,7 +191,6 @@ struct ProfileView: View {
     @State private var loadedFor = ""
     @State private var placeQuery = ""
     @State private var editingPlace = false
-    @State private var writing = false
     @State private var sfBusy = false
     @FocusState private var noteFocused: Bool
     @Environment(\.openURL) private var openURL
@@ -25,10 +199,7 @@ struct ProfileView: View {
     var body: some View {
         if let p = model.person(k) {
             List {
-                header(p)
-                Section { BriefCard(person: p) }
                 if model.info.hasRel { relationship(p) }
-                TimelineSection(person: p)
                 followUp(p)
                 location(p)
                 more(p)
@@ -36,8 +207,9 @@ struct ProfileView: View {
                 notes(p)
             }
             .listStyle(.insetGrouped)
-            .sheet(isPresented: $writing) { MessageSheet(k: p.k) }
-            .navigationTitle(p.f)
+            .scrollContentBackground(.hidden)
+            .background(Theme.bg)
+            .navigationTitle("About \(p.f)")
             .navigationBarTitleDisplayMode(.inline)
             .task(id: k) {
                 await model.loadFull(k)
@@ -60,132 +232,6 @@ struct ProfileView: View {
         seg = ed.seg; branch = ed.branch; status = ed.status; grade = ed.grade; rank = ed.rank
     }
 
-    private func header(_ p: Person) -> some View {
-        Section {
-            VStack(spacing: 14) {
-                ZStack {
-                    if model.info.hasRel {
-                        Circle().stroke(Color(.tertiarySystemFill), lineWidth: 4)
-                        Circle()
-                            .trim(from: 0, to: CGFloat(p.score) / 100)
-                            .stroke(Band.color(p.band), style: StrokeStyle(lineWidth: 4, lineCap: .round))
-                            .rotationEffect(.degrees(-90))
-                    }
-                    Avatar(person: p, size: 104)
-                }
-                .frame(width: 118, height: 118)
-                VStack(spacing: 4) {
-                    Text(p.fullName)
-                        .font(Theme.geist(.title, .bold))
-                        .multilineTextAlignment(.center)
-                    if !p.p.isEmpty {
-                        Text(p.p).font(Theme.geist(.body)).foregroundStyle(.secondary).multilineTextAlignment(.center).lineLimit(3)
-                    }
-                    if !p.c.isEmpty {
-                        Button { model.open(.unit(p.c)) } label: {
-                            HStack(spacing: 4) {
-                                Text(p.c).font(Theme.geist(.body, .semibold))
-                                Image(systemName: "chevron.right").font(.caption.weight(.bold)).foregroundStyle(.tertiary)
-                            }
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-                badges(p)
-                actionRow(p)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.top, 4)
-            .listRowBackground(Color.clear)
-            .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 8, trailing: 0))
-        }
-    }
-
-    private func badgeList(_ p: Person) -> [Badge] {
-        var out: [Badge] = []
-        if p.waiting { out.append(Badge(text: "Waiting on your reply", color: Theme.amber)) }
-        if p.moved { out.append(Badge(text: "New job", color: Theme.info)) }
-        if p.isNew { out.append(Badge(text: "New connection", color: Theme.accent)) }
-        if p.due { out.append(Badge(text: "Follow-up due", color: Theme.violet)) }
-        if let b = model.nextBirthday(p.k), b.timeIntervalSinceNow < 14 * 86400 {
-            out.append(Badge(text: Calendar.current.isDateInToday(b) ? "Birthday today" : "Birthday \(b.formatted(.dateTime.month(.abbreviated).day()))", color: Theme.bad))
-        }
-        if p.over, let c = p.circle { out.append(Badge(text: "\(c.title): overdue", color: Theme.violet)) }
-        if model.info.hasRel && p.rx != nil { out.append(Badge(text: Band.label(p.band), color: Band.color(p.band))) }
-        return Array(out.prefix(3))
-    }
-
-    struct Badge: Hashable { let text: String; let color: Color }
-
-    @ViewBuilder private func badges(_ p: Person) -> some View {
-        let items = badgeList(p)
-        if !items.isEmpty {
-            HStack(spacing: 6) {
-                ForEach(items, id: \.self) { b in Flag(text: b.text, color: b.color) }
-            }
-        }
-    }
-
-    private func actionRow(_ p: Person) -> some View {
-        ViewThatFits(in: .horizontal) {
-            HStack(spacing: 10) { actionButtons(p) }
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 10) { actionButtons(p) }.padding(.horizontal, 16)
-            }
-        }
-        .padding(.top, 4)
-    }
-
-    @ViewBuilder private func actionButtons(_ p: Person) -> some View {
-        Group {
-            RoundAction(title: "Message", icon: "square.and.pencil", tint: Theme.accent) { writing = true }
-            RoundAction(title: p.starred ? "Starred" : "Star", icon: p.starred ? "star.fill" : "star", tint: Theme.amber, on: p.starred) {
-                Haptic.star()
-                Task { await model.toggleStar(p.k) }
-            }
-            Menu {
-                ForEach([(7, "In a week"), (14, "In 2 weeks"), (30, "In a month"), (90, "In 3 months")], id: \.0) { d, l in
-                    Button(l) { Task { await model.followUp(p.k, days: d) } }
-                }
-                if let due = p.ed?.due, !due.isEmpty {
-                    Divider()
-                    Button("Clear reminder", role: .destructive) { Task { await model.followUp(p.k, days: 0) } }
-                }
-            } label: {
-                RoundActionLabel(title: "Remind", icon: (p.ed?.due ?? "").isEmpty ? "bell" : "bell.badge.fill", tint: Theme.violet, on: !(p.ed?.due ?? "").isEmpty)
-            }
-            .buttonStyle(.plain)
-            Menu {
-                Section("Keep in touch") {
-                    ForEach(KeepCircle.allCases) { c in
-                        Button {
-                            Task { await model.setCircle(p.k, c) }
-                        } label: {
-                            Label("\(c.title) · \(c.cadence.lowercased())", systemImage: p.circle == c ? "checkmark" : c.icon)
-                        }
-                    }
-                    if p.circle != nil {
-                        Button("Remove from circle", role: .destructive) { Task { await model.setCircle(p.k, nil) } }
-                    }
-                }
-                Button {
-                    Task { await model.touched(p.k) }
-                } label: { Label("I was in touch today", systemImage: "checkmark.bubble") }
-            } label: {
-                RoundActionLabel(title: p.circle == nil ? "Circle" : (p.over ? "Overdue" : "In touch"), icon: p.circle?.icon ?? "circle.dashed",
-                                 tint: p.over ? Theme.violet : Theme.good, on: p.circle != nil)
-            }
-            .buttonStyle(.plain)
-            if let l = links, let u = URL(string: l.profile), !l.profile.isEmpty {
-                RoundAction(title: "LinkedIn", icon: "link", tint: Theme.info) { Haptic.tap(); openURL(u) }
-            }
-            if Salesforce.shared.connected && !model.info.isSample {
-                RoundAction(title: sfBusy ? "Sending" : "Salesforce", icon: "cloud", tint: Theme.info) { sendToSalesforce(p) }
-                    .disabled(sfBusy)
-            }
-        }
-    }
-
     private func sendToSalesforce(_ p: Person) {
         sfBusy = true
         Task {
@@ -200,6 +246,11 @@ struct ProfileView: View {
 
     @ViewBuilder private func more(_ p: Person) -> some View {
         Section {
+            if let l = links, !l.profile.isEmpty { LinkButton(title: "LinkedIn profile", url: l.profile, icon: "link") }
+            if Salesforce.shared.connected && !model.info.isSample {
+                Button { sendToSalesforce(p) } label: { Label(sfBusy ? "Sending to Salesforce" : "Send to Salesforce", systemImage: "cloud") }
+                    .disabled(sfBusy)
+            }
             if model.salesNav, let l = links, !l.salesNav.isEmpty { LinkButton(title: "Sales Navigator", url: l.salesNav, icon: "safari") }
             if !p.e.isEmpty {
                 Button {

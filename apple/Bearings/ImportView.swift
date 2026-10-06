@@ -216,7 +216,7 @@ struct PayoffView: View {
                             .prominentGlassButton()
                             Button {
                                 dismiss()
-                                model.tab = .explore
+                                model.go("explore")
                             } label: { Text("See it on a map").frame(maxWidth: .infinity).fontWeight(.semibold) }
                             .glassButton()
                         }

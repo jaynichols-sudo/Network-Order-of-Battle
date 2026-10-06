@@ -1,18 +1,61 @@
-// Explore: the Scope radar, Clusters (people around their company), the Map, and
-// Ranks in the federal view. Ports ExploreView.swift, ClustersView.swift and MapView.swift.
-import { M, persons, person, isSample, locate } from './model.js';
+// Explore, pushed from Today's compass card: the big Compass (sectors you can zoom
+// into), the Scope radar, Clusters (people around their company), the Map, and Ranks in
+// the federal view. Ports ExploreView.swift, ClustersView.swift, MapView.swift and Compass.swift.
+import { M, persons, person, isSample, locate, myInitials } from './model.js';
 import { esc, fmt, icon, segmented, palette, rgba, empty, callout, $, plural, REDUCED } from './ui.js';
-import { openSheet, closeSheet } from './nav.js';
-import { openPerson, openUnit, showPeople, showSector } from './actions.js';
+import { openSheet, closeSheet, registerRoute } from './nav.js';
+import { openPerson, openUnit, openIndustry, showPeople, showSector, perform, open, GOV_SEGS } from './actions.js';
 import { personRow } from './people.js';
-import { accountButton, accountMenu } from './home.js';
+import { createCompass } from './compass.js';
 import { fx, ls } from './platform.js';
 import { loadGeo, lookup, miles } from '../geo.js';
 import L from 'leaflet';
 
 const TAU = Math.PI * 2;
-let mode = ls.get('bearings.explore') || 'scope';
-let radar = null, clusters = null, map = null;
+let mode = ls.get('bearings.explore') || 'compass';
+let radar = null, clusters = null, map = null, compass = null, compassData = null, root = null;
+
+/* ---------- the compass ---------- */
+function signals(d){
+  const t = d.tally || {};
+  const chip = (v, label, color, act) => `<button type="button" class="sig ${v ? '' : 'off'}" data-a="sig" data-v="${act}" ${v ? '' : 'disabled'} aria-label="${fmt(v)} ${label}"><i class="dot" style="background:${color}"></i><b class="mono">${fmt(v)}</b><span>${label}</span></button>`;
+  return `<div class="sigs">${chip(t.w, 'waiting on you', 'var(--amber)', 'waiting')}${t.o ? chip(t.o, 'overdue', 'var(--violet)', 'overdue') : ''}${chip(t.j, 'new jobs', 'var(--info)', 'jcw')}${chip(t.n, 'new connections', 'var(--accent)', 'new')}${d.rel ? chip(t.close, 'close', 'var(--good)', 'close') : ''}</div>`;
+}
+function sectorPanel(d, w){
+  const parts = [];
+  if (d.rel) parts.push(w.close === 0 ? 'No one close yet' : `${w.close} close`);
+  if (w.flagged > 0) parts.push(`${w.flagged} worth a look now`);
+  const line = parts.length ? parts.join(', ') + '.' : 'Closer to the middle means more senior.';
+  return `<div class="sector-panel"><div class="sp-head"><i class="dot lg" style="background:${esc(w.color)}"></i><h3>${esc(w.id)}</h3><span class="mono muted">${fmt(w.n)}</span></div>
+    <p class="muted">${esc(line)}</p>
+    <div class="btn-row"><button type="button" class="btn prominent" data-a="sectorPeople" data-v="${esc(w.id)}">${icon('people')}See everyone</button>${GOV_SEGS.includes(w.id) ? '' : `<button type="button" class="btn" data-a="sectorCos" data-v="${esc(w.id)}">${icon('building')}Companies</button>`}</div>
+    <p class="hint">Tap a dot to open someone.</p></div>`;
+}
+function sectorStrip(d){
+  const f = compass && compass.focus();
+  return `<div class="strip">${d.wedges.slice().sort((a, b) => b.n - a.n).map(w => `<button type="button" class="pill ${f === w.id ? 'on' : ''}" style="--pc:${esc(w.color)}" data-a="focusSector" data-v="${esc(w.id)}"><i class="dot" style="background:${esc(w.color)}"></i><b>${esc(w.short)}</b><span class="mono">${fmt(w.n)}</span></button>`).join('')}</div>`;
+}
+function compassUI(body){
+  if (!compassData || !compass) return;
+  const f = compass.focus(), w = f && compassData.wedges.find(x => x.id === f);
+  const whole = $('.whole', body), share = $('.share-btn', body); if (!whole) return;
+  whole.hidden = !w; share.hidden = !!w;
+  $('.compass-under', body).innerHTML = w ? sectorPanel(compassData, w) : signals(compassData);
+  const strip = $('.compass-strip', body), sl = strip.firstElementChild ? strip.firstElementChild.scrollLeft : 0;
+  strip.innerHTML = sectorStrip(compassData);
+  strip.firstElementChild.scrollLeft = sl;
+}
+function mountCompass(body){
+  body.innerHTML = `<p class="muted small pad-x">Everyone you know, by sector. Closer to the middle means more senior. Tap a sector to zoom in.</p>
+    <section class="card compass-card"><div class="compass-wrap">
+      <button type="button" class="glass-chip whole" data-a="whole" hidden>${icon('collapse')}Whole network</button>
+      <button type="button" class="glass-circle share-btn" data-a="share" aria-label="Share a picture of your network">${icon('share')}</button>
+    </div><div class="compass-under"></div><div class="compass-strip"></div></section>`;
+  compass = createCompass({initials: myInitials(), onOpen: k => { fx.tap(); openPerson(k); }, onTapSector: () => fx.tap(), onFocus: () => compassUI(body)});
+  $('.compass-wrap', body).prepend(compass.el);
+  compassData = M.api.compass({}); compass.setData(compassData);
+  compassUI(body);
+}
 
 /* ---------- canvas helper ---------- */
 function canvasBox(el, {height, square = false, draw}){
@@ -271,20 +314,23 @@ function ranks(){
 }
 
 /* ---------- the view ---------- */
-function teardown(){ if (radar){ radar.destroy(); radar = null; } if (clusters){ clusters.destroy(); clusters = null; } }
+function teardown(){ if (radar){ radar.destroy(); radar = null; } if (clusters){ clusters.destroy(); clusters = null; } if (compass){ compass.destroy(); compass = null; } }
 export const ExploreView = {
+  title: 'Explore',
   mount(el){
-    el.innerHTML = `<div class="scr"><header class="scr-head"><h1>Explore</h1><div class="tools">${accountButton()}</div></header><div class="seg-wrap"></div><div class="ex-body"></div></div>`;
+    root = el;
+    el.innerHTML = `<div class="seg-wrap"></div><div class="ex-body"></div>`;
     this.update(el);
   },
   update(el, what){
     if (!M.info.lens && mode === 'ranks') mode = 'scope';
-    $('.scr-head .me-btn', el).outerHTML = accountButton();
-    $('.seg-wrap', el).innerHTML = segmented('mode', [['scope', 'Scope'], ['clusters', 'Clusters'], ['map', 'Map'], ...(M.info.lens ? [['ranks', 'Ranks']] : [])], mode);
+    if (what === 'theme' && compass){ compass.retheme(); return; }
+    $('.seg-wrap', el).innerHTML = segmented('mode', [['compass', 'Compass'], ['scope', 'Scope'], ['clusters', 'Clusters'], ['map', 'Map'], ...(M.info.lens ? [['ranks', 'Ranks']] : [])], mode);
     const body = $('.ex-body', el);
     if (what === 'person' && mode !== 'map') return; // a single edit doesn't move anyone on these views
     teardown();
-    if (mode === 'scope'){
+    if (mode === 'compass') mountCompass(body);
+    else if (mode === 'scope'){
       body.innerHTML = `<p class="muted small pad-x">More senior people sit closer to the middle. Tap a dot to open someone.</p><div class="radar-host"></div><div class="legend"></div>`;
       radar = createRadar($('.radar-host', body));
       $('.legend', body).innerHTML = radarLegend(radar.data());
@@ -299,9 +345,15 @@ export const ExploreView = {
     } else body.innerHTML = ranks();
   },
   onHide(){ playing = false; },
+  destroy(){ playing = false; teardown(); if (map){ map.m.remove(); map = null; } root = null; },
   handlers: {
-    account: (_, t) => accountMenu(t),
-    mode(v, t){ fx.select(); mode = v; ls.set('bearings.explore', v); ExploreView.update(t.closest('.screen')); },
+    mode(v){ fx.select(); mode = v; ls.set('bearings.explore', v); ExploreView.update(root); },
+    share: () => { fx.tap(); open('share'); },
+    whole: () => { fx.tap(); if (compass) compass.setFocus(null); },
+    focusSector: v => { fx.tap(); if (compass) compass.setFocus(compass.focus() === v ? null : v); },
+    sectorPeople: v => showSector(v),
+    sectorCos: v => openIndustry(v),
+    sig: v => { fx.tap(); if (v === 'close') showPeople({rel: ['Close']}); else perform({kind: 'filter', sig: [v]}); },
     sector: v => showSector(v),
     unit: v => openUnit(v),
     year(v, t){ const y = +v; if (clusters) clusters.setYear(y); const b = t.parentElement.querySelector('.yr'); if (b) b.textContent = y; },
@@ -319,16 +371,15 @@ export const ExploreView = {
       await loadGeo(); const hit = lookup(q);
       if (!hit){ import_show(`Couldn’t find “${q}”. Try a city and state, like Tampa, FL.`); return; }
       MAP.center = {lat: hit.lat, lon: hit.lon}; MAP.centerName = hit.name;
-      const el = t.closest('.screen'); ExploreView.update(el); if (map) map.m.setView([hit.lat, hit.lon], MAP.radius > 100 ? 6 : 8);
+      ExploreView.update(root); if (map) map.m.setView([hit.lat, hit.lon], MAP.radius > 100 ? 6 : 8);
     },
     nearMe(_, t){
       if (!navigator.geolocation){ import_show('Location isn’t available here. Search for a city instead.'); return; }
-      const el = t.closest('.screen');
-      navigator.geolocation.getCurrentPosition(p => { MAP.center = {lat: p.coords.latitude, lon: p.coords.longitude}; MAP.centerName = ''; ExploreView.update(el); if (map) map.m.setView([MAP.center.lat, MAP.center.lon], 8); },
+      navigator.geolocation.getCurrentPosition(p => { MAP.center = {lat: p.coords.latitude, lon: p.coords.longitude}; MAP.centerName = ''; if (root) ExploreView.update(root); if (map) map.m.setView([MAP.center.lat, MAP.center.lon], 8); },
         () => import_show('Location isn’t available. Allow it in settings, or search for a city.'), {maximumAge: 600000, timeout: 15000});
     },
-    radius(v, t){ MAP.radius = +v; fx.select(); ExploreView.update(t.closest('.screen')); },
-    mapClear(_, t){ MAP.center = null; MAP.centerName = ''; ExploreView.update(t.closest('.screen')); if (map) map.m.setView([37.5, -92], 3); },
+    radius(v){ MAP.radius = +v; fx.select(); ExploreView.update(root); },
+    mapClear(){ MAP.center = null; MAP.centerName = ''; ExploreView.update(root); if (map) map.m.setView([37.5, -92], 3); },
     place: v => openPlace(v),
     locate: () => locate(),
     rankCell(v){ const [tier, branch] = v.split('\u0001'); showPeople({tier: [tier], branch: [branch]}); },
@@ -336,3 +387,4 @@ export const ExploreView = {
 };
 let playing = false;
 import { show as import_show } from './model.js';
+registerRoute('explore', () => ExploreView);

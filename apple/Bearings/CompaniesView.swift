@@ -18,7 +18,6 @@ struct CompaniesView: View {
                 Button { model.introQuery = "" } label: { Text("Ways in").font(Theme.geist(.subheadline, .semibold)) }
                     .accessibilityLabel("Find a way into a company")
             }
-            MainToolbar()
         }
     }
 }

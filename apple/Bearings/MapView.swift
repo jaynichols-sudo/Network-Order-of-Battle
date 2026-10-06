@@ -112,7 +112,7 @@ struct PeopleMapView: View {
             }
             .padding(.leading, 12)
             .padding(4)
-            .background(Color(.secondarySystemGroupedBackground), in: Capsule())
+            .background(Theme.card, in: Capsule())
             NavigationLink(value: Route.trips) {
                 Label("Trips: see who’s near where you’re going", systemImage: "airplane")
                     .font(Theme.geist(.subheadline, .semibold))
@@ -222,7 +222,7 @@ struct PeopleMapView: View {
                 .buttonStyle(.plain)
             }
         }
-        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .card(18)
     }
 
     private var footnote: some View {

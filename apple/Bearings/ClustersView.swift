@@ -26,7 +26,7 @@ struct ClustersView: View {
                 .font(Theme.geist(.footnote)).foregroundStyle(.secondary)
             canvas
                 .frame(height: 520)
-                .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .card(18)
                 .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                 .overlay(alignment: .topLeading) { focusChip }
             if let d = data, d.maxYear > d.minYear { replay(d) }
@@ -233,7 +233,7 @@ struct ClustersView: View {
             }
         }
         .padding(14)
-        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .card(18)
     }
 }
 

@@ -1,14 +1,14 @@
 // Catch Up: new connections and job changes as a swipeable deck. Right to star,
 // left to skip, with a flick counting even if the card didn't travel far.
-// Ports CatchUpView.swift.
+// Ports CatchUpView.swift. A page pushed from Today's "N to catch up" chip.
 import { M, person, reviewed, isSample } from './model.js';
 import { esc, fmt, icon, avatar, Day, bandLabel, segmented, empty, $, REDUCED } from './ui.js';
 import { openPerson, perform } from './actions.js';
-import { go } from './nav.js';
+import { registerRoute, popPage } from './nav.js';
 import { fx } from './platform.js';
-import { accountButton, accountMenu } from './home.js';
 
 const S = {mode: 'week', queue: [], index: 0, done: 0, starred: 0, key: '', busy: false};
+let root = null;
 
 function build(){
   S.queue = M.api.deck(S.mode); S.index = 0; S.done = 0; S.starred = 0;
@@ -36,21 +36,22 @@ function finished(){
   return `<div class="finish"><div class="burst">${dots}<span class="burst-bg"></span><span class="burst-ic">${icon('check')}</span></div>
     <h2>${fmt(S.done)} ${S.done === 1 ? 'person' : 'people'} caught up</h2>
     <p class="muted">${S.starred > 0 ? `You starred ${S.starred}. They’re easy to find in People.` : 'Nothing starred this round. Your network’s up to date.'}</p>
-    <div class="finish-btns">${S.starred > 0 ? '<button type="button" class="btn prominent big" data-a="seeStarred">See who you starred</button>' : ''}<button type="button" class="btn big" data-a="homeBack">Back to Home</button></div></div>`;
+    <div class="finish-btns">${S.starred > 0 ? '<button type="button" class="btn prominent big" data-a="seeStarred">See who you starred</button>' : ''}<button type="button" class="btn big" data-a="homeBack">Back to Today</button></div></div>`;
 }
 
 export const CatchUpView = {
+  title: 'Catch Up',
+  cls: 'fill',
   mount(el){
-    el.classList.add('fill');
-    el.innerHTML = `<div class="scr catch"><header class="scr-head"><h1>Catch Up</h1><div class="tools">${accountButton()}</div></header>
-      <div class="seg-wrap"></div><div class="deck-area"></div></div>`;
-    build();
+    root = el;
+    el.innerHTML = `<div class="catch"><div class="seg-wrap"></div><div class="deck-area"></div></div>`;
+    if (S.key !== `${S.mode}-${M.info.lastImport}-${M.info.mode}` || S.index >= S.queue.length) build();
     this.update(el);
   },
+  destroy(){ root = null; },
   update(el, what){
-    if (S.busy) return;
+    if (S.busy || !el) return;
     if (S.key !== `${S.mode}-${M.info.lastImport}-${M.info.mode}`) build();
-    $('.scr-head .me-btn', el).outerHTML = accountButton();
     $('.seg-wrap', el).innerHTML = segmented('mode', [['week', 'Since last refresh'], ['all', 'Everyone']], S.mode);
     const area = $('.deck-area', el);
     if (S.index >= S.queue.length){
@@ -78,13 +79,12 @@ export const CatchUpView = {
     });
   },
   handlers: {
-    account: (_, t) => accountMenu(t),
-    mode(v){ if (v === S.mode) return; fx.select(); S.mode = v; build(); CatchUpView.update(document.querySelector('.screen[data-tab="catchup"]')); },
+    mode(v){ if (v === S.mode) return; fx.select(); S.mode = v; build(); CatchUpView.update(root); },
     skip: () => decide(false),
     starTop: () => decide(true),
     openTop: () => { if (S.index < S.queue.length) openPerson(S.queue[S.index]); },
     seeStarred(){ S.done = 0; S.starred = 0; perform({kind: 'filter', sig: ['star']}); },
-    homeBack(){ S.done = 0; S.starred = 0; go('home'); CatchUpView.update(document.querySelector('.screen[data-tab="catchup"]')); },
+    homeBack(){ S.done = 0; S.starred = 0; popPage(); },
   },
 };
 
@@ -123,7 +123,7 @@ function drag(card, k){
 
 function decide(star, flingY){
   if (S.busy || S.index >= S.queue.length) return;
-  const el = document.querySelector('.screen[data-tab="catchup"]');
+  const el = root;
   const card = el && el.querySelector('.dcard.top');
   const k = S.queue[S.index];
   S.busy = true;
@@ -142,3 +142,4 @@ function decide(star, flingY){
     await reviewed(k, S.mode, star);
   }, 260);
 }
+registerRoute('catchup', () => CatchUpView);

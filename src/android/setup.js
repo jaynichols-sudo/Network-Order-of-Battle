@@ -56,7 +56,7 @@ export function openImport(file = null){
           await commitImport(plan);
           closeSheet(sheet);
           if (plan.wasSample || plan.stats.first || plan.wasStarter){ go('home'); setTimeout(openPayoff, 350); }
-          else show(`${fmt(plan.stats.added)} new, ${fmt(plan.stats.changed)} changed jobs. Catch up from Home.`);
+          else show(`${fmt(plan.stats.added)} new, ${fmt(plan.stats.changed)} changed jobs. Catch up from Today.`);
         } catch (e) { st.saving = false; st.error = 'Save failed: ' + ((e && e.message) || e); render(body); }
       },
     },
@@ -102,7 +102,7 @@ export function applyTheme(){
   const root = document.documentElement;
   if (t === 'system') delete root.dataset.theme; else root.dataset.theme = t;
   root.dataset.scheme = dark ? 'dark' : 'light';
-  const meta = document.querySelector('meta[name="theme-color"]'); if (meta) meta.content = dark ? '#000000' : '#F2F2F7';
+  const meta = document.querySelector('meta[name="theme-color"]'); if (meta) meta.content = dark ? '#0D0A17' : '#F3F3F6';
   statusBar(dark);
 }
 export function openSettings(){

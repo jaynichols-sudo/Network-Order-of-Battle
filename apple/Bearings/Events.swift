@@ -70,7 +70,7 @@ struct EventsStrip: View {
                     .font(Theme.geist(.subheadline, .semibold))
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 14).padding(.vertical, 12)
-                    .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .card(18)
             }
             .buttonStyle(.plain)
         }
@@ -97,7 +97,7 @@ struct EventRow: View {
             Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(.tertiary)
         }
         .padding(14)
-        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .card(18)
     }
 
     private func line(_ todo: Int) -> String {

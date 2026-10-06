@@ -16,13 +16,9 @@ struct RootView: View {
             Tab(AppTab.companies.title, systemImage: AppTab.companies.icon, value: AppTab.companies) {
                 stack(.companies) { CompaniesView() }
             }
-            Tab(AppTab.explore.title, systemImage: AppTab.explore.icon, value: AppTab.explore) {
-                stack(.explore) { ExploreView() }
+            Tab(AppTab.you.title, systemImage: AppTab.you.icon, value: AppTab.you) {
+                stack(.you) { YouView() }
             }
-            Tab(AppTab.catchup.title, systemImage: AppTab.catchup.icon, value: AppTab.catchup) {
-                stack(.catchup) { CatchUpView() }
-            }
-            .badge(model.info.deckCount)
         }
         .tabViewStyle(.sidebarAdaptable)
         .modifier(ModernTabBar())
@@ -66,6 +62,10 @@ struct RootView: View {
                     case .trip(let id): TripView(id: id)
                     case .trips: TripsView()
                     case .event(let id): EventView(id: id)
+                    case .explore: ExploreView()
+                    case .catchup: CatchUpView()
+                    case .events: EventsList()
+                    case .about(let k): PersonAboutView(k: k)
                     }
                 }
         }

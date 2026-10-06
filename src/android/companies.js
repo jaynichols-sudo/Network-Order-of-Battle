@@ -6,7 +6,6 @@ import { esc, fmt, icon, ring, animateRings, mixBar, segmented, empty, menu, Day
 import { registerRoute, openSheet, closeSheet, setPageTitle } from './nav.js';
 import { openPerson, openUnit, openIndustry, showPeople, register, open } from './actions.js';
 import { personRow } from './people.js';
-import { accountButton, accountMenu } from './home.js';
 import { openURL, fx, prefs, ls } from './platform.js';
 import { openMessage } from './sheets.js';
 
@@ -52,17 +51,15 @@ function allCompanies(){
 
 export const CompaniesView = {
   mount(el){
-    el.innerHTML = `<div class="scr"><header class="scr-head"><button type="button" class="link strong ways" data-a="ways">${icon('waysIn')}Ways in</button><h1>Companies</h1><div class="tools">${accountButton()}</div></header><div class="seg-wrap"></div><div class="co-body"></div></div>`;
+    el.innerHTML = `<div class="scr"><header class="scr-head"><h1>Companies</h1><div class="tools"><button type="button" class="pill-btn soft" data-a="ways">${icon('waysIn')}Ways in</button></div></header><div class="seg-wrap"></div><div class="co-body"></div></div>`;
     this.update(el);
   },
   update(el){
-    $('.scr-head .me-btn', el).outerHTML = accountButton();
     $('.seg-wrap', el).innerHTML = segmented('mode', [['watchlist', 'Watchlist'], ['industries', 'Industries'], ['all', 'All']], mode);
     $('.co-body', el).innerHTML = mode === 'watchlist' ? watchlist() : mode === 'industries' ? industries() : allCompanies();
     animateRings(el);
   },
   handlers: {
-    account: (_, t) => accountMenu(t),
     mode(v, t){ fx.select(); mode = v; ls.set('bearings.companies', v); CompaniesView.update(t.closest('.screen')); },
     unit: v => openUnit(v),
     industry: v => openIndustry(v),

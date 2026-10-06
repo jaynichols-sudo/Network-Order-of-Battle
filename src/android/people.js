@@ -8,24 +8,24 @@ import { fx } from './platform.js';
 
 /* ---------- a person row ---------- */
 export function flagFor(p){
-  if (p.waiting) return flag('Reply', 'var(--bad)');
+  if (p.waiting) return flag('Reply', 'var(--amber)');
   if (p.due) return flag('Follow up', 'var(--violet)');
   if (p.over) return flag('Overdue', 'var(--violet)');
   if (p.moved) return flag('New job', 'var(--info)');
-  if (p.isNew) return flag('New', 'var(--accent)');
+  if (p.isNew) return flag('New', 'var(--good)');
   if (p.x) return flag('Removed', 'var(--text2)');
   return '';
 }
 export function personRow(p, {lens = M.info.lens, sub = '', act = 'open'} = {}){
   if (!p) return '';
   const t = p.rx && p.rx.t;
-  const meta = `${t ? `<span class="meta-msg"><i class="dot" style="background:${bandVar(p.band)}"></i><span class="mono">${esc(Day.short(t))}</span></span>` : ''}${
-    lens && p.cl.grade ? `<span class="grade mono">${esc(p.cl.grade)}</span>`
-      : p.indShort && p.cl.ind !== 'Unclassified' ? `<span class="meta-ind"><i class="dot sm" style="background:${esc(p.indColor)}"></i>${esc(p.indShort)}</span>` : ''}`;
+  const tag = flagFor(p) || (lens && p.cl.grade ? `<span class="grade mono">${esc(p.cl.grade)}</span>`
+    : p.indShort && p.cl.ind !== 'Unclassified' ? `<span class="meta-ind"><i class="dot sm" style="background:${esc(p.indColor)}"></i>${esc(p.indShort)}</span>` : '');
+  const detail = [p.p, p.c].filter(Boolean).join(' · ');
   return `<button type="button" class="row prow" data-a="${act}" data-v="${esc(p.k)}" aria-label="${esc(p.full)}${p.p ? ', ' + esc(p.p) : ''}${p.c ? ', ' + esc(p.c) : ''}${t ? `, ${esc(bandLabel(p.band))}, last message ${esc(Day.ago(t))}` : ''}">
-    ${avatar(p, 46)}
-    <span class="prow-main"><span class="prow-name"><b>${esc(p.full)}</b>${flagFor(p)}</span>${p.p ? `<span class="prow-title">${esc(p.p)}</span>` : ''}${p.c ? `<span class="prow-co">${esc(p.c)}</span>` : ''}${sub ? `<span class="prow-sub">${esc(sub)}</span>` : ''}</span>
-    <span class="prow-meta">${meta}</span></button>`;
+    ${avatar(p, 42)}
+    <span class="prow-main"><b class="prow-name">${esc(p.full)}</b>${detail ? `<span class="prow-detail">${esc(detail)}</span>` : ''}${sub ? `<span class="prow-sub">${esc(sub)}</span>` : ''}</span>
+    <span class="prow-meta">${tag}${t ? `<span class="meta-msg"><i class="dot" style="background:${bandVar(p.band)}"></i><span class="mono">${esc(Day.short(t))}</span></span>` : ''}</span></button>`;
 }
 export const rowsCard = (ps, opts) => ps.length ? `<div class="card list">${ps.map(p => personRow(p, opts)).join('')}</div>` : '';
 
@@ -47,6 +47,21 @@ function removeToken(g, v){
   setQuery({filters: f});
 }
 
+/* the pill row: one tap for the views you use most */
+const QUICK = [['all', 'All', {}], ['waiting', 'Reply', {sig: ['waiting']}], ['jcw', 'New jobs', {sig: ['jcw']}], ['star', 'Starred', {sig: ['star']}], ['close', 'Close', {rel: ['Close']}], ['new', 'New', {sig: ['new']}]];
+function quickOn(id){
+  const f = M.q.filters, n = filterCount(f), q = QUICK.find(x => x[0] === id); if (!q) return false;
+  const want = q[2], keys = Object.keys(want);
+  if (!keys.length) return n === 0;
+  return n === 1 && keys.every(g => f[g].length === 1 && f[g][0] === want[g][0]);
+}
+function pills(){
+  const qs = QUICK.filter(([id]) => id !== 'close' || M.info.hasRel);
+  const n = filterCount(M.q.filters);
+  return `<div class="fpills">${qs.map(([id, l]) => `<button type="button" class="fpill ${quickOn(id) ? 'on' : ''}" data-a="quick" data-v="${id}">${esc(l)}</button>`).join('')}
+    <button type="button" class="fpill round ${n && !QUICK.some(([id]) => id !== 'all' && quickOn(id)) ? 'on' : ''}" data-a="filters" aria-label="Filters">${icon('filter')}${n ? `<b class="badge">${n}</b>` : ''}</button></div>`;
+}
+
 const SORTS = [['new', 'Newest connections'], ['name', 'Last name'], ['level', 'Most senior'], ['warm', 'Closest relationships'], ['rank', 'Rank']];
 const PAGE = 80;
 
@@ -55,11 +70,10 @@ export const PeopleView = {
   shown: PAGE,
   mount(el){
     el.innerHTML = `<div class="scr">
-      <header class="scr-head"><h1>People</h1><div class="tools">
-        <button type="button" class="tool" data-a="sort" aria-label="Sort and more">${icon('sort')}</button>
-        <button type="button" class="tool" data-a="filters" aria-label="Filters">${icon('filter')}<b class="badge" hidden></b></button></div></header>
-      <label class="searchbox">${icon('search')}<input type="search" data-in="q" placeholder="Names, companies, or “navy o-5 and up”" autocomplete="off" autocorrect="off" spellcheck="false" enterkeyhint="search" aria-label="Search your network"><button type="button" class="clear" data-a="clearQ" aria-label="Clear search" hidden>${icon('x')}</button></label>
-      <div class="people-body"></div><div class="sentinel"></div></div>`;
+      <header class="scr-head"><h1>People</h1><div class="tools"><span class="count"></span>
+        <button type="button" class="tool" data-a="sort" aria-label="Sort, pin and export">${icon('sort')}</button></div></header>
+      <label class="searchbox white">${icon('search')}<input type="search" data-in="q" placeholder="Names, companies, or “navy o-5 and up”" autocomplete="off" autocorrect="off" spellcheck="false" enterkeyhint="search" aria-label="Search your network"><button type="button" class="clear" data-a="clearQ" aria-label="Clear search" hidden>${icon('x')}</button></label>
+      <div class="pills-slot"></div><div class="people-body"></div><div class="sentinel"></div></div>`;
     this.io = new IntersectionObserver(es => { if (es.some(e => e.isIntersecting) && this.shown < M.results.length){ this.shown += PAGE; this.renderList(el, true); } }, {root: el, rootMargin: '600px'});
     this.io.observe($('.sentinel', el));
     register('peopleScrollTop', () => { el.scrollTop = 0; this.shown = PAGE; });
@@ -69,17 +83,18 @@ export const PeopleView = {
     const input = $('input[data-in="q"]', el);
     if (document.activeElement !== input && input.value !== M.q.text) input.value = M.q.text;
     $('.clear', el).hidden = !M.q.text;
-    const n = filterCount(M.q.filters), b = $('.tool .badge', el); b.hidden = !n; b.textContent = n;
+    $('.scr-head .count', el).textContent = fmt(M.results.length);
+    const ps = $('.pills-slot', el), sl = ps.firstElementChild ? ps.firstElementChild.scrollLeft : 0;
+    ps.innerHTML = pills(); ps.firstElementChild.scrollLeft = sl;
     this.renderList(el);
   },
   renderList(el, append = false){
     const body = $('.people-body', el);
     const keys = M.results;
     if (!append){
-      const toks = tokens();
+      const toks = QUICK.some(([id]) => quickOn(id)) ? [] : tokens();
       const chips = M.chips.map(c => `<span class="chip on">${icon('sparkles')}${esc(c)}</span>`).join('') + toks.map(([g, v, l]) => `<button type="button" class="chip on" data-a="untoken" data-v="${esc(g + '\u0001' + v)}">${esc(l)}${icon('x')}</button>`).join('');
       body.innerHTML = `${chips ? `<div class="chips-scroll">${chips}${toks.length + (M.chips.length ? 1 : 0) > 1 ? '<button type="button" class="link" data-a="clearAll">Clear all</button>' : ''}</div>` : ''}
-        <p class="sec-h">${plural(keys.length, 'person', 'people')}</p>
         ${keys.length ? `<div class="card list plist">${persons(keys.slice(0, this.shown)).map(p => personRow(p)).join('')}</div>` : empty('search', 'No one matches', 'Remove a filter or clear the search.')}`;
     } else {
       const list = $('.plist', body); if (!list) return;
@@ -89,22 +104,23 @@ export const PeopleView = {
   },
   handlers: {
     open: k => openPerson(k),
-    q(v, t){ clearTimeout(PeopleView.qt); PeopleView.qt = setTimeout(() => { PeopleView.shown = PAGE; setQuery({text: v}); t.closest('.screen').scrollTop = 0; }, 160); },
+    q(v, t){ clearTimeout(PeopleView.qt); PeopleView.qt = setTimeout(() => { PeopleView.shown = PAGE; setQuery({text: v}); const sc = t.closest('.screen'); if (sc) sc.scrollTop = 0; }, 160); },
     clearQ(){ PeopleView.shown = PAGE; setQuery({text: ''}); },
     clearAll(){ PeopleView.shown = PAGE; setQuery({text: '', filters: blankFilters()}); },
     untoken(v){ const [g, val] = v.split('\u0001'); removeToken(g, val); },
     filters: () => openFilters(),
+    quick(id){ fx.select(); const q = QUICK.find(x => x[0] === id); if (!q) return; PeopleView.shown = PAGE; setQuery({filters: Object.assign(blankFilters(), JSON.parse(JSON.stringify(q[2])))}); },
     sort(_, t){
       const sorts = SORTS.filter(([s]) => (s !== 'rank' || M.info.lens) && (s !== 'warm' || M.info.hasRel));
       menu(t, [{header: 'Sort by'}, ...sorts.map(([s, l]) => ({label: l, on: M.q.sort === s, run: () => setQuery({sort: s})})), 'sep',
-        {label: 'Pin this search to Home', icon: 'pin', disabled: !M.q.text && !filterCount(M.q.filters), run: pinSearch},
+        {label: 'Pin this search to Today', icon: 'pin', disabled: !M.q.text && !filterCount(M.q.filters), run: pinSearch},
         {label: 'Export this list', icon: 'share', run: () => exportCSV(M.results)}]);
     },
   },
 };
 async function pinSearch(){
   const t = M.q.text;
-  const name = await prompt({title: 'Name this list', message: 'It stays up to date every time you refresh.', placeholder: 'Navy O-5 and up', value: t ? t[0].toUpperCase() + t.slice(1) : '', ok: 'Pin to Home'});
+  const name = await prompt({title: 'Name this list', message: 'It stays up to date every time you refresh.', placeholder: 'Navy O-5 and up', value: t ? t[0].toUpperCase() + t.slice(1) : '', ok: 'Pin to Today'});
   if (name == null) return;
   saveSearch(name.trim() || 'My list');
 }
