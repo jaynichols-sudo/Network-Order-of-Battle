@@ -1,7 +1,7 @@
 # App Review notes
 
 Pushed to App Store Connect by the store-listing workflow (store/listing.json, "review").
-The contact phone number comes from the REVIEW_PHONE repository secret (Apple requires one), or can be typed into App Store Connect by hand.
+The contact phone number comes from the REVIEW_PHONE repository secret.
 
 Thank you for reviewing Bearings.
 
@@ -17,6 +17,8 @@ PERMISSIONS, ALL OPTIONAL AND ASKED IN CONTEXT:
 - Notifications: follow-up reminders and the Monday brief.
 
 SYNC. Data syncs only through the user's own iCloud (CloudKit/iCloud Documents). Optional Salesforce integration signs in directly with the user's Salesforce org via OAuth and is off by default.
+
+ENRICHMENT (OPTIONAL). Users who already have a ZoomInfo or Seamless.AI account can add their own API credentials in Settings. Only when they tap Look up, the selected people's names and companies are sent from the device to that provider to fetch work email, phone, title and city. Credentials stay in the device Keychain. Off by default; no Bearings server is involved.
 
 AI. Briefs and draft messages use Apple's on-device Foundation Models when available, with a plain template fallback. No third-party AI service.
 

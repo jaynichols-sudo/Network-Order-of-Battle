@@ -189,6 +189,9 @@ struct UnitView: View {
     @State private var linkText = ""
     @State private var editingPlace = false
     @State private var placeText = ""
+    @State private var enrichAsking = false
+    /// Everyone at this company or unit, capped so one tap can't burn a whole credit balance.
+    private var unitKeys: [String] { Array((u?.rungs.flatMap(\.keys) ?? []).prefix(100)) }
 
     var body: some View {
         List {
@@ -214,9 +217,19 @@ struct UnitView: View {
                         Button {
                             if let url = AccountMapDocument.pdf(u, model: model) { model.shareFile = ShareFile(url: url) }
                         } label: { Label("Share account map (PDF)", systemImage: "doc.richtext") }
+                        if EnrichProvider.current != .off {
+                            Button { enrichAsking = true } label: {
+                                Label("Look up everyone here with \(EnrichProvider.current.title)", systemImage: "sparkle.magnifyingglass")
+                            }
+                        }
                     }
                 } label: { Label("More", systemImage: "ellipsis.circle") }
             }
+        }
+        .confirmationDialog("Look up \(unitKeys.count) people with \(EnrichProvider.current.title)?", isPresented: $enrichAsking, titleVisibility: .visible) {
+            Button("Look up \(unitKeys.count)") { Task { _ = await model.enrich(unitKeys) } }
+        } message: {
+            Text(EnrichProvider.current == .seamless ? "This uses up to \(unitKeys.count) Seamless.AI research credits. Their names and companies are sent to Seamless.AI." : "Their names and companies are sent to ZoomInfo, using your account.")
         }
         .task(id: name) {
             await load()

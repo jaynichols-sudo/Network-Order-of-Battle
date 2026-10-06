@@ -24,6 +24,8 @@ struct PersonPlace: Codable, Hashable {
         case "title": return "From their job title or company"
         case "company": return "From the location you set for their company"
         case "sample": return "Sample data"
+        case "zoominfo": return "From ZoomInfo"
+        case "seamless": return "From Seamless.AI"
         default: return ""
         }
     }

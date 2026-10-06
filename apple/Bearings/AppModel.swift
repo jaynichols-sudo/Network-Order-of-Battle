@@ -84,6 +84,8 @@ final class AppModel {
 
     // places
     private(set) var places: [String: PersonPlace] = [:]
+    /// What the user's ZoomInfo or Seamless.AI account found, by person.
+    private(set) var enriched: [String: Enriched] = [:]
     private var foundPlaces: [String: PersonPlace] = [:]
     private var companyPlaced: [String: PersonPlace] = [:]
     private(set) var placesBuilt = ""
@@ -315,6 +317,10 @@ final class AppModel {
            let lists = try? JSONDecoder().decode([SavedSearch].self, from: d) {
             savedSearches = lists
         }
+        if case .data(let t) = await store.read("enrichment.json"), let t, let d = t.data(using: .utf8),
+           let e = try? JSONDecoder().decode([String: Enriched].self, from: d) {
+            enriched = e
+        }
         if case .data(let t) = await store.read("places.json"), let t, let d = t.data(using: .utf8),
            let f = try? JSONDecoder().decode(PlacesFile.self, from: d) {
             foundPlaces = f.people
@@ -364,6 +370,10 @@ final class AppModel {
     /// Your own settings win: the person first, then their company or office. Then Contacts and title clues.
     func mergePlaces() {
         var out = info.isSample ? Locator.samplePlaces(people) : foundPlaces
+        // a city from the user's enrichment provider beats a rough guess from a title
+        for (k, e) in enriched where out[k] == nil || out[k]!.isApproximate || out[k]!.src == "title" {
+            if let pl = e.place { out[k] = pl }
+        }
         for (k, pl) in companyPlaced { out[k] = pl }
         for p in people {
             if let e = p.ed, !e.loc.isEmpty, let la = e.lat, let lo = e.lon {
@@ -371,6 +381,15 @@ final class AppModel {
             }
         }
         places = out
+    }
+
+    func saveEnriched(_ found: [String: Enriched]) async {
+        guard !found.isEmpty else { return }
+        for (k, e) in found { enriched[k] = e }
+        if !info.isSample, let d = try? JSONEncoder().encode(enriched) {
+            try? await store.write("enrichment.json", String(decoding: d, as: UTF8.self))
+        }
+        mergePlaces()
     }
 
     /// Works out where people are from Contacts and job titles. Asks for Contacts access first.

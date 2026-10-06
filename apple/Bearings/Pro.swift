@@ -23,7 +23,7 @@ final class Pro {
     static let gating = false
 
     enum Feature: String, Identifiable {
-        case events, waysIn, team, arrivals, accountMap, salesforce
+        case events, waysIn, team, arrivals, accountMap, salesforce, enrich
         var id: String { rawValue }
         var title: String {
             switch self {
@@ -33,6 +33,7 @@ final class Pro {
             case .arrivals: return "Arrival alerts"
             case .accountMap: return "Account map PDF"
             case .salesforce: return "Salesforce"
+            case .enrich: return "ZoomInfo and Seamless.AI"
             }
         }
         var line: String {
@@ -43,6 +44,7 @@ final class Pro {
             case .arrivals: return "Land somewhere and see who you know there."
             case .accountMap: return "A one-page map of who you know at an account, to share."
             case .salesforce: return "Send contacts, tasks and notes to your Salesforce."
+            case .enrich: return "Fill in emails, phones and locations from your own account."
             }
         }
         var icon: String {
@@ -53,9 +55,10 @@ final class Pro {
             case .arrivals: return "airplane.arrival"
             case .accountMap: return "doc.richtext"
             case .salesforce: return "cloud"
+            case .enrich: return "sparkle.magnifyingglass"
             }
         }
-        static let order: [Feature] = [.events, .waysIn, .team, .arrivals, .accountMap, .salesforce]
+        static let order: [Feature] = [.events, .waysIn, .team, .arrivals, .enrich, .accountMap, .salesforce]
     }
 
     /// Prices to show before the App Store answers (and in screenshots); the real ones come from StoreKit.

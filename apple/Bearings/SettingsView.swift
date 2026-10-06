@@ -33,6 +33,7 @@ struct SettingsView: View {
                 contactsSection
                 calendarSection
                 salesforceSection
+                EnrichSettingsSection()
                 dataSection
                 aboutSection
             }

@@ -207,6 +207,7 @@ struct PersonAboutView: View {
                 if model.info.hasRel { relationship(p) }
                 followUp(p)
                 location(p)
+                EnrichPersonSection(person: p)
                 more(p)
                 details(p)
                 notes(p)
