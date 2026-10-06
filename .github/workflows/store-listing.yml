@@ -3,6 +3,11 @@ name: Bearings App Store listing
 on:
   # run by hand from the Actions tab: Mac runners use build minutes ten times faster
   workflow_dispatch:
+    inputs:
+      text_only:
+        description: Only the listing text and App Review notes (no screenshots)
+        type: boolean
+        default: false
 
 concurrency:
   group: store-listing
@@ -40,6 +45,7 @@ jobs:
         continue-on-error: true
         run: python3 ios/ci/asc_listing.py text
       - name: Build the app for the simulator
+        if: ${{ !inputs.text_only }}
         run: |
           npm ci && npm run build
           brew install xcodegen >/dev/null
@@ -47,6 +53,7 @@ jobs:
           xcodebuild -project apple/Bearings.xcodeproj -scheme Bearings -configuration Debug \
             -destination 'generic/platform=iOS Simulator' -derivedDataPath build/dd CODE_SIGNING_ALLOWED=NO build > build.log 2>&1 || { grep error: build.log | head -40; exit 1; }
       - name: Capture App Store screenshots
+        if: ${{ !inputs.text_only }}
         run: |
           APP=$(find build/dd/Build/Products -maxdepth 2 -name "Bearings.app" -path "*iphonesimulator*" | head -1)
           pick() { xcrun simctl list devices available -j | python3 -c "
@@ -78,9 +85,11 @@ jobs:
           python3 store/frame.py raw framed 2064 2752 pad
           ls framed
       - name: Upload screenshots to App Store Connect
+        if: ${{ !inputs.text_only }}
         continue-on-error: true
         run: python3 ios/ci/asc_listing.py screenshots framed
       - name: Publish framed screenshots to the store-screens branch
+        if: ${{ !inputs.text_only }}
         continue-on-error: true
         run: |
           cd framed

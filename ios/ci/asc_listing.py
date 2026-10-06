@@ -69,7 +69,8 @@ def review(version):
     else:
         ok, res = call_soft('POST', '/appStoreReviewDetails', {'data': {'type': 'appStoreReviewDetails', 'attributes': attrs,
                                                                          'relationships': {'appStoreVersion': {'data': {'type': 'appStoreVersions', 'id': version}}}}})
-    print(f"::{'notice' if ok else 'warning'} title=App Review notes::{'Review contact and notes updated' if ok else res}")
+    msg = 'Review contact and notes updated' if ok else ' '.join(str(res).split())
+    print(f"::{'notice' if ok else 'warning'} title=App Review notes::{msg}")
 
 
 def upload(set_id, path):
