@@ -53,11 +53,12 @@ jobs:
             sleep $secs
             # stop the recorder itself (xcrun hands off to a child process), with a hard stop as backup
             pkill -INT -f "recordVideo" || true
-            for i in 1 2 3 4 5 6 7 8 9 10; do kill -0 $rec 2>/dev/null || break; sleep 1; done
+            for i in $(seq 1 25); do kill -0 $rec 2>/dev/null || break; sleep 1; done
             kill -9 $rec 2>/dev/null || true
             pkill -9 -f "recordVideo" || true
             ls -la "clips/$name.mp4" || true
           }
+          clip 0-warmup 3
           clip 1-home 8
           clip 2-weekly 5 -demoOpen weekly
           clip 3-profile 5 -startTab people -demoOpen person
@@ -65,6 +66,8 @@ jobs:
           clip 5-clusters 6 -startTab explore -exploreMode clusters
           clip 6-intro 5 -startTab companies -demoOpen intro
           clip 7-event 5 -demoOpen event
+          clip 8-home 8
+          rm -f clips/0-warmup.mp4
           ls -la clips
       - name: Publish clips to the demo-clips branch
         run: |
