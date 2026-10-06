@@ -46,12 +46,30 @@ def text():
     attrs = {k: L[k] for k in ('description', 'keywords', 'promotionalText', 'supportUrl', 'marketingUrl')}
     ok, res = call_soft('PATCH', f'/appStoreVersionLocalizations/{loc}', {'data': {'type': 'appStoreVersionLocalizations', 'id': loc, 'attributes': attrs}})
     print(f"::{'notice' if ok else 'warning'} title=App Store listing::{'Description, keywords, promo text and links updated' if ok else res}")
+    review(version_id := editable_version(app))
     infos = call('GET', f'/apps/{app}/appInfos')['data']
     for info in infos:
         for il in call('GET', f"/appInfos/{info['id']}/appInfoLocalizations")['data']:
             if il['attributes']['locale'] == L['locale']:
                 ok, res = call_soft('PATCH', f"/appInfoLocalizations/{il['id']}", {'data': {'type': 'appInfoLocalizations', 'id': il['id'], 'attributes': {'privacyPolicyUrl': L['privacyPolicyUrl']}}})
                 print('privacy policy url', 'ok' if ok else res)
+
+
+def review(version):
+    """App Review contact and notes. The phone number is left to App Store Connect, where Jay enters it."""
+    r = L.get('review')
+    if not r:
+        return
+    attrs = {k: r[k] for k in ('contactFirstName', 'contactLastName', 'contactEmail', 'notes') if r.get(k)}
+    attrs['demoAccountRequired'] = False
+    ok, res = call_soft('GET', f'/appStoreVersions/{version}/appStoreReviewDetail')
+    rid = res.get('data', {}).get('id') if ok and isinstance(res, dict) and res.get('data') else None
+    if rid:
+        ok, res = call_soft('PATCH', f'/appStoreReviewDetails/{rid}', {'data': {'type': 'appStoreReviewDetails', 'id': rid, 'attributes': attrs}})
+    else:
+        ok, res = call_soft('POST', '/appStoreReviewDetails', {'data': {'type': 'appStoreReviewDetails', 'attributes': attrs,
+                                                                         'relationships': {'appStoreVersion': {'data': {'type': 'appStoreVersions', 'id': version}}}}})
+    print(f"::{'notice' if ok else 'warning'} title=App Review notes::{'Review contact and notes updated' if ok else res}")
 
 
 def upload(set_id, path):

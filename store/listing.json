@@ -1,88 +1,105 @@
 {
-  "locale": "en-US",
-  "names": [
-    "Bearings",
-    "Bearings: Network Map",
-    "Bearings Network",
-    "Bearings: Know Your Network"
+ "locale": "en-US",
+ "names": [
+  "Bearings",
+  "Bearings: Network Map",
+  "Bearings Network",
+  "Bearings: Know Your Network"
+ ],
+ "subtitle": "Your network, mapped",
+ "promotionalText": "Know who changed jobs, who’s waiting on your reply, and who’s near where you’re headed. Private by design: no account, no server.",
+ "keywords": "linkedin,network,contacts,crm,relationships,networking,sales,follow up,travel,salesforce,federal",
+ "supportUrl": "https://www.jaynichols.net/bearings/support.html",
+ "marketingUrl": "https://www.jaynichols.net/bearings/index.html",
+ "privacyPolicyUrl": "https://www.jaynichols.net/bearings/privacy.html",
+ "description": "Bearings turns your LinkedIn export into a private, living map of the people you know, so you always know where you stand and who to reach out to.\n\nKNOW WHO TO CALL\n• Every Monday, five people worth reaching out to, each with a reason and a ready-made message\n• See who wrote last and is waiting on your reply\n• Spot good relationships that are going cold\n• Set follow-ups and get reminded, with Done and Snooze right from the notification\n• Catch up on new connections and job changes with a quick swipe\n\nSEE EVERY COMPANY\n• Who you know at each company, agency or command, at every level from executive to staff\n• Coverage gaps on your watchlist, like no director-level contact yet\n• The people who used to work there, often the best way in\n• Everyone sorted by industry, with a tap to fix anything\n\nTRAVEL SMARTER\n• A map of where your people are, worked out on your iPhone from your Contacts and their titles\n• Search a city or tap Near Me to see who’s within 25 to 250 miles\n• Trips found in your calendar, with a heads-up about who’s nearby before you go\n• Ready-made “I’ll be in town” messages\n\nWALK INTO MEETINGS PREPARED\n• A brief 30 minutes before meetings with people you know: how well you know them, your last conversation, your notes, and who else you know at their company\n\nEXPLORE YOUR NETWORK\n• Clusters: watch your network gather around companies and replay how it grew\n• Scope: see seniority at a glance\n• Plain-English search like “navy o-5 and up in cyber” or “close contacts at Duke Energy”\n• An optional federal and military view with branch, rank, agency and segment\n\nEVERYWHERE YOU ARE\n• iPhone, iPad and Mac, synced through your own iCloud\n• Apple Watch app and complications\n• Home Screen and Lock Screen widgets\n• Siri and Shortcuts: “Who’s waiting on me in Bearings?”\n• Your people in iPhone search\n\nWORKS WITH SALESFORCE\nSend contacts, follow-up tasks and notes to your organization’s Salesforce, signing in directly with Salesforce.\n\nPRIVATE BY DESIGN\nNo account and no Bearings server. Your network lives on your devices and in your own iCloud. Contacts, calendar and location are read on your device and never uploaded. No ads, no tracking.\n\nTo start, request your data from LinkedIn (Settings, Data privacy, Get a copy of your data) and open the zip in Bearings. It takes about three minutes.",
+ "screens": [
+  [
+   "01-home",
+   [],
+   "Who needs you this week"
   ],
-  "subtitle": "Your network, mapped",
-  "promotionalText": "Know who changed jobs, who’s waiting on your reply, and who’s near where you’re headed. Private by design: no account, no server.",
-  "keywords": "linkedin,network,contacts,crm,relationships,networking,sales,follow up,travel,salesforce,federal",
-  "supportUrl": "https://www.jaynichols.net/bearings/support.html",
-  "marketingUrl": "https://www.jaynichols.net/bearings/index.html",
-  "privacyPolicyUrl": "https://www.jaynichols.net/bearings/privacy.html",
-  "description": "Bearings turns your LinkedIn export into a private, living map of the people you know, so you always know where you stand and who to reach out to.\n\nKNOW WHO TO CALL\n• See who wrote last and is waiting on your reply\n• Spot good relationships that are going cold\n• Set follow-ups and get reminded, with Done and Snooze right from the notification\n• Catch up on new connections and job changes with a quick swipe\n\nSEE EVERY COMPANY\n• Who you know at each company, agency or command, at every level from executive to staff\n• Coverage gaps on your watchlist, like no director-level contact yet\n• The people who used to work there, often the best way in\n• Everyone sorted by industry, with a tap to fix anything\n\nTRAVEL SMARTER\n• A map of where your people are, worked out on your iPhone from your Contacts and their titles\n• Search a city or tap Near Me to see who’s within 25 to 250 miles\n• Trips found in your calendar, with a heads-up about who’s nearby before you go\n• Ready-made “I’ll be in town” messages\n\nWALK INTO MEETINGS PREPARED\n• A brief 30 minutes before meetings with people you know: how well you know them, your last conversation, your notes, and who else you know at their company\n\nEXPLORE YOUR NETWORK\n• Clusters: watch your network gather around companies and replay how it grew\n• Scope: see seniority at a glance\n• Plain-English search like “navy o-5 and up in cyber” or “close contacts at Duke Energy”\n• An optional federal and military view with branch, rank, agency and segment\n\nEVERYWHERE YOU ARE\n• iPhone, iPad and Mac, synced through your own iCloud\n• Apple Watch app and complications\n• Home Screen and Lock Screen widgets\n• Siri and Shortcuts: “Who’s waiting on me in Bearings?”\n• Your people in iPhone search\n\nWORKS WITH SALESFORCE\nSend contacts, follow-up tasks and notes to your organization’s Salesforce, signing in directly with Salesforce.\n\nPRIVATE BY DESIGN\nNo account and no Bearings server. Your network lives on your devices and in your own iCloud. Contacts, calendar and location are read on your device and never uploaded. No ads, no tracking.\n\nTo start, request your data from LinkedIn (Settings, Data privacy, Get a copy of your data) and open the zip in Bearings. It takes about three minutes.",
-  "screens": [
-    [
-      "01-home",
-      [],
-      "Your whole network at a glance"
-    ],
-    [
-      "03-profile",
-      [
-        "-startTab",
-        "people",
-        "-demoOpen",
-        "person"
-      ],
-      "Every relationship, the whole story"
-    ],
-    [
-      "02-people",
-      [
-        "-startTab",
-        "people"
-      ],
-      "Search the way you think"
-    ],
-    [
-      "07c-map",
-      [
-        "-startTab",
-        "explore",
-        "-exploreMode",
-        "map"
-      ],
-      "See who’s near where you’re going"
-    ],
-    [
-      "08-catchup",
-      [
-        "-startTab",
-        "catchup"
-      ],
-      "Catch up in two minutes"
-    ],
-    [
-      "07b-clusters",
-      [
-        "-startTab",
-        "explore",
-        "-exploreMode",
-        "clusters"
-      ],
-      "Watch your network take shape"
-    ],
-    [
-      "05-unit",
-      [
-        "-startTab",
-        "companies",
-        "-demoOpen",
-        "unit"
-      ],
-      "Who you know at every company"
-    ]
+  [
+   "03-profile",
+   [
+    "-startTab",
+    "people",
+    "-demoOpen",
+    "person"
+   ],
+   "Every relationship, the whole story"
   ],
-  "eyebrows": {
-    "01-home": "THE COMPASS",
-    "03-profile": "DOSSIERS",
-    "02-people": "PLAIN-ENGLISH SEARCH",
-    "07c-map": "TRIP MODE",
-    "08-catchup": "SWIPE TO TRIAGE",
-    "07b-clusters": "CLUSTERS",
-    "05-unit": "COVERAGE"
-  }
+  [
+   "07a-compass",
+   [
+    "-startTab",
+    "explore",
+    "-exploreMode",
+    "compass"
+   ],
+   "Your whole network on one compass"
+  ],
+  [
+   "02-people",
+   [
+    "-startTab",
+    "people"
+   ],
+   "Search the way you think"
+  ],
+  [
+   "07c-map",
+   [
+    "-startTab",
+    "explore",
+    "-exploreMode",
+    "map"
+   ],
+   "See who’s near where you’re going"
+  ],
+  [
+   "08-catchup",
+   [
+    "-startTab",
+    "catchup"
+   ],
+   "Catch up in two minutes"
+  ],
+  [
+   "05-unit",
+   [
+    "-startTab",
+    "companies",
+    "-demoOpen",
+    "unit"
+   ],
+   "Who you know at every company"
+  ],
+  [
+   "07b-clusters",
+   [
+    "-startTab",
+    "explore",
+    "-exploreMode",
+    "clusters"
+   ],
+   "Watch your network take shape"
+  ]
+ ],
+ "eyebrows": {
+  "01-home": "THIS WEEK",
+  "03-profile": "DOSSIERS",
+  "02-people": "PLAIN-ENGLISH SEARCH",
+  "07c-map": "TRIP MODE",
+  "08-catchup": "SWIPE TO TRIAGE",
+  "07b-clusters": "CLUSTERS",
+  "05-unit": "COVERAGE",
+  "07a-compass": "THE COMPASS"
+ },
+ "review": {
+  "contactFirstName": "Jay",
+  "contactLastName": "Nichols",
+  "contactEmail": "jay@jaynichols.net",
+  "notes": "Thank you for reviewing Bearings.\n\nNO ACCOUNT OR LOGIN. Bearings has no account and no server. On first launch it opens a built-in sample network (680 fictional people) so every screen can be reviewed without any personal data. On the welcome screens, choose “Just look around a sample network.”\n\nHOW REAL USERS GET DATA. LinkedIn lets members download their own data (Settings > Data privacy > Get a copy of your data). The user shares that ZIP or Connections.csv to Bearings, or picks it in Import. Everything is parsed on the device. Nothing is uploaded. There is no scraping and no use of LinkedIn's API.\n\nPERMISSIONS, ALL OPTIONAL AND ASKED IN CONTEXT:\n- Contacts: to start a network from Contacts before the LinkedIn file arrives, to add birthdays, and to place people on the map. Read on device only.\n- Calendar: to brief the user before meetings with people they know and to spot trips. Read on device only.\n- Location (when in use): Near Me on the map.\n- Camera: scanning a business card at an event (text is read on device with Vision).\n- Notifications: follow-up reminders and the Monday brief.\n\nSYNC. Data syncs only through the user's own iCloud (CloudKit/iCloud Documents). Optional Salesforce integration signs in directly with the user's Salesforce org via OAuth and is off by default.\n\nAI. Briefs and draft messages use Apple's on-device Foundation Models when available, with a plain template fallback. No third-party AI service.\n\nPrivacy policy: https://www.jaynichols.net/bearings/privacy.html"
+ }
 }
