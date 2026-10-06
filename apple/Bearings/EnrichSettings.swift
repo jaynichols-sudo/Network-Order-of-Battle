@@ -4,7 +4,7 @@ import SwiftUI
 struct EnrichSettingsSection: View {
     @Environment(AppModel.self) private var model
     @State private var provider = EnrichProvider.current
-    @State private var user = Keychain.get("enrich.zoominfo.user") ?? ""
+    @State private var user = SecretStore.get("enrich.zoominfo.user") ?? ""
     @State private var pass = ""
     @State private var key = ""
     @State private var testing = false
@@ -23,13 +23,13 @@ struct EnrichSettingsSection: View {
             if provider == .zoominfo {
                 TextField("API username", text: $user)
                     .textContentType(.username).textInputAutocapitalization(.never).autocorrectionDisabled()
-                SecureField(Keychain.get("enrich.zoominfo.pass") == nil ? "API password" : "API password (saved)", text: $pass)
+                SecureField(SecretStore.get("enrich.zoominfo.pass") == nil ? "API password" : "API password (saved)", text: $pass)
                     .textContentType(.password)
                 Button(testing ? "Checking…" : "Save and test") { saveZoomInfo() }.disabled(testing || user.isEmpty)
             } else if provider == .seamless {
-                SecureField(Keychain.get("enrich.seamless.key") == nil ? "API key" : "API key (saved)", text: $key)
+                SecureField(SecretStore.get("enrich.seamless.key") == nil ? "API key" : "API key (saved)", text: $key)
                 Button("Save") {
-                    Keychain.set("enrich.seamless.key", key.trimmingCharacters(in: .whitespacesAndNewlines))
+                    SecretStore.set("enrich.seamless.key", key.trimmingCharacters(in: .whitespacesAndNewlines))
                     key = ""
                     status = "Saved. Look someone up from their profile to check it."
                 }
@@ -38,7 +38,7 @@ struct EnrichSettingsSection: View {
             if !status.isEmpty { Text(status).font(Theme.geist(.footnote)).foregroundStyle(Theme.text2) }
             if provider != .off && provider.configured {
                 Button("Remove saved credentials", role: .destructive) {
-                    Keychain.set("enrich.zoominfo.user", nil); Keychain.set("enrich.zoominfo.pass", nil); Keychain.set("enrich.seamless.key", nil)
+                    SecretStore.set("enrich.zoominfo.user", nil); SecretStore.set("enrich.zoominfo.pass", nil); SecretStore.set("enrich.seamless.key", nil)
                     user = ""; status = "Removed."
                 }
             }
@@ -53,14 +53,14 @@ struct EnrichSettingsSection: View {
 
     private func saveZoomInfo() {
         let u = user.trimmingCharacters(in: .whitespacesAndNewlines)
-        let p = pass.isEmpty ? (Keychain.get("enrich.zoominfo.pass") ?? "") : pass
+        let p = pass.isEmpty ? (SecretStore.get("enrich.zoominfo.pass") ?? "") : pass
         testing = true
         status = ""
         Task {
             do {
                 _ = try await ZoomInfo.token(user: u, pass: p, fresh: true)
-                Keychain.set("enrich.zoominfo.user", u)
-                Keychain.set("enrich.zoominfo.pass", p)
+                SecretStore.set("enrich.zoominfo.user", u)
+                SecretStore.set("enrich.zoominfo.pass", p)
                 pass = ""
                 status = "Connected to ZoomInfo."
             } catch {

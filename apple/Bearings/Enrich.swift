@@ -44,14 +44,14 @@ enum EnrichProvider: String, CaseIterable, Identifiable {
     var configured: Bool {
         switch self {
         case .off: return false
-        case .zoominfo: return !(Keychain.get("enrich.zoominfo.user") ?? "").isEmpty && !(Keychain.get("enrich.zoominfo.pass") ?? "").isEmpty
-        case .seamless: return !(Keychain.get("enrich.seamless.key") ?? "").isEmpty
+        case .zoominfo: return !(SecretStore.get("enrich.zoominfo.user") ?? "").isEmpty && !(SecretStore.get("enrich.zoominfo.pass") ?? "").isEmpty
+        case .seamless: return !(SecretStore.get("enrich.seamless.key") ?? "").isEmpty
         }
     }
 }
 
-/// Small Keychain wrapper: this device only, never synced, readable after first unlock.
-enum Keychain {
+/// Small Keychain wrapper for provider credentials: this device only, never synced, readable after first unlock.
+enum SecretStore {
     private static let service = "com.jaynichols.networkoob.enrich"
 
     static func set(_ key: String, _ value: String?) {
@@ -118,7 +118,7 @@ enum ZoomInfo {
 
     static func token(user: String? = nil, pass: String? = nil, fresh: Bool = false) async throws -> String {
         if !fresh, let j = jwt, j.until > Date() { return j.token }
-        guard let user = user ?? Keychain.get("enrich.zoominfo.user"), let pass = pass ?? Keychain.get("enrich.zoominfo.pass"), !user.isEmpty, !pass.isEmpty
+        guard let user = user ?? SecretStore.get("enrich.zoominfo.user"), let pass = pass ?? SecretStore.get("enrich.zoominfo.pass"), !user.isEmpty, !pass.isEmpty
         else { throw EnrichFailure(message: "Add your ZoomInfo API username and password in Settings.") }
         var req = URLRequest(url: URL(string: "https://api.zoominfo.com/authenticate")!)
         req.httpMethod = "POST"
@@ -179,7 +179,7 @@ enum Seamless {
     static let base = "https://api.seamless.ai/api/client/v1"
 
     static func request(_ path: String, method: String = "GET", body: Any? = nil, key: String? = nil) throws -> URLRequest {
-        guard let key = key ?? Keychain.get("enrich.seamless.key"), !key.isEmpty else { throw EnrichFailure(message: "Add your Seamless.AI API key in Settings.") }
+        guard let key = key ?? SecretStore.get("enrich.seamless.key"), !key.isEmpty else { throw EnrichFailure(message: "Add your Seamless.AI API key in Settings.") }
         var req = URLRequest(url: URL(string: base + path)!)
         req.httpMethod = method
         req.setValue(key, forHTTPHeaderField: "Token")
