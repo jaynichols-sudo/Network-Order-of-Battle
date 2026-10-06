@@ -4,7 +4,8 @@
   "description": "Bearings: know where everyone in your network landed",
   "scripts": {
     "build": "node scripts/build.mjs",
-    "sync": "npm run build && npx cap sync"
+    "sync": "npm run build && npx cap sync",
+    "test": "node --test test/*.test.mjs"
   },
   "license": "UNLICENSED",
   "dependencies": {
