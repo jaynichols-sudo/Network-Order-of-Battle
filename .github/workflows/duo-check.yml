@@ -1,0 +1,79 @@
+name: Bearings iPhone Duo check
+
+# Builds with Xcode 27.1 (the iPhone Duo SDK) and screenshots the app on the Duo simulator,
+# open and closed. Screens go to the duo-screens branch.
+on: workflow_dispatch
+
+permissions:
+  contents: write
+
+jobs:
+  duo:
+    runs-on: xcode-27
+    timeout-minutes: 60
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_27.1.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - name: Build shared engine
+        run: npm ci && npm run build
+      - name: Generate Xcode project
+        run: |
+          brew install xcodegen >/dev/null
+          cd apple && xcodegen generate
+      - name: Compile with Xcode 27.1
+        run: |
+          xcodebuild -version
+          xcodebuild -project apple/Bearings.xcodeproj -scheme Bearings -configuration Debug \
+            -destination 'generic/platform=iOS Simulator' -derivedDataPath build/dd CODE_SIGNING_ALLOWED=NO build > build.log 2>&1 || true
+          if ! grep -q "\*\* BUILD SUCCEEDED" build.log; then
+            msg=$( (grep -E "error:" build.log || tail -60 build.log) | sed -E 's#/Users/runner/work/[^/]+/[^/]+/##' | awk '!s[$0]++' | head -60 | sed 's/%/%25/g' | awk 'BEGIN{ORS="%0A"}{print}')
+            echo "::error title=Xcode 27.1 build errors::$msg"; exit 1
+          fi
+          w=$(grep -E "warning:" build.log | grep -v "/SourcePackages/" | sed -E 's#/Users/runner/work/[^/]+/[^/]+/##' | awk '!s[$0]++' | head -30 | sed 's/%/%25/g' | awk 'BEGIN{ORS="%0A"}{print}')
+          [ -n "$w" ] && echo "::warning title=Xcode 27.1 warnings::$w" || true
+      - name: Duo screenshots
+        run: |
+          APP=$(find build/dd/Build/Products -maxdepth 2 -name "Bearings.app" -path "*iphonesimulator*" | head -1)
+          RT=$(xcrun simctl list runtimes -j | python3 -c "import json,sys;r=[x for x in json.load(sys.stdin)['runtimes'] if x['platform']=='iOS' and x['isAvailable']];r.sort(key=lambda x:[int(p) for p in x['version'].split('.')]);print(r[-1]['identifier'])")
+          DEV=$(xcrun simctl create "Duo check" com.apple.CoreSimulator.SimDeviceType.iPhone-Duo "$RT")
+          { echo "runtime $RT"; xcrun simctl help 2>&1 | grep -i -E "fold|posture|display|hinge" || echo "no posture commands"; } > info.txt
+          echo "::notice title=Duo simulator::$(sed 's/%/%25/g' info.txt | awk 'BEGIN{ORS="%0A"}{print}')"
+          xcrun simctl boot $DEV; xcrun simctl bootstatus $DEV -b >/dev/null
+          xcrun simctl status_bar $DEV override --time 9:41 --batteryState charged --batteryLevel 100 || true
+          xcrun simctl install $DEV "$APP"
+          mkdir -p shots
+          shoot() { n=$1; shift
+            xcrun simctl terminate $DEV com.jaynichols.networkoob >/dev/null 2>&1 || true
+            xcrun simctl launch $DEV com.jaynichols.networkoob -onboarded YES "$@" >/dev/null; sleep 8
+            xcrun simctl io $DEV screenshot "shots/$n.png" >/dev/null 2>&1; }
+          set_posture() { # best effort: whichever posture command this simctl offers
+            for c in "fold $1" "posture $1" "ui posture $1"; do xcrun simctl $c $DEV >/dev/null 2>&1 && return 0; done
+            xcrun simctl ui $DEV $1 >/dev/null 2>&1 || return 1; }
+          for pose in open closed; do
+            set_posture $pose && echo "posture $pose ok" >> shots/info.txt || echo "posture $pose unavailable" >> shots/info.txt
+            for theme in light dark; do
+              xcrun simctl ui $DEV appearance $theme
+              shoot $pose-$theme-01-today
+              shoot $pose-$theme-02-people -startTab people
+              shoot $pose-$theme-03-profile -startTab people -demoOpen person
+              shoot $pose-$theme-04-companies -startTab companies
+              shoot $pose-$theme-05-compass -startTab explore -exploreMode compass
+              shoot $pose-$theme-06-map -startTab explore -exploreMode map
+              shoot $pose-$theme-07-intro -startTab companies -demoOpen intro
+              shoot $pose-$theme-08-paywall -demoOpen paywall
+            done
+          done
+          echo "::notice title=Duo shots::$(ls shots | wc -l) files. $(cat shots/info.txt | tr '\n' ' ')"
+      - name: Publish to the duo-screens branch
+        run: |
+          cd shots
+          git init -q -b duo-screens
+          git config user.name "ci"; git config user.email "ci@users.noreply.github.com"
+          echo "${{ github.sha }}" > SHA
+          git add -A && git commit -qm "duo screens ${{ github.sha }}"
+          git push -qf "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" duo-screens
