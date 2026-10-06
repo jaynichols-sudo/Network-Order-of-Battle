@@ -1,0 +1,70 @@
+name: Bearings demo clips
+
+on:
+  # run by hand: records short clips of the real app for the website's demo video
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  clips:
+    runs-on: macos-15
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Build the app for the simulator
+        run: |
+          npm ci && npm run build
+          brew install xcodegen >/dev/null
+          (cd apple && xcodegen generate)
+          xcodebuild -project apple/Bearings.xcodeproj -scheme Bearings -configuration Debug \
+            -destination 'generic/platform=iOS Simulator' -derivedDataPath build/dd CODE_SIGNING_ALLOWED=NO build > build.log 2>&1 || { grep error: build.log | head -40; exit 1; }
+      - name: Record clips
+        run: |
+          APP=$(find build/dd/Build/Products -maxdepth 2 -name "Bearings.app" -path "*iphonesimulator*" | head -1)
+          DEV=$(xcrun simctl list devices available -j | python3 -c "
+          import json,sys,re
+          d=json.load(sys.stdin)['devices']
+          for rt in sorted(d, reverse=True):
+              for x in d[rt]:
+                  if re.fullmatch('iPhone 1[6-9] Pro', x['name']): print(x['udid']); sys.exit()
+          ")
+          xcrun simctl boot $DEV || true
+          xcrun simctl bootstatus $DEV -b >/dev/null
+          xcrun simctl status_bar $DEV override --time 9:41 --batteryState charged --batteryLevel 100 --cellularBars 4 || true
+          xcrun simctl ui $DEV appearance dark
+          xcrun simctl install $DEV "$APP"
+          mkdir -p clips
+          clip() { # name seconds args...
+            name=$1; secs=$2; shift 2
+            xcrun simctl terminate $DEV com.jaynichols.networkoob >/dev/null 2>&1 || true
+            xcrun simctl launch $DEV com.jaynichols.networkoob -onboarded YES -storeMode YES "$@" >/dev/null
+            sleep 4
+            xcrun simctl io $DEV recordVideo --codec=h264 --force "clips/$name.mp4" &
+            rec=$!
+            sleep $secs
+            kill -INT $rec; wait $rec || true
+          }
+          clip 1-home 8
+          clip 2-weekly 5 -demoOpen weekly
+          clip 3-profile 5 -startTab people -demoOpen person
+          clip 4-catchup 5 -startTab catchup
+          clip 5-clusters 6 -startTab explore -exploreMode clusters
+          clip 6-intro 5 -startTab companies -demoOpen intro
+          clip 7-event 5 -demoOpen event
+          ls -la clips
+      - name: Publish clips to the demo-clips branch
+        run: |
+          cd clips
+          git init -q -b demo-clips
+          git config user.name "Bearings CI"; git config user.email "ci@users.noreply.github.com"
+          git add -A && git commit -qm "clips ${{ github.sha }}"
+          git push -qf "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" demo-clips
