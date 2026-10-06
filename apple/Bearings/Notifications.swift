@@ -103,6 +103,8 @@ final class Notifications: NSObject, UNUserNotificationCenterDelegate, @unchecke
         var action = response.actionIdentifier
         if let typed = response as? UNTextInputNotificationResponse {
             action = "note:" + ((info["mt"] as? String) ?? "") + "\n" + typed.userText
+        } else if action == UNNotificationDefaultActionIdentifier, info["weekly"] != nil {
+            action = "weekly"
         } else if action == UNNotificationDefaultActionIdentifier, let ev = info["event"] as? String {
             action = "event:" + ev
         } else if action == UNNotificationDefaultActionIdentifier {

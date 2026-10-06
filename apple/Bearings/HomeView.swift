@@ -8,6 +8,7 @@ struct HomeView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
                 header
+                WeeklyCard()
                 CompassCard()
                 SavedSearchStrip()
                 banner

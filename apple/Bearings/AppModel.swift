@@ -129,6 +129,7 @@ final class AppModel {
     }
     var newEvent = false
     var showQuickFind = false
+    var showWeekly = false
     var shareFile: ShareFile?
     var pendingImportURL: URL?
 
@@ -233,6 +234,7 @@ final class AppModel {
         case "onboarding": showOnboarding = true
         case "intro": introQuery = targets.first?.name ?? "NAVFAC"
         case "quickfind": showQuickFind = true
+        case "weekly": showWeekly = true
         case "event":
             let known = people.filter { $0.x == nil }.sorted { $0.score > $1.score }
             var e = NetEvent(name: "AFCEA TechNet Augusta", place: "Augusta, GA", start: Date().addingTimeInterval(-2 * 86400), end: Date().addingTimeInterval(-86400))
@@ -952,6 +954,7 @@ final class AppModel {
     func handleNotification(k: String?, action: String) async {
         if action.hasPrefix("meeting:") { tab = .home; paths[.home] = [.meeting(String(action.dropFirst(8)))]; return }
         if action.hasPrefix("trip:") { tab = .home; paths[.home] = [.trip(String(action.dropFirst(5)))]; return }
+        if action == "weekly" { showWeekly = true; return }
         if action.hasPrefix("event:") { tab = .home; paths[.home] = [.event(String(action.dropFirst(6)))]; return }
         if action.hasPrefix("note:"), let k {
             let body = action.dropFirst(5)

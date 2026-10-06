@@ -665,6 +665,34 @@ function addNote(k, text, source){
 const touch = k => setEdit(k, {touched: TODAY});
 const setCircle = (k, c) => setEdit(k, {circle: CIRCLES[c] ? c : ''});
 
+/* ---------- Monday brief ---------- */
+// Five people worth reaching out to this week, each with one plain reason. The
+// app saves the week's picks so the list stays put while you work through it.
+function weekly(skip){
+  const avoid = new Set(skip || []);
+  const A = live().filter(r => !avoid.has(r.k));
+  const seen = new Set(), out = [];
+  const take = (list, kind, why, max) => {
+    let n = 0;
+    for (const r of list){
+      if (out.length >= 5 || n >= max) break;
+      if (seen.has(r.k)) continue;
+      seen.add(r.k); n++;
+      out.push({k: r.k, kind, why: why(r)});
+    }
+  };
+  take(A.filter(isWaiting).sort((a, b) => b.rx.t.localeCompare(a.rx.t)), 'reply', r => `Wrote you ${ago(r.rx.t)} and is waiting on a reply.`, 2);
+  take(A.filter(isOverdue).sort((a, b) => CIRCLES[a.ed.circle] - CIRCLES[b.ed.circle]), 'circle', r => `In your ${({inner: 'inner circle', key: 'key relationships', wide: 'wider network'})[r.ed.circle]}; ${lastTouch(r) ? 'last in touch ' + ago(lastTouch(r)) : 'not in touch yet'}.`, 2);
+  take(A.filter(isDue).sort((a, b) => a.ed.due.localeCompare(b.ed.due)), 'due', r => `You planned to follow up ${r.ed.due < TODAY ? 'on ' + niceDate(r.ed.due) : 'today'}.`, 2);
+  take(A.filter(r => r.movedNow).sort(bySenior), 'congrats', r => `New role${r.p ? ' as ' + r.p : ''}${r.c ? ' at ' + r.c : ''}. A good moment to say congratulations.`, 2);
+  take(A.filter(isCooling).sort((a, b) => b.wm.score - a.wm.score), 'cold', r => `You used to talk often; last message ${ago(r.rx.t)}.`, 2);
+  take(A.filter(r => isAnniversary(r.d)).sort(bySenior), 'anniv', r => `${new Date().getFullYear() - +r.d.slice(0, 4)} years connected this week.`, 1);
+  take(A.filter(r => r.isNew && !(r.rx && r.rx.m)).sort(bySenior), 'new', r => `New connection${r.cl.sen ? ', ' + r.cl.sen.toLowerCase() : ''}. Say thanks while it’s fresh.`, 2);
+  // still short: warm people you haven't talked to in a while
+  take(A.filter(r => r.wm.score >= 35 && daysSince(lastTouch(r)) > 120).sort((a, b) => b.wm.score - a.wm.score), 'checkin', r => `A good relationship you haven’t touched in ${ago(lastTouch(r)).replace(' ago', '')}.`, 5);
+  return out;
+}
+
 /* ---------- intro finder ---------- */
 // "Who can get me into X?": people there now, people who used to be, and people
 // you're close to in the same sector, with the best few paths first.
@@ -865,7 +893,7 @@ function constants(){
 }
 
 const api = {load, loadSample, loadFiles, clearNotes, clusters, placeClues, setCompanyLocation, companyPlaces, messages, matchAttendees, alsoAt, setLens, info, people, person, search, facets, home, payoff, targets, unit, addTargetCandidates, toggleTarget, setTargetNote, orgs,
-  industries, industry, setCompanyIndustry, setCompanyLink, ranks, deck, deckCount, reviewed, radar, compass, startFromContacts, introPaths, touch, setCircle, setEdit, followUp, markReplied, addNote,
+  industries, industry, setCompanyIndustry, setCompanyLink, ranks, deck, deckCount, reviewed, radar, compass, startFromContacts, introPaths, weekly, touch, setCircle, setEdit, followUp, markReplied, addNote,
   importTexts, backup, restore, exportCSV, reminders, watch, constants};
 // Every call goes through here: JSON string in, JSON string out, errors as {error}.
 globalThis.Bearings = {

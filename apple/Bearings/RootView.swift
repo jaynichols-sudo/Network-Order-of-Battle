@@ -34,6 +34,7 @@ struct RootView: View {
         .sheet(isPresented: $model.showShareCard) { ShareCardSheet() }
         .sheet(isPresented: $model.newEvent) { NewEventSheet() }
         .sheet(isPresented: $model.showQuickFind) { QuickFind() }
+        .sheet(isPresented: $model.showWeekly) { WeeklyBriefView() }
         .sheet(item: Binding(get: { model.introQuery.map { IntroFinderView.Wrapped(id: $0) } }, set: { model.introQuery = $0?.id })) { w in
             IntroFinderView(query: w.id)
         }

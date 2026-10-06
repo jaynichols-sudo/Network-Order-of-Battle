@@ -77,6 +77,7 @@ struct SettingsView: View {
                 .onChange(of: notify) { _, on in reschedule(on) }
             Toggle("Haptics", isOn: $haptics)
             Toggle("Sounds", isOn: $sounds)
+            Toggle("Monday brief", isOn: Binding(get: { WeeklyBrief.enabled }, set: { on in WeeklyBrief.enabled = on; Task { await WeeklyBrief.schedule() } }))
         } header: {
             Text("Your network")
         } footer: {

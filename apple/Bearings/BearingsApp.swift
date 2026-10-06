@@ -19,6 +19,7 @@ struct BearingsApp: App {
                 .task {
                     await model.start()
                     await TripMode.refresh(model: model)
+                    if !model.info.isSample { await WeeklyBrief.schedule() }
                 }
                 .onOpenURL { url in
                     if url.scheme == "bearings" {

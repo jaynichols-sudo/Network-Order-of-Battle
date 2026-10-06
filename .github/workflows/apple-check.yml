@@ -107,6 +107,7 @@ jobs:
             shoot $dev $p-18-share -demoOpen share
             shoot $dev $p-19-event -demoOpen event
             shoot $dev $p-20-intro -startTab companies -demoOpen intro
+            shoot $dev $p-25-weekly -demoOpen weekly
             xcrun simctl ui $dev content_size accessibility-large
             shoot $dev $p-21-home-xl
             shoot $dev $p-22-profile-xl -startTab people -demoOpen person
