@@ -6,10 +6,12 @@ jobs:
     timeout-minutes: 15
     steps:
       - run: |
-          sw_vers
+          {
+          sw_vers -productVersion
           ls -d /Applications/Xcode*.app
           xcodebuild -version
           xcrun simctl list runtimes
-          xcrun simctl list devicetypes | grep -i -E "duo|iphone 1[78]|fold" || true
-          xcrun simctl list devices available | grep -i -E "duo|==" || true
+          xcrun simctl list devicetypes | grep -i -E "duo|fold" || echo "no duo devicetype"
           for x in /Applications/Xcode*.app; do echo "== $x"; ls "$x/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/" 2>/dev/null; done
+          } > probe.txt 2>&1
+          echo "::notice title=Probe::$(sed 's/%/%25/g' probe.txt | awk 'BEGIN{ORS="%0A"}{print}')"
