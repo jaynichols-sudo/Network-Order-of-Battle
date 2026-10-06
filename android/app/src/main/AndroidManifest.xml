@@ -30,6 +30,7 @@
                 <data android:mimeType="application/x-zip-compressed" />
                 <data android:mimeType="text/csv" />
                 <data android:mimeType="text/comma-separated-values" />
+                <data android:mimeType="application/json" />
             </intent-filter>
 
             <!-- LinkedIn's answer after "Connect LinkedIn" (EEA and Switzerland) -->
@@ -38,6 +39,7 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="bearings" android:host="linkedin" />
+                <data android:scheme="bearings" android:host="seamless" />
             </intent-filter>
 
             <!-- "Share to Bearings" from Gmail, Files or Drive; MainActivity turns it into a VIEW -->
@@ -48,6 +50,7 @@
                 <data android:mimeType="application/x-zip-compressed" />
                 <data android:mimeType="text/csv" />
                 <data android:mimeType="text/comma-separated-values" />
+                <data android:mimeType="application/json" />
             </intent-filter>
         </activity>
 

@@ -4,6 +4,7 @@ import api from '../engine.js';
 import JSZip from 'jszip';
 import { Store, prefs, savePrefs, ls, fx, askNotify, scheduleFollowUps, scheduleMonday, clearExportReminder, readStarterContacts, readContactCards, contactsAllowed, shareFile } from './platform.js';
 import { loadGeo, lookup, city, placesFromContacts } from '../geo.js';
+export { saveFile };
 import { birthdaysFromContacts } from './eventkit.js';
 import { hash } from '../core.js';
 
@@ -23,7 +24,7 @@ export const M = {
   q: {text: '', filters: blankFilters(), sort: 'new'}, results: [], chips: [],
   lists: ls.json('bearings.lists', []),
   places: {}, found: {}, placesBuilt: '', locating: false,
-  events: [], trips: ls.json('bearings.trips', []), births: {},
+  events: [], trips: ls.json('bearings.trips', []), births: {}, enriched: {},
   error: '', loaded: false, version: 0,
 };
 export const isSample = () => M.info.mode === 'sample';
@@ -58,12 +59,13 @@ export function norm(p){
 /* ---------- loading ---------- */
 export async function reload(){
   const texts = {};
-  for (const [key, file] of [['network', 'network.json'], ['edits', 'edits.json'], ['review', 'review.json'], ['targets', 'targets.json'], ['industries', 'industries.json']]){
+  for (const [key, file] of [['network', 'network.json'], ['edits', 'edits.json'], ['review', 'review.json'], ['targets', 'targets.json'], ['industries', 'industries.json'], ['team', 'team.json']]){
     const t = await Store.read(file); if (t) texts[key] = t;
   }
   try { M.info = api.loadFiles(texts, prefs.lens); M.error = ''; }
   catch (e) { M.error = `Your saved network didn’t load (${(e && e.message) || e}). Close and reopen the app to try again.`; try { M.info = api.loadSample(); } catch {} }
   try { const pf = JSON.parse((await Store.read('places.json')) || 'null'); M.found = (pf && pf.people) || {}; M.placesBuilt = (pf && pf.built) || ''; M.births = (pf && pf.births) || {}; } catch { M.found = {}; M.births = {}; }
+  try { const en = JSON.parse((await Store.read('enrichment.json')) || 'null'); M.enriched = (en && en.people) || {}; } catch { M.enriched = {}; }
   try { const ev = JSON.parse((await Store.read('events.json')) || '[]'); M.events = Array.isArray(ev) ? ev.filter(e => e && e.id && e.start) : []; } catch { M.events = []; }
   if (!M.constants) M.constants = api.constants();
   refreshAll();
@@ -222,9 +224,23 @@ export function mergePlaces(){
   const out = {};
   if (isSample()){ for (const p of M.people){ if (p.x) continue; const h = hash(p.k); if (h % 10 < 7){ const s = SAMPLE_SPOTS[Math.floor(h / 10) % SAMPLE_SPOTS.length]; out[p.k] = {name: s[0], lat: s[1], lon: s[2], prec: 'city', src: 'sample'}; } } }
   else Object.assign(out, M.found);
+  // a city from your ZoomInfo, Seamless.AI or enrichment file beats a guess from Contacts or a title
+  for (const [k, e] of Object.entries(M.enriched)) if (e.lat != null && e.lon != null) out[k] = {name: e.loc, lat: e.lat, lon: e.lon, prec: 'city', src: e.src};
   try { for (const [k, l] of Object.entries(api.companyPlaces())) out[k] = {name: l.name, lat: l.lat, lon: l.lon, prec: 'city', src: 'company'}; } catch {}
   for (const p of M.people){ const e = p.ed; if (e && e.loc && e.lat != null && e.lon != null) out[p.k] = {name: e.loc, lat: +e.lat, lon: +e.lon, prec: 'city', src: 'you'}; }
   M.places = out;
+}
+/** Keeps what ZoomInfo, Seamless.AI or a file found, apart from the network, and maps the cities. */
+export async function saveEnriched(found){
+  if (!found || !Object.keys(found).length) return;
+  await loadGeo().catch(() => {});
+  for (const [k, e] of Object.entries(found)){
+    const us = !e.country || /^(us|usa|united states( of america)?)$/i.test(e.country);
+    if (e.city && us){ const hit = lookup(e.state ? `${e.city}, ${e.state}` : e.city); if (hit){ e.lat = hit.lat; e.lon = hit.lon; e.loc = hit.name; } }
+    M.enriched[k] = e;
+  }
+  if (!isSample()) await Store.write('enrichment.json', JSON.stringify({v: 1, people: M.enriched})).catch(e => show('Couldn’t save: ' + ((e && e.message) || e)));
+  mergePlaces(); M.version++; emit('person');
 }
 /** Works out where people are from the phone's contacts (address, then phone area code). */
 export async function locate(){

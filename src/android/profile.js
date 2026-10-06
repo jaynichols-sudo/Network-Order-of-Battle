@@ -7,6 +7,7 @@ import { registerRoute, setPageTitle, push } from './nav.js';
 import { openUnit, open } from './actions.js';
 import { openURL, copy, fx, prefs } from './platform.js';
 import { show } from './model.js';
+import { enrichSection, enrichHandlers } from './enrich.js';
 
 /* ---------- the brief, from facts already in the app ---------- */
 export function briefText(p){
@@ -153,6 +154,7 @@ function personView(k, part){
                    <button type="button" class="row act" data-a="ways" data-v="${esc(p.c)}">${icon('waysIn')}<span>Other ways into ${esc(p.c)}</span></button>` : ''}
           <button type="button" class="row act" data-a="message">${icon('pencil')}<span>Write a message</span></button>
         </div>
+        ${enrichSection(p)}
         <p class="sec-h">Details</p><div class="card list details">
           ${labeled('Industry', `<i class="dot sm" style="background:${esc(p.indColor)}"></i>${esc(cl.ind + (cl.indHow === 'you' ? ' (set by you)' : cl.indHow === 'guess' ? ' (best guess)' : ''))}`)}
           ${labeled('Seniority', esc(cl.sen))}
@@ -184,6 +186,7 @@ function personView(k, part){
       body.scrollTop = st0;
     },
     handlers: {
+      ...enrichHandlers(k),
       unit: v => openUnit(v),
       details: () => push('personDetails', k),
       ways: v => open('intro', v),

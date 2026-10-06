@@ -7,6 +7,7 @@ import { esc, fmt, icon, avatar, menu, empty, $, plural } from './ui.js';
 import { openSheet, closeSheet, registerRoute, push, popPage } from './nav.js';
 import { openPerson, register, open } from './actions.js';
 import { personRow } from './people.js';
+import { allow } from './pro.js';
 import { fx, openURL, scheduleEventNudge, cancelEventNudge } from './platform.js';
 import { ymd, addDays, whenText, newId, eventOn, eventUpcoming, eventRecent, followedUp, toFollowUp, parseAttendees, linkedInSearch } from './eventkit.js';
 
@@ -59,6 +60,7 @@ const EventsView = {
 
 /* ---------- create ---------- */
 export function openNewEvent(){
+  if (!allow('events')) return;
   const t = today();
   openSheet({
     title: 'New event', left: ['Cancel'], right: ['Create', s => create(s)],

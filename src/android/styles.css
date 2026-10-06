@@ -744,3 +744,21 @@ input[type=range] { accent-color: var(--accent); }
 .bdrow b { flex: 1; min-width: 0; font-size: 15px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .bdrow .mono { font-size: 13px; }
 .list > .bdrow + .bdrow::before { left: 58px; }
+
+/* ---------- Pro, year in review, team packs ---------- */
+.paywall { padding: 0 0 24px; }
+.paywall > .muted { margin: 4px 16px 14px; }
+.pw-feat { align-items: flex-start; }
+.pw-feat .grow, .plan .grow { display: flex; flex-direction: column; gap: 2px; }
+.pw-ic { width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; background: var(--soft); color: var(--accent); flex: 0 0 32px; }
+.pw-feat.hl .pw-ic { background: var(--needs-soft, var(--soft)); }
+.plans { display: grid; gap: 8px; margin: 14px 0; }
+.plan { display: flex; align-items: center; gap: 12px; width: 100%; padding: 14px 16px; text-align: left; border: 1.5px solid transparent; }
+.plan.on { border-color: var(--accent); }
+.plan-dot { width: 20px; height: 20px; border-radius: 50%; border: 2px solid var(--text3); flex: 0 0 20px; }
+.plan.on .plan-dot { border: 6px solid var(--accent); }
+.badge-needs { font: 600 12px Geist; color: var(--amber); background: var(--soft); padding: 4px 10px; border-radius: 999px; }
+.year-card { display: block; width: min(100%, 360px); margin: 8px auto 10px; border-radius: 22px; box-shadow: 0 12px 36px rgba(0,0,0,.25); }
+.team-row .grow { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.team-row .grow > * { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.btn-stack { display: grid; gap: 10px; margin: 12px 0; }

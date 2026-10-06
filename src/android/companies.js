@@ -8,6 +8,7 @@ import { openPerson, openUnit, openIndustry, showPeople, register, open } from '
 import { personRow } from './people.js';
 import { openURL, fx, prefs, ls } from './platform.js';
 import { openMessage } from './sheets.js';
+import { allow } from './pro.js';
 
 let mode = ls.get('bearings.companies') || 'watchlist';
 let gov = false, shownUnc = 25;
@@ -179,6 +180,7 @@ registerRoute('industry', id => ({
 
 /* ---------- ways in ---------- */
 export function openIntro(initial = ''){
+  if (!allow('waysIn')) return;
   let q = initial, t0 = 0;
   const results = body => {
     const out = $('.intro-out', body);
@@ -188,7 +190,8 @@ export function openIntro(initial = ''){
     }
     const p = M.api.introPaths(q);
     const sugg = M.api.addTargetCandidates(q).slice(0, 6).filter(([n]) => n !== p.company);
-    if (!p.now.length && !p.alumni.length && !p.sector.length){
+    const team = p.team || [];
+    if (!p.now.length && !p.alumni.length && !p.sector.length && !team.length){
       out.innerHTML = empty('waysIn', 'No paths yet', `No one in your network works or worked at “${q}”. Try a shorter name.`) + suggestions(sugg);
       return;
     }
@@ -199,6 +202,7 @@ export function openIntro(initial = ''){
       ${section('Work there now', p.now)}
       ${p.alumni.length ? `<p class="sec-h">Used to work there (${p.alumni.length})</p><div class="card list">${p.alumni.map(a => { const x = person(a.k); return x ? personRow(x, {sub: a.was || a.until ? `Was ${a.was || 'there'}${a.until ? `, until ${Day.nice(a.until)}` : ''}` : ''}) : ''; }).join('')}</div>` : ''}
       ${section(p.ind ? `Close to you in ${p.ind}` : 'Close to you nearby', p.sector)}
+      ${team.length ? `<p class="sec-h">Through your team (${team.length})</p><div class="card list">${team.map(t => `<div class="row static team-row"><span class="grow"><b>${esc(t.name)}</b><span class="muted small">${esc([t.p, `${t.owner} knows them${t.b === 'strong' ? ' well' : t.b === 'warm' ? '' : ' a little'}`].filter(Boolean).join(' · '))}</span></span></div>`).join('')}</div>` : ''}
       ${suggestions(sugg)}`;
     out.__company = p.company;
   };

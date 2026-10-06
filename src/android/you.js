@@ -8,6 +8,9 @@ import { runSavedList, listMenu } from './home.js';
 import { openURL, fx, prefs } from './platform.js';
 import { tripsAhead } from './trips.js';
 import { birthdaysWithin } from './birthdays.js';
+import { reviewYear, yearSeason } from './team.js';
+import { unlocked, GATING } from './pro.js';
+import './enrich.js';
 
 const row = (a, ic, label, detail = '', chev = true) => `<button type="button" class="row act" data-a="${a}">${icon(ic)}<span>${esc(label)}</span>${detail ? `<span class="muted">${esc(detail)}</span>` : ''}${chev ? icon('chevR', 'chev') : ''}</button>`;
 
@@ -54,12 +57,16 @@ export const YouView = {
         ${row('trips', 'plane', 'Trips', tripsAhead().length ? fmt(tripsAhead().length) : '')}
         ${row('birthdays', 'gift', 'Birthdays', birthdaysWithin(7).length ? `${fmt(birthdaysWithin(7).length)} this week` : '')}
         ${row('explore', 'scope', 'Explore', 'Compass, map, clusters')}
+        ${row('team', 'people', 'Team packs', M.api.teamList().length ? fmt(M.api.teamList().length) : '')}
+        ${row('year', 'sparkles', `Your ${reviewYear()} in review`, yearSeason() ? 'New' : '')}
       </section>
       <section class="card list"><div class="card-head static"><h2>Data</h2></div>
         ${row('import', 'download', isSample() ? 'Import connections' : 'Refresh connections', M.info.lastImport && !isSample() ? Day.ago(M.info.lastImport) : '')}
         ${isSample() ? '' : row('backup', 'drive', 'Back up notes', b ? `Last ${Day.ago(b)}` : 'Never', false)}
+        ${isSample() ? '' : row('enrichFile', 'download', 'Import an enrichment file', 'CSV', false)}
       </section>
       <section class="card list">
+        ${row('pro', 'starCircle', 'Bearings Pro', !GATING ? 'Unlocked for now' : unlocked() ? 'Active' : '')}
         ${row('settings', 'gear', 'Settings')}
         ${row('help', 'mail', 'Help and contact support', '', false)}
       </section>
@@ -77,6 +84,10 @@ export const YouView = {
     birthdays: () => open('birthdays'),
     import: () => open('import'),
     backup: () => open('backup'),
+    team: () => open('team'),
+    year: () => open('year'),
+    pro: () => open('paywall'),
+    enrichFile: () => open('enrichFile'),
     help: () => openURL('mailto:jay@jaynichols.net?subject=' + encodeURIComponent('Bearings for Android: help')),
   },
 };

@@ -15,6 +15,10 @@ import './trips.js';
 import './birthdays.js';
 import { applyTheme, openImport, openOnboarding } from './setup.js';
 import { handleLinkedInUrl } from './linkedin.js';
+import { handleSeamlessUrl } from './enrich.js';
+import { initBilling } from './pro.js';
+import { checkArrival } from './arrivals.js';
+import { addTeamPackText } from './team.js';
 import { open, openPerson } from './actions.js';
 import { migrate, onAppEvents, onNotification, readIncoming, scheduleMonday, ls, prefs } from './platform.js';
 
@@ -48,11 +52,16 @@ async function boot(){
   // the engine's "today" is set when it loads; start fresh when you come back on a new day
   const bootDay = new Date().toDateString();
   onAppEvents({
-    resume: () => { if (new Date().toDateString() !== bootDay) location.reload(); },
+    resume: () => { if (new Date().toDateString() !== bootDay) location.reload(); else checkArrival(); },
     url: async u => {
-      if (handleLinkedInUrl(u)) return;
+      if (handleLinkedInUrl(u) || handleSeamlessUrl(u)) return;
       if (!/^(content|file):/i.test(u)) return;
-      try { openImport(await readIncoming(u)); }
+      try {
+        const f = await readIncoming(u);
+        // a teammate's pack arrives as JSON; everything else is a LinkedIn export
+        if (f.type !== 'application/zip' && (await f.slice(0, 400).text()).includes('bearings-team-pack')){ await addTeamPackText(await f.text()); return; }
+        openImport(f);
+      }
       catch (e) { openImport(); toast(`Couldn’t open that file (${(e && e.message) || 'unknown error'}). Choose it from here instead.`); }
     },
     back,
@@ -66,6 +75,8 @@ async function boot(){
     if (ex.refresh) open('import');
   });
   scheduleMonday();
+  initBilling();
+  setTimeout(checkArrival, 1500);
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => refreshVisible('fonts'));
   document.documentElement.classList.add('ready');
 }

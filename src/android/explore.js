@@ -4,7 +4,7 @@
 import { M, persons, person, isSample, locate, myInitials } from './model.js';
 import { esc, fmt, icon, segmented, palette, rgba, empty, callout, $, plural, REDUCED } from './ui.js';
 import { openSheet, closeSheet, registerRoute } from './nav.js';
-import { openPerson, openUnit, openIndustry, showPeople, showSector, perform, open, GOV_SEGS } from './actions.js';
+import { openPerson, openUnit, openIndustry, showPeople, showSector, perform, open, openToday, register, GOV_SEGS } from './actions.js';
 import { personRow } from './people.js';
 import { createCompass } from './compass.js';
 import { fx, ls } from './platform.js';
@@ -388,3 +388,8 @@ export const ExploreView = {
 let playing = false;
 import { show as import_show } from './model.js';
 registerRoute('explore', () => ExploreView);
+/** The map, centred on a place: used by the arrival check. */
+register('mapAt', (lat, lon, name) => {
+  MAP.center = {lat, lon}; MAP.centerName = name || ''; mode = 'map'; ls.set('bearings.explore', 'map');
+  openToday('explore'); if (root) ExploreView.update(root);
+});

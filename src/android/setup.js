@@ -6,6 +6,8 @@ import { esc, fmt, icon, segmented, $, plural, REDUCED } from './ui.js';
 import { openSheet, closeSheet, go, toast } from './nav.js';
 import { register, open } from './actions.js';
 import { createCompass } from './compass.js';
+import { allow, unlocked } from './pro.js';
+import { enableArrivals } from './arrivals.js';
 import { prefs, savePrefs, ls, fx, openURL, exportRequested, askNotify, statusBar, NATIVE } from './platform.js';
 
 const LINKEDIN_EXPORT = 'https://www.linkedin.com/mypreferences/d/download-my-data';
@@ -123,9 +125,10 @@ export function openSettings(){
       <p class="sec-h">You</p><div class="card form"><label class="frow col"><span>Your name</span><input type="text" class="field" data-ch="name" value="${esc(prefs.name)}" placeholder="Used to greet you and sign drafts" autocomplete="name"></label></div>
       <p class="sec-h">Appearance</p><div class="card pad">${segmented('theme', [['system', 'Automatic'], ['light', 'Light'], ['dark', 'Dark']], prefs.theme || 'system')}</div>
       <p class="sec-h">Federal and military view</p><div class="card pad">${segmented('lens', [['auto', `Automatic${M.info.lensAuto ? ' (on)' : ' (off)'}`], ['on', 'On'], ['off', 'Off']], lens)}<p class="muted small top8">Sorts out ranks, agencies and commands, and splits government into DoD, federal civilian, and state and local.</p></div>
-      <p class="sec-h">Preferences</p><div class="card list">${toggle('salesnav', 'I use Sales Navigator')}${toggle('notify', 'Reminders', 'Follow-ups and refresh nudges')}${toggle('mondayBrief', 'Monday brief', 'Five people worth reaching out to, every Monday at 7:30')}${toggle('haptics', 'Haptics')}</div>
+      <p class="sec-h">Preferences</p><div class="card list">${toggle('salesnav', 'I use Sales Navigator')}${toggle('notify', 'Reminders', 'Follow-ups and refresh nudges')}${toggle('mondayBrief', 'Monday brief', 'Five people worth reaching out to, every Monday at 7:30')}${toggle('haptics', 'Haptics')}${toggle('arrivals', 'Arrival check', 'Open Bearings in a new city to see who you know there')}</div>
       <p class="sec-h">Places</p><div class="card list"><button type="button" class="row act" data-a="locate" ${M.locating ? 'disabled' : ''}>${icon('contactCheck')}<span>${M.locating ? 'Matching…' : 'Match with my Contacts'}</span></button></div>
       <p class="foot">Works out where people are from their cards in your Contacts: the address, then the phone area code. It all happens on this phone.</p>
+      <p class="sec-h">Enrichment</p><div class="card list"><button type="button" class="row act" data-a="enrich">${icon('sparkles')}<span>ZoomInfo and Seamless.AI</span>${icon('chevR', 'chev')}</button></div>
       <p class="sec-h">Your data</p><div class="card list">
         <button type="button" class="row act" data-a="import">${icon('download')}<span>${isSample() ? 'Import connections' : 'Refresh connections'}</span></button>
         <button type="button" class="row act" data-a="export">${icon('share')}<span>Export everyone as a spreadsheet</span></button>
@@ -146,10 +149,12 @@ export function openSettings(){
       async pref(v, t){
         const k = t.dataset.k; prefs[k] = !!v; savePrefs(); fx.select();
         if (k === 'notify' && v) await askNotify();
+        if (k === 'arrivals' && v){ if (!allow('arrivals') || !(await enableArrivals())){ prefs.arrivals = false; savePrefs(); t.checked = false; if (unlocked()) show('Allow location for Bearings to use the arrival check.'); } }
         if (k === 'mondayBrief' || k === 'notify') scheduleMonday();
         if (k === 'notify') M.version++;
       },
       locate: () => locate(),
+      enrich: () => open('enrichSettings'),
       import(){ closeSheet(); setTimeout(() => open('import'), 300); },
       export: () => exportCSV(null),
       backup: () => backup(),
