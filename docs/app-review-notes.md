@@ -1,7 +1,7 @@
 # App Review notes
 
 Pushed to App Store Connect by the store-listing workflow (store/listing.json, "review").
-The contact phone number is entered by hand in App Store Connect.
+The contact phone number comes from the REVIEW_PHONE repository secret (Apple requires one), or can be typed into App Store Connect by hand.
 
 Thank you for reviewing Bearings.
 

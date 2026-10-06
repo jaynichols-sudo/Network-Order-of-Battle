@@ -62,6 +62,9 @@ def review(version):
         return
     attrs = {k: r[k] for k in ('contactFirstName', 'contactLastName', 'contactEmail', 'notes') if r.get(k)}
     attrs['demoAccountRequired'] = False
+    # the phone stays out of this public repo: it comes from the REVIEW_PHONE secret, e.g. +1 336 555 0100
+    if os.environ.get('REVIEW_PHONE'):
+        attrs['contactPhone'] = os.environ['REVIEW_PHONE']
     ok, res = call_soft('GET', f'/appStoreVersions/{version}/appStoreReviewDetail')
     rid = res.get('data', {}).get('id') if ok and isinstance(res, dict) and res.get('data') else None
     if rid:
