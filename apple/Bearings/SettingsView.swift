@@ -23,6 +23,7 @@ struct SettingsView: View {
     @State private var feedback = false
     @State private var sfWorking = false
     @State private var homeText = UserDefaults.standard.string(forKey: "homeName") ?? ""
+    @State private var arrivals = ArrivalAlerts.enabled
 
     var body: some View {
         NavigationStack {
@@ -117,6 +118,15 @@ struct SettingsView: View {
                     TripMode.enabled = on
                     Task { await TripMode.refresh(model: model) }
                 }))
+            #if !targetEnvironment(macCatalyst)
+            Toggle("Arrival alerts", isOn: Binding(
+                get: { arrivals },
+                set: { on in
+                    if on && !model.allow(.arrivals) { return }
+                    arrivals = on
+                    ArrivalAlerts.shared.setEnabled(on)
+                }))
+            #endif
             TextField("Home city, like Greensboro, NC", text: $homeText)
                 .submitLabel(.done)
                 .onSubmit {
@@ -130,7 +140,7 @@ struct SettingsView: View {
         } header: {
             Text("Calendar")
         } footer: {
-            Text("Bearings reads your calendar on this device to brief you 30 minutes before meetings with people you know, and to spot trips more than 75 miles from home. In Trip mode, a trip shows on your Lock Screen two days ahead with who you know nearby. Nothing is uploaded.")
+            Text("Bearings reads your calendar on this device to brief you 30 minutes before meetings with people you know, and to spot trips more than 75 miles from home. In Trip mode, a trip shows on your Lock Screen two days ahead with who you know nearby. With arrival alerts, landing in a city away from home tells you who you know there (choose “Always” for location when asked). Nothing is uploaded.")
         }
     }
 
@@ -163,7 +173,7 @@ struct SettingsView: View {
                 }
                 TextField("Connected app consumer key", text: $sfClientId)
                     .textInputAutocapitalization(.never).autocorrectionDisabled()
-                Button(sfWorking ? "Connecting…" : "Connect Salesforce") { connectSalesforce() }
+                Button(sfWorking ? "Connecting…" : "Connect Salesforce") { if model.allow(.salesforce) { connectSalesforce() } }
                     .disabled(sfClientId.trimmingCharacters(in: .whitespaces).isEmpty || sfWorking)
                 Button("How to set this up") { sfGuide = true }
             }
@@ -173,6 +183,7 @@ struct SettingsView: View {
             Text("Sends contacts, follow-up tasks and notes from Bearings to Salesforce. You sign in with Salesforce directly; Bearings never sees your password, and there’s no Bearings server in between.")
         }
         .sheet(isPresented: $sfGuide) { SalesforceGuide().environment(AppModel.shared) }
+        .sheet(item: Binding(get: { model.paywallFeature }, set: { model.paywallFeature = $0 })) { f in PaywallView(feature: f).environment(AppModel.shared) }
         .sheet(isPresented: $feedback) {
             FeedbackMail(to: AppInfo.supportEmail, body: "\n\n\n—\n" + Diagnostics.shared.summary(model: model), attachments: Diagnostics.shared.reports)
                 .ignoresSafeArea()

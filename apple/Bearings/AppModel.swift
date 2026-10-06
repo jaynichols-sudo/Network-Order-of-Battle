@@ -38,6 +38,7 @@ enum Route: Hashable {
     case catchup
     case events
     case about(String)
+    case team
 }
 
 enum CompaniesMode: String, CaseIterable, Identifiable {
@@ -136,6 +137,10 @@ final class AppModel {
     var pendingImportURL: URL?
     /// A LinkedIn export spotted in Downloads (Mac), waiting for a yes.
     var foundExport: URL?
+    /// The paywall, opened from a locked feature or from You.
+    var paywallFeature: Pro.Feature?
+    var showPaywall = false
+    var showYear = false
 
     // people search
     var searchText = "" { didSet { scheduleSearch() } }
@@ -242,6 +247,13 @@ final class AppModel {
         case "intro": introQuery = targets.first?.name ?? "NAVFAC"
         case "quickfind": showQuickFind = true
         case "weekly": showWeekly = true
+        case "paywall": showPaywall = true
+        case "year": showYear = true
+        case "team":
+            let mate = """
+            {"kind":"bearings-team-pack","v":1,"owner":"Jim Loughlin","made":"\(Day.today)","people":[{"f":"Pat","l":"Morgan","c":"NAVFAC Southeast","p":"Contracting Officer","b":"strong"}]}
+            """
+            Task { _ = try? await engine.call("addTeamPack", [mate], as: TeamAdded.self); paths[.you] = [.team] }
         case "event":
             let known = people.filter { $0.x == nil }.sorted { $0.score > $1.score }
             var e = NetEvent(name: "AFCEA TechNet Augusta", place: "Augusta, GA", start: Date().addingTimeInterval(-2 * 86400), end: Date().addingTimeInterval(-86400))
@@ -286,7 +298,7 @@ final class AppModel {
         syncNote = ""
         var texts: [String: Any] = [:]
         if case .data(let t) = net, let t { texts["network"] = t }
-        for (key, file) in [("edits", "edits.json"), ("review", "review.json"), ("targets", "targets.json"), ("industries", "industries.json")] {
+        for (key, file) in [("edits", "edits.json"), ("review", "review.json"), ("targets", "targets.json"), ("industries", "industries.json"), ("team", "team.json")] {
             if case .data(let t) = await store.read(file), let t { texts[key] = t }
         }
         do {
@@ -483,7 +495,7 @@ final class AppModel {
 
     // MARK: edits
 
-    private func saveFile(_ engineName: String, _ file: String) async {
+    func saveFile(_ engineName: String, _ file: String) async {
         guard !info.isSample, let json = await engine.fileJSON(engineName) else { return }
         do { try await store.write(file, json) } catch { show("Couldn’t save: \(error.localizedDescription)") }
     }
@@ -980,6 +992,7 @@ final class AppModel {
         if action.hasPrefix("meeting:") { tab = .home; paths[.home] = [.meeting(String(action.dropFirst(8)))]; return }
         if action.hasPrefix("trip:") { tab = .home; paths[.home] = [.trip(String(action.dropFirst(5)))]; return }
         if action == "weekly" { showWeekly = true; return }
+        if action == "arrival" { UserDefaults.standard.set("map", forKey: "exploreMode"); go("explore"); return }
         if action.hasPrefix("event:") { tab = .home; paths[.home] = [.event(String(action.dropFirst(6)))]; return }
         if action.hasPrefix("note:"), let k {
             let body = action.dropFirst(5)

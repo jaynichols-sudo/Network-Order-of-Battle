@@ -29,7 +29,7 @@ struct BearingsApp: App {
                     }
                     guard url.isFileURL else { return }
                     if url.pathExtension.lowercased() == "json" {
-                        Task { await model.restore(url) }
+                        Task { await model.openJSON(url) }
                     } else {
                         model.pendingImportURL = url
                         model.showOnboarding = false
@@ -107,6 +107,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         Notifications.shared.register()
         Diagnostics.shared.start()
         WatchLink.shared.start()
+        ArrivalAlerts.shared.resume()
         return true
     }
 }

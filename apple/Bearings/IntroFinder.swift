@@ -3,12 +3,14 @@ import SwiftUI
 struct IntroPaths: Decodable {
     struct Alum: Decodable, Identifiable { var k: String; var was: String; var until: String; var id: String { k } }
     struct Best: Decodable, Identifiable { var k: String; var why: String; var id: String { k } }
+    struct Mate: Decodable, Identifiable, Hashable { var owner: String; var name: String; var c: String; var p: String; var u: String; var b: String; var id: String { owner + "|" + name + "|" + c } }
     var company: String
     var ind: String
     var now: [String]
     var alumni: [Alum]
     var sector: [String]
     var best: [Best]
+    var team: [Mate]? = nil
 }
 
 /// "Who can get me into X?" Your best paths into a company, warmest first.
@@ -63,7 +65,7 @@ struct IntroFinderView: View {
     struct Wrapped: Identifiable { let id: String }
 
     @ViewBuilder private func results(_ p: IntroPaths) -> some View {
-        if p.now.isEmpty && p.alumni.isEmpty && p.sector.isEmpty {
+        if p.now.isEmpty && p.alumni.isEmpty && p.sector.isEmpty && (p.team ?? []).isEmpty {
             Section {
                 ContentUnavailableView("No paths yet", systemImage: "point.3.connected.trianglepath.dotted",
                                        description: Text("No one in your network works or worked at “\(query)”. Try a shorter name."))
@@ -111,6 +113,27 @@ struct IntroFinderView: View {
                 }
             }
             peopleSection(p.ind.isEmpty ? "Close to you nearby" : "Close to you in \(p.ind)", p.sector)
+            if let team = p.team, !team.isEmpty {
+                Section {
+                    ForEach(team) { m in
+                        HStack(spacing: 12) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(m.name).font(Theme.geist(.subheadline, .semibold))
+                                Text([m.p, m.c].filter { !$0.isEmpty }.joined(separator: " · ")).font(Theme.geist(.footnote)).foregroundStyle(.secondary).lineLimit(2)
+                            }
+                            Spacer()
+                            VStack(alignment: .trailing, spacing: 2) {
+                                Text("via \(m.owner)").font(Theme.geist(.footnote, .semibold)).foregroundStyle(Theme.primary)
+                                Text(Band.label(m.b)).font(Theme.geist(.caption)).foregroundStyle(Band.color(m.b))
+                            }
+                        }
+                    }
+                } header: {
+                    Text("Through your team (\(team.count))")
+                } footer: {
+                    Text("From team packs your teammates shared. Ask them for the intro.")
+                }
+            }
         }
     }
 
@@ -130,6 +153,7 @@ struct IntroFinderView: View {
         if !p.now.isEmpty { parts.append("\(p.now.count) there now") }
         if !p.alumni.isEmpty { parts.append("\(p.alumni.count) used to be") }
         if !p.sector.isEmpty { parts.append("\(p.sector.count) close in the same field") }
+        if let t = p.team, !t.isEmpty { parts.append("\(t.count) through your team") }
         return parts.joined(separator: ", ")
     }
 }

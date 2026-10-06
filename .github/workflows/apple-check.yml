@@ -111,6 +111,9 @@ jobs:
             shoot $dev $p-25-weekly -demoOpen weekly
             shoot $dev $p-26-you -startTab you
             shoot $dev $p-27-about -startTab people -demoOpen about
+            shoot $dev $p-28-paywall -demoOpen paywall
+            shoot $dev $p-29-year -demoOpen year
+            shoot $dev $p-30-team -startTab you -demoOpen team
             xcrun simctl ui $dev content_size accessibility-large
             shoot $dev $p-21-home-xl
             shoot $dev $p-22-profile-xl -startTab people -demoOpen person

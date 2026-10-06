@@ -10,7 +10,7 @@ import { parseQuery, matchNL } from './nlq.js';
 import { INDUSTRIES, indColor, indShort, setIndustryOverrides, companyKey, UNCLASSIFIED, GOV_IND } from './industry.js';
 
 /* ---------- state ---------- */
-const S = {all: [], byK: new Map(), edits: {}, review: {}, targets: [], meta: null, mode: 'sample', coInd: Object.create(null), coLink: Object.create(null), coLoc: Object.create(null), lensPref: null, lens: false, hasRel: false};
+const S = {all: [], byK: new Map(), edits: {}, review: {}, targets: [], meta: null, mode: 'sample', coInd: Object.create(null), coLink: Object.create(null), coLoc: Object.create(null), lensPref: null, lens: false, hasRel: false, team: []};
 const SEG_COLORS = ['#7A9A1E', '#3E7BE0', '#1E9E8F', '#7556E8', '#C79100', '#D9467F', '#E0683A', '#A07C50', '#6B7F99', '#5B6B83'];
 const segColor = seg => SEG_COLORS[SEGI[seg] ?? 9];
 const GOV_SEGS3 = ['DoD & Military', 'Federal Civilian', 'State & Local'];
@@ -700,7 +700,7 @@ const coKey = s => String(s || '').toLowerCase().replace(/&/g, ' and ').replace(
   .replace(/\b(the|inc|llc|ltd|corp|corporation|co|company|incorporated|plc|gmbh|lp|llp|group|holdings)\b/g, ' ').replace(/\s+/g, ' ').trim();
 function introPaths(q){
   const want = coKey(q);
-  if (want.length < 2) return {company: '', ind: '', now: [], alumni: [], sector: [], best: []};
+  if (want.length < 2) return {company: '', ind: '', now: [], alumni: [], sector: [], best: [], team: []};
   const hit = c => { const k = coKey(c); return !!k && (k === want || (want.length >= 4 && (k.startsWith(want + ' ') || k.includes(' ' + want + ' ') || k.endsWith(' ' + want)))); };
   const A = live();
   const warmFirst = (a, b) => b.wm.score - a.wm.score || a.cl.lv - b.cl.lv;
@@ -722,7 +722,7 @@ function introPaths(q){
   if (best.length < 3) for (const r of now.filter(r => r.wm.score < 35).sort((a, b) => a.cl.lv - b.cl.lv).slice(0, 3 - best.length)) best.push({k: r.k, why: `Works there now${r.cl.sen ? ', ' + r.cl.sen.toLowerCase() : ''}. You haven’t talked much yet.`});
   if (best.length < 3) for (const r of sector.slice(0, 3 - best.length)) best.push({k: r.k, why: `Close to you in ${ind}. Likely knows people there.`});
   const name = (now[0] && (hit(now[0].c) ? now[0].c : now[0].cl.agency)) || (alumni[0] && (alumni[0].r.pv || []).find(x => hit(x.c))?.c) || q;
-  return {company: name, ind, now: now.slice(0, 50).map(r => r.k), alumni: alumni.slice(0, 30).map(a => ({k: a.r.k, was: a.was, until: a.until})), sector: sector.map(r => r.k), best: best.slice(0, 4)};
+  return {company: name, ind, now: now.slice(0, 50).map(r => r.k), alumni: alumni.slice(0, 30).map(a => ({k: a.r.k, was: a.was, until: a.until})), sector: sector.map(r => r.k), best: best.slice(0, 4), team: teamPaths(hit)};
 }
 
 /* ---------- import ---------- */
@@ -739,6 +739,56 @@ function importTexts(t, device){
   if (wasStarter) carryStarterNotes(out);
   return {stats: plan.stats, wasSample: S.mode === 'sample', wasStarter};
 }
+
+/* ---------- team packs ---------- */
+// A teammate shares a pack: who they know, at which company, and how well. No notes, emails,
+// messages or tags. Packs stay on your device and only feed "Ways in".
+const BAND_RANK = {strong: 3, warm: 2, light: 1, none: 0};
+function teamPack(owner){
+  const people = live().map(r => ({f: r.f, l: r.l, c: r.c || '', p: r.p || '', u: r.u || '', b: r.wm ? r.wm.band : 'none'}));
+  return JSON.stringify({kind: 'bearings-team-pack', v: 1, owner: String(owner || 'A teammate').slice(0, 80), made: TODAY, people});
+}
+function addTeamPack(text){
+  let d; try { d = JSON.parse(text); } catch { d = null; }
+  if (!d || d.kind !== 'bearings-team-pack' || !Array.isArray(d.people)) throw new Error('That isn’t a Bearings team pack.');
+  const owner = String(d.owner || 'A teammate').slice(0, 80);
+  const people = d.people.slice(0, 50000).filter(p => p && (p.f || p.l)).map(p => ({f: String(p.f || '').slice(0, 80), l: String(p.l || '').slice(0, 80),
+    c: String(p.c || '').slice(0, 160), p: String(p.p || '').slice(0, 240), u: String(p.u || '').slice(0, 300), b: BAND_RANK[p.b] != null ? p.b : 'none'}));
+  S.team = S.team.filter(t => t.owner !== owner).concat([{owner, made: String(d.made || TODAY).slice(0, 10), people}]);
+  return {owner, count: people.length, packs: teamList()};
+}
+function removeTeamPack(owner){ S.team = S.team.filter(t => t.owner !== owner); return teamList(); }
+function teamList(){ return S.team.map(t => ({owner: t.owner, made: t.made, count: t.people.length})); }
+/** Teammates' people at a company, best first, plus who on the team covers it. */
+function teamPaths(hit){
+  const out = [];
+  for (const t of S.team) for (const p of t.people) if (hit(p.c)) out.push({owner: t.owner, name: `${p.f} ${p.l}`.trim(), c: p.c, p: p.p, u: p.u, b: p.b});
+  out.sort((a, b) => BAND_RANK[b.b] - BAND_RANK[a.b] || a.name.localeCompare(b.name));
+  return out.slice(0, 40);
+}
+
+/* ---------- year in review ---------- */
+// A shareable look back at the year: who joined your network, the job changes you caught,
+// who you talked with and who you reconnected with. Counts only, for the card.
+function yearInReview(year){
+  const y = String(year || TODAY.slice(0, 4));
+  const inYear = d => !!d && String(d).slice(0, 4) === y;
+  const A = live();
+  const joined = A.filter(r => inYear(r.d));
+  const moved = A.filter(r => inYear(r.jc));
+  const talked = A.filter(r => r.rx && inYear(r.rx.t));
+  const reconnected = A.filter(r => r.ed && (inYear(r.ed.touched) || inYear(r.ed.replied)));
+  const notes = A.filter(r => r.ed && inYear(r.ed.updated)).length;
+  const months = Array(12).fill(0); for (const r of joined) months[+r.d.slice(5, 7) - 1]++;
+  const sectors = new Map(); for (const r of joined){ const g = groupOf(r); sectors.set(g, (sectors.get(g) || 0) + 1); }
+  const topSectors = [...sectors.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3).map(([id, n]) => ({id, n, color: groupColor(id)}));
+  const topCompanies = topCompanies_(joined, 3);
+  const closest = talked.slice().sort((a, b) => b.wm.score - a.wm.score).slice(0, 5).map(r => r.k);
+  const best = months.indexOf(Math.max(...months));
+  return {year: +y, total: A.length, joined: joined.length, moved: moved.length, talked: talked.length, reconnected: reconnected.length, notes,
+    months, busiestMonth: joined.length ? best + 1 : 0, topSectors, topCompanies, closest, hasRel: S.hasRel};
+}
+const topCompanies_ = (ps, n) => topCompanies(ps, n).map(([name, k]) => ({name, n: k}));
 
 /* ---------- LinkedIn's Member Data Portability API (EEA and Switzerland) ---------- */
 // The snapshot API returns the same columns as the export's CSV files, as JSON rows per
@@ -872,6 +922,7 @@ function load(st){
   S.coInd = Object.assign(Object.create(null), st.companies || {});
   S.coLink = Object.assign(Object.create(null), st.links || {});
   S.coLoc = Object.assign(Object.create(null), st.locations || {});
+  S.team = Array.isArray(st.team) ? st.team : [];
   if ('lens' in st) S.lensPref = st.lens;
   hydrate(st.rows || []);
   return info();
@@ -883,10 +934,10 @@ function loadSample(){
 // Native apps hand over the raw saved files; parsing them here keeps one source of truth.
 function loadFiles(f, lens){
   const p = t => { if (!t) return null; try { return JSON.parse(t); } catch { return null; } };
-  const n = p(f.network), e = p(f.edits), rv = p(f.review), tg = p(f.targets), ci = p(f.industries);
+  const n = p(f.network), e = p(f.edits), rv = p(f.review), tg = p(f.targets), ci = p(f.industries), tm = p(f.team);
   if (!n || !n.rows) return Object.assign(loadSample(), {empty: true});
   return load({mode: 'live', rows: n.rows, meta: n.meta || {}, edits: (e && e.edits) || {}, review: (rv && rv.review) || {}, targets: (tg && tg.targets) || [],
-    companies: (ci && ci.companies) || {}, links: (ci && ci.links) || {}, locations: (ci && ci.locations) || {}, lens});
+    companies: (ci && ci.companies) || {}, links: (ci && ci.links) || {}, locations: (ci && ci.locations) || {}, team: (tm && tm.packs) || [], lens});
 }
 function fileData(name){
   if (name === 'network'){ if (!S.pending) throw new Error('Nothing to save'); const p = S.pending; S.pending = null; return p; }
@@ -894,6 +945,7 @@ function fileData(name){
   if (name === 'review') return {review: S.review};
   if (name === 'targets') return {targets: S.targets};
   if (name === 'industries') return {companies: S.coInd, links: S.coLink, locations: S.coLoc};
+  if (name === 'team') return {packs: S.team};
   throw new Error('Unknown file ' + name);
 }
 function clearNotes(){ S.edits = {}; S.review = {}; S.targets = []; S.coInd = Object.create(null); S.coLink = Object.create(null); S.coLoc = Object.create(null); return true; }
@@ -918,7 +970,7 @@ function constants(){
 
 const api = {load, loadSample, loadFiles, clearNotes, clusters, placeClues, setCompanyLocation, companyPlaces, messages, matchAttendees, alsoAt, setLens, info, people, person, search, facets, home, payoff, targets, unit, addTargetCandidates, toggleTarget, setTargetNote, orgs,
   industries, industry, setCompanyIndustry, setCompanyLink, ranks, deck, deckCount, reviewed, radar, compass, startFromContacts, introPaths, weekly, touch, setCircle, setEdit, followUp, markReplied, addNote,
-  importTexts, importSnapshot, backup, restore, exportCSV, reminders, watch, constants};
+  importTexts, importSnapshot, yearInReview, teamPack, addTeamPack, removeTeamPack, teamList, backup, restore, exportCSV, reminders, watch, constants};
 // Every call goes through here: JSON string in, JSON string out, errors as {error}.
 globalThis.Bearings = {
   call(name, argsJSON){

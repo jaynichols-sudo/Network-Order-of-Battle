@@ -169,6 +169,9 @@ struct TodayChips: View {
             if let trip {
                 chip("\(trip.city) trip", icon: "airplane") { model.open(.trip(trip.id)) }
             }
+            if model.yearReviewSeason && !model.info.isSample {
+                chip("Your \(String(model.reviewYear))", icon: "sparkles") { model.showYear = true }
+            }
             chip("Explore", icon: "scope") { model.open(.explore) }
         }
         .padding(.horizontal, 2)
@@ -255,6 +258,8 @@ struct YouView: View {
                     row("Events", icon: "ticket", detail: model.events.isEmpty ? nil : model.events.count.formatted()) { model.open(.events) }
                     row("Trips", icon: "airplane") { model.open(.trips) }
                     row("Find a way into a company", icon: "point.3.connected.trianglepath.dotted") { model.introQuery = "" }
+                    row("Team packs", icon: "person.3") { model.open(.team) }
+                    row("Your year in review", icon: "calendar.badge.checkmark") { model.showYear = true }
                     ForEach(model.savedSearches) { s in
                         row(s.name, icon: "pin") { model.apply(s) }
                     }
@@ -269,6 +274,7 @@ struct YouView: View {
                 }
 
                 group(nil) {
+                    row(Pro.shared.owned ? "Bearings Pro (thank you!)" : "Bearings Pro", icon: "sparkles") { model.showPaywall = true }
                     row("Settings", icon: "gearshape") { model.showSettings = true }
                     row("Help and support", icon: "questionmark.circle") {
                         if let u = URL(string: "https://www.jaynichols.net/bearings/support.html") { UIApplication.shared.open(u) }

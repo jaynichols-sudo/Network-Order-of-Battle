@@ -28,11 +28,16 @@ struct RootView: View {
         .sheet(isPresented: $model.showAddTarget) { AddTargetView().environment(AppModel.shared) }
         .sheet(isPresented: $model.showPayoff) { PayoffView().environment(AppModel.shared) }
         .sheet(isPresented: $model.showShareCard) { ShareCardSheet().environment(AppModel.shared) }
-        .sheet(isPresented: $model.newEvent) { NewEventSheet().environment(AppModel.shared) }
+        .sheet(isPresented: $model.newEvent) {
+            Group { if Pro.shared.unlocked { NewEventSheet() } else { PaywallView(feature: .events) } }.environment(AppModel.shared)
+        }
+        .sheet(isPresented: $model.showYear) { YearInReviewView().environment(AppModel.shared) }
+        .sheet(isPresented: $model.showPaywall) { PaywallView().environment(AppModel.shared) }
+        .sheet(item: $model.paywallFeature) { f in PaywallView(feature: f).environment(AppModel.shared) }
         .sheet(isPresented: $model.showQuickFind) { QuickFind().environment(AppModel.shared) }
         .sheet(isPresented: $model.showWeekly) { WeeklyBriefView().environment(AppModel.shared) }
         .sheet(item: Binding(get: { model.introQuery.map { IntroFinderView.Wrapped(id: $0) } }, set: { model.introQuery = $0?.id })) { w in
-            IntroFinderView(query: w.id).environment(AppModel.shared)
+            Group { if Pro.shared.unlocked { IntroFinderView(query: w.id) } else { PaywallView(feature: .waysIn) } }.environment(AppModel.shared)
         }
         .sheet(item: $model.shareFile) { f in ActivityView(items: [f.url]).ignoresSafeArea().environment(AppModel.shared) }
         .alert("Found your LinkedIn export", isPresented: Binding(get: { model.foundExport != nil }, set: { if !$0 { model.foundExport = nil } })) {
@@ -76,6 +81,7 @@ struct RootView: View {
                     case .catchup: CatchUpView()
                     case .events: EventsList()
                     case .about(let k): PersonAboutView(k: k)
+                    case .team: TeamView()
                     }
                 }
         }

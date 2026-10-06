@@ -167,3 +167,42 @@ test('CSV export quotes commas and keeps a header', () => {
   assert.match(lines[0], /^First Name,Last Name,Company/);
   assert.equal(lines.length, call('info').count + 1);
 });
+
+test('team packs: share who you know, never your notes, and they show up in Ways in', () => {
+  const k = people()[0].k;
+  call('addNote', k, 'Private note that must not leave');
+  call('setEdit', k, { star: true, tags: ['secret'] });
+  const pack = call('teamPack', 'Jim');
+  assert.doesNotMatch(pack, /Private note|secret|"star"|@/, 'no notes, tags, stars or emails in a pack');
+  const parsed = JSON.parse(pack);
+  assert.equal(parsed.kind, 'bearings-team-pack');
+  assert.equal(parsed.people.length, call('info').count);
+
+  // a teammate's pack, then Ways in shows their people at the company
+  const theirs = JSON.stringify({ kind: 'bearings-team-pack', v: 1, owner: 'Jim', made: '2026-10-01',
+    people: [{ f: 'Pat', l: 'Morgan', c: 'NAVFAC Southeast', p: 'Contracting Officer', u: '', b: 'strong' },
+             { f: 'Lee', l: 'Ray', c: 'Duke Energy', p: 'CISO', u: '', b: 'warm' }] });
+  const added = call('addTeamPack', theirs);
+  assert.equal(added.count, 2);
+  const paths = call('introPaths', 'NAVFAC');
+  assert.equal(paths.team.length, 1);
+  assert.equal(paths.team[0].owner, 'Jim');
+  assert.equal(paths.team[0].b, 'strong');
+
+  // re-adding replaces rather than duplicates, and removing works
+  call('addTeamPack', theirs);
+  assert.equal(call('teamList').length, 1);
+  call('removeTeamPack', 'Jim');
+  assert.equal(call('introPaths', 'NAVFAC').team.length, 0);
+  assert.throws(() => call('addTeamPack', '{"kind":"notes-backup"}'), /isn’t a Bearings team pack/);
+});
+
+test('year in review counts this year only', () => {
+  const y = call('yearInReview', 2026);
+  assert.equal(y.year, 2026);
+  assert.equal(y.months.length, 12);
+  assert.equal(y.months.reduce((a, b) => a + b, 0), y.joined);
+  assert.ok(y.joined > 0 && y.joined < y.total);
+  assert.ok(y.topSectors.length <= 3 && y.topCompanies.length <= 3);
+  assert.equal(call('yearInReview', 1990).joined, 0);
+});
