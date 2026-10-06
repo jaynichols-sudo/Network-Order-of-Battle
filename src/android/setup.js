@@ -1,5 +1,6 @@
 // Import, the "here's your network" payoff, Settings, and the welcome tour.
 // Ports ImportView.swift (and PayoffView), SettingsView.swift and Onboarding.swift.
+import { linkedInAvailable, readFromLinkedIn } from './linkedin.js';
 import { M, isSample, isStarter, readImport, commitImport, startFromContacts, backup, restore, exportCSV, setLens, locate, show, setQuery, myInitials, scheduleMonday } from './model.js';
 import { esc, fmt, icon, segmented, $, plural, REDUCED } from './ui.js';
 import { openSheet, closeSheet, go, toast } from './nav.js';
@@ -17,13 +18,15 @@ const pickFile = accept => new Promise(resolve => {
 /* ---------- import ---------- */
 const step = (n, title, text) => `<div class="step"><span class="step-n mono">${n}</span><div><b>${esc(title)}</b><p class="muted">${esc(text)}</p></div></div>`;
 export function openImport(file = null){
-  const st = {reading: false, saving: false, plan: null, name: '', error: ''};
+  const st = {reading: false, saving: false, plan: null, name: '', error: '', connecting: ''};
   let sheet = null;
   const render = body => {
     const p = st.plan;
-    body.innerHTML = `<p class="muted pad-x">${isSample() ? 'Three steps. Everything stays private to you.' : 'New people are added, job changes are noted, and anyone no longer in the file is kept but marked as removed.'}</p>
-      <div class="card pad steps">${step(1, 'Ask LinkedIn for your data', 'On LinkedIn’s “Get a copy of your data” page, choose the larger archive (it includes messages, so Bearings can tell who you talk to) or just Connections, then tap Request archive.')}
-        ${step(2, 'Wait for the email', 'LinkedIn usually sends a download link within about 10 minutes. The full archive can take up to a day.')}
+    body.innerHTML = `<p class="muted pad-x">${isSample() ? 'Three steps. Everything stays private to you.' : 'Only what changed is updated: new people are added, job changes are noted, and anyone no longer in the file is kept but marked. Your notes, stars, industries and follow-ups are never touched.'}</p>
+      ${linkedInAvailable() ? `<div class="card list"><button type="button" class="row choose" data-a="connect" ${st.connecting || st.reading || st.saving ? 'disabled' : ''}>${icon('ext')}<span><b>Connect LinkedIn</b><span class="muted small">${esc(st.connecting || 'One tap. LinkedIn sends your connections and messages straight to this phone.')}</span></span>${st.connecting ? '<span class="spinner sm"></span>' : ''}</button></div>
+        <p class="foot">Available in the EEA and Switzerland, where LinkedIn lets members share their data with apps. Or use the export file below.</p>` : ''}
+      <div class="card pad steps">${step(1, 'Ask LinkedIn for your data', 'On LinkedIn’s “Get a copy of your data” page, choose “Want something in particular?” and tick Connections, Messages and Invitations. Then tap Request archive.')}
+        ${step(2, 'Wait for the email', 'That version usually arrives in about 10 minutes. Bearings will remind you. (The larger archive works too, but can take a day.)')}
         ${step(3, 'Bring the file here', 'Download the zip and choose it below, or open it from your Downloads or Files app with Bearings.')}
         <button type="button" class="link" data-a="linkedin">${icon('ext')}Open LinkedIn’s data page</button></div>
       <div class="card list"><button type="button" class="row choose" data-a="choose" ${st.reading || st.saving ? 'disabled' : ''}>${icon('zip')}<span><b>Choose your LinkedIn file</b><span class="muted small">The .zip from LinkedIn, or the Connections.csv inside it</span></span></button>
@@ -47,6 +50,13 @@ export function openImport(file = null){
     mount(body){ render(body); if (file) read(file, body); },
     handlers: {
       linkedin(){ openURL(LINKEDIN_EXPORT); exportRequested(); },
+      async connect(_, t){
+        const body = t.closest('.sheet-body');
+        st.name = 'LinkedIn'; st.error = ''; st.plan = null; st.connecting = 'Opening LinkedIn…'; render(body);
+        try { st.plan = await readFromLinkedIn(m => { st.connecting = m; render(body); }); }
+        catch (e) { const m = (e && e.message) || String(e); if (m !== 'cancelled') st.error = m; }
+        st.connecting = ''; render(body);
+      },
       async choose(_, t){ const body = t.closest('.sheet-body'); const f = await pickFile('.zip,.csv,application/zip,text/csv,text/comma-separated-values'); if (f) read(f, body); },
       starter(){ closeSheet(); setTimeout(() => openOnboarding(2), 300); },
       async commit(_, t){
@@ -192,7 +202,7 @@ export function openOnboarding(startStep = 0){
     } else {
       html = `<div class="ob-step">${st.built ? `<div class="ob-built"><p class="good strong">${icon('checkCircle')}${esc(plural(st.built.count, 'person', 'people'))} mapped</p><p class="muted">from your contacts, at ${esc(plural(st.built.companies, 'company', 'companies'))}.</p></div>` : ''}
         ${header(hasReal() ? 'Keep it fresh' : 'Now get the full picture', hasReal() ? 'Every few weeks, grab a new LinkedIn export. Bearings spots job changes and new connections.' : 'LinkedIn adds everyone you’re connected to, who you message, and who changed jobs. Ask for your data now; it arrives by email.')}
-        <div class="ob-scroll steps">${step(1, 'Ask LinkedIn for your data', 'Pick the larger archive so Bearings can see who you talk to.')}${step(2, 'Wait for the email', 'Usually about 10 minutes, up to a day for the full archive. We’ll remind you.')}${step(3, 'Open the file with Bearings', 'Download it, then open it from your Downloads or Files app and choose Bearings.')}</div>
+        <div class="ob-scroll steps">${step(1, 'Ask LinkedIn for your data', 'Choose “Want something in particular?” and tick Connections, Messages and Invitations.')}${step(2, 'Wait for the email', 'Usually about 10 minutes. We’ll remind you.')}${step(3, 'Open the file with Bearings', 'Download it, then open it from your Downloads or Files app and choose Bearings.')}</div>
         <div class="ob-foot"><button type="button" class="btn prominent big" data-a="ask">Ask LinkedIn for my data</button><button type="button" class="link strong" data-a="later">I’ll do it later</button></div></div>`;
     }
     el.innerHTML = html;

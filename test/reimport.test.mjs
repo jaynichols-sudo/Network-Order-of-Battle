@@ -114,3 +114,31 @@ test('notes on contacts carry over when the LinkedIn export replaces a starter n
   assert.ok(p.get('Pat Neighbor'), 'a contact with notes who is not a connection is kept');
   assert.match(p.get('Pat Neighbor').ed.note, /Not on LinkedIn but important/);
 });
+
+test('LinkedIn’s portability API (EEA): snapshot rows import like the export files', () => {
+  call('clearNotes');
+  call('loadSample');
+  const me = 'https://www.linkedin.com/in/me-myself';
+  const ada = 'https://www.linkedin.com/in/ada';
+  const plan = call('importSnapshot', {
+    CONNECTIONS: [
+      {'First Name': 'Ada', 'Last Name': 'Lovelace', URL: ada, 'Email Address': 'ada@example.com', Company: 'Engines, Ltd', Position: 'Chief "Engine" Officer', 'Connected On': '05 Oct 2020'},
+      {'First Name': 'Grace', 'Last Name': 'Hopper', URL: 'https://www.linkedin.com/in/grace', 'Email Address': '', Company: 'US Navy', Position: 'Rear Admiral', 'Connected On': '01 Jan 2020'},
+    ],
+    INBOX: [
+      {'CONVERSATION ID': '1', FROM: 'Ada Lovelace', 'SENDER PROFILE URL': ada, TO: 'Me', 'RECIPIENT PROFILE URLS': me, DATE: '2026-09-30 10:00:00 UTC', CONTENT: 'Can we talk next week?', FOLDER: 'INBOX'},
+      {'CONVERSATION ID': '1', FROM: 'Me', 'SENDER PROFILE URL': me, TO: 'Ada Lovelace', 'RECIPIENT PROFILE URLS': ada, DATE: '2026-09-29 10:00:00 UTC', CONTENT: 'Hi Ada', FOLDER: 'INBOX'},
+      {'CONVERSATION ID': '2', FROM: 'Me', 'SENDER PROFILE URL': me, TO: 'Grace', 'RECIPIENT PROFILE URLS': 'https://www.linkedin.com/in/grace', DATE: '2026-08-01 10:00:00 UTC', CONTENT: 'Hello', FOLDER: 'INBOX'},
+    ],
+  }, 'test');
+  assert.equal(plan.stats.total, 2);
+  assert.equal(plan.stats.rel, 2, 'messages are matched to people');
+  call('clearNotes');
+  call('loadFiles', {network: file('network'), edits: file('edits'), review: file('review'), targets: file('targets'), industries: file('industries')}, null);
+  const p = byName();
+  assert.equal(p.get('Ada Lovelace').c, 'Engines, Ltd', 'commas survive the CSV round trip');
+  assert.equal(p.get('Ada Lovelace').p, 'Chief "Engine" Officer', 'quotes survive too');
+  assert.equal(p.get('Ada Lovelace').rx.dir, 'i', 'Ada wrote last');
+  assert.ok(p.get('Ada Lovelace').waiting);
+  assert.throws(() => call('importSnapshot', {CONNECTIONS: []}, 'test'), /didn’t send any connections/);
+});

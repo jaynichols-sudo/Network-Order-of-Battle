@@ -740,6 +740,23 @@ function importTexts(t, device){
   return {stats: plan.stats, wasSample: S.mode === 'sample', wasStarter};
 }
 
+/* ---------- LinkedIn's Member Data Portability API (EEA and Switzerland) ---------- */
+// The snapshot API returns the same columns as the export's CSV files, as JSON rows per
+// domain. Turning them back into CSV text lets the one import path handle both.
+const SNAPSHOT_FILES = {CONNECTIONS: 'connections', INBOX: 'messages', INVITATIONS: 'invitations'};
+function snapshotCSV(rows){
+  if (!Array.isArray(rows) || !rows.length) return '';
+  const cols = [...new Set(rows.flatMap(r => Object.keys(r || {})))];
+  const q = v => { v = String(v ?? ''); return /[",\n\r]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
+  return [cols.map(q).join(',')].concat(rows.map(r => cols.map(c => q(r && r[c])).join(','))).join('\n');
+}
+function importSnapshot(domains, device){
+  const t = {};
+  for (const [dom, name] of Object.entries(SNAPSHOT_FILES)){ const csv = snapshotCSV(domains && domains[dom]); if (csv) t[name] = csv; }
+  if (!t.connections) throw new Error('LinkedIn didn’t send any connections. Try again in a minute, or use the export file instead.');
+  return importTexts(t, device);
+}
+
 /* ---------- starter network from the phone's contacts ---------- */
 // Instant value while the LinkedIn export is on its way. People come from the
 // address book (name, company, title, email); the LinkedIn import replaces them
@@ -901,7 +918,7 @@ function constants(){
 
 const api = {load, loadSample, loadFiles, clearNotes, clusters, placeClues, setCompanyLocation, companyPlaces, messages, matchAttendees, alsoAt, setLens, info, people, person, search, facets, home, payoff, targets, unit, addTargetCandidates, toggleTarget, setTargetNote, orgs,
   industries, industry, setCompanyIndustry, setCompanyLink, ranks, deck, deckCount, reviewed, radar, compass, startFromContacts, introPaths, weekly, touch, setCircle, setEdit, followUp, markReplied, addNote,
-  importTexts, backup, restore, exportCSV, reminders, watch, constants};
+  importTexts, importSnapshot, backup, restore, exportCSV, reminders, watch, constants};
 // Every call goes through here: JSON string in, JSON string out, errors as {error}.
 globalThis.Bearings = {
   call(name, argsJSON){

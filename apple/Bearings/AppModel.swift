@@ -134,6 +134,8 @@ final class AppModel {
     var showWeekly = false
     var shareFile: ShareFile?
     var pendingImportURL: URL?
+    /// A LinkedIn export spotted in Downloads (Mac), waiting for a yes.
+    var foundExport: URL?
 
     // people search
     var searchText = "" { didSet { scheduleSearch() } }

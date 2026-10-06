@@ -31,6 +31,8 @@ jobs:
           cache: npm
 
       - name: Build web core
+        env:
+          LINKEDIN_CONNECT_URL: ${{ vars.LINKEDIN_CONNECT_URL }}
         run: |
           npm ci
           npm run build

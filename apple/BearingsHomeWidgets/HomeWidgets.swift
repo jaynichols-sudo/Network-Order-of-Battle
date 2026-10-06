@@ -65,12 +65,12 @@ struct HomeWidgetView: View {
             }
             .widgetAccentable()
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel(need == 0 ? "Bearings, all caught up" : "Bearings, \(need) need you")
+            .accessibilityLabel(need == 0 ? "Bearings, all caught up" : "Bearings, \(need) to get back to")
         case .accessoryInline:
             Text(need == 0 ? "Bearings: all caught up" : "\(entry.waiting) to reply · \(entry.due) to follow up")
         case .accessoryRectangular:
             VStack(alignment: .leading, spacing: 1) {
-                Text(need == 0 ? "All caught up" : "\(need) need\(need == 1 ? "s" : "") you")
+                Text(need == 0 ? "All caught up" : "\(need) to get back to")
                     .font(.headline)
                     .widgetAccentable()
                 Text("\(entry.waiting) to reply · \(entry.due) due")

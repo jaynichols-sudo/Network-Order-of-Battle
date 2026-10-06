@@ -14,6 +14,7 @@ import './events.js';
 import './trips.js';
 import './birthdays.js';
 import { applyTheme, openImport, openOnboarding } from './setup.js';
+import { handleLinkedInUrl } from './linkedin.js';
 import { open, openPerson } from './actions.js';
 import { migrate, onAppEvents, onNotification, readIncoming, scheduleMonday, ls, prefs } from './platform.js';
 
@@ -49,6 +50,7 @@ async function boot(){
   onAppEvents({
     resume: () => { if (new Date().toDateString() !== bootDay) location.reload(); },
     url: async u => {
+      if (handleLinkedInUrl(u)) return;
       if (!/^(content|file):/i.test(u)) return;
       try { openImport(await readIncoming(u)); }
       catch (e) { openImport(); toast(`Couldn’t open that file (${(e && e.message) || 'unknown error'}). Choose it from here instead.`); }

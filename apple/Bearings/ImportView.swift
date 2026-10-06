@@ -11,6 +11,7 @@ struct ImportView: View {
     @State private var plan: ImportPlan?
     @State private var fileName = ""
     @State private var error = ""
+    @State private var connecting = ""
 
     var body: some View {
         NavigationStack {
@@ -18,13 +19,33 @@ struct ImportView: View {
                 Section {
                     Text(model.info.isSample
                          ? "Three steps. Everything stays private to you."
-                         : "New people are added, job changes are noted, and anyone no longer in the file is kept but marked as removed.")
+                         : "Only what changed is updated: new people are added, job changes are noted, and anyone no longer in the file is kept but marked. Your notes, stars, industries and follow-ups are never touched.")
                         .foregroundStyle(.secondary)
                         .listRowBackground(Color.clear)
                 }
+                if LinkedInConnect.available {
+                    Section {
+                        Button { connect() } label: {
+                            HStack(spacing: 12) {
+                                Image(systemName: "link.circle.fill").font(.title2)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Connect LinkedIn").fontWeight(.semibold)
+                                    Text(connecting.isEmpty ? "One tap. LinkedIn sends your connections and messages straight to this device." : connecting)
+                                        .font(.footnote).foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                                if !connecting.isEmpty { ProgressView() }
+                            }
+                            .padding(.vertical, 6)
+                        }
+                        .disabled(!connecting.isEmpty || reading || saving)
+                    } footer: {
+                        Text("Available in the EEA and Switzerland, where LinkedIn lets members share their data with apps. Or use the export file below.")
+                    }
+                }
                 Section {
-                    step(1, "Ask LinkedIn for your data", "On LinkedIn’s “Get a copy of your data” page, choose the larger archive (it includes messages, so Bearings can tell who you talk to) or just Connections, then tap Request archive.")
-                    step(2, "Wait for the email", "LinkedIn usually sends a download link within about 10 minutes. The full archive can take up to a day.")
+                    step(1, "Ask LinkedIn for your data", "On LinkedIn’s “Get a copy of your data” page, choose “Want something in particular?” and tick Connections, Messages and Invitations. Then tap Request archive.")
+                    step(2, "Wait for the email", "That version usually arrives in about 10 minutes. Bearings will remind you. (The larger archive works too, but can take a day.)")
                     step(3, "Bring the file here", "Download the zip and choose it below, or open it from Mail or Files and share it to Bearings.")
                     Button {
                         if let u = URL(string: "https://www.linkedin.com/mypreferences/d/download-my-data") { openURL(u) }
@@ -141,6 +162,22 @@ struct ImportView: View {
         Task {
             do { plan = try await model.readImport(url) } catch { self.error = error.localizedDescription }
             reading = false
+        }
+    }
+
+    private func connect() {
+        error = ""
+        plan = nil
+        fileName = "LinkedIn"
+        connecting = "Opening LinkedIn…"
+        Task {
+            do {
+                plan = try await model.readFromLinkedIn { connecting = $0 }
+            } catch is CancellationError {
+            } catch {
+                self.error = error.localizedDescription
+            }
+            connecting = ""
         }
     }
 

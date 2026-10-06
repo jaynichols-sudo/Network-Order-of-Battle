@@ -56,12 +56,12 @@ enum Calm {
         Font.custom("GeistMono-SemiBold", size: size, relativeTo: style)
     }
 
-    /// "Five people need you", spelled out up to ten like Today's headline.
+    /// "Five people to get back to" (replies and follow-ups due), spelled out up to ten.
     static func needLine(_ n: Int) -> String {
         if n <= 0 { return "You’re all caught up." }
-        if n == 1 { return "One person needs you." }
+        if n == 1 { return "One person to get back to." }
         let words = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten"]
-        return "\(n < words.count ? words[n] : n.formatted()) people need you."
+        return "\(n < words.count ? words[n] : n.formatted()) people to get back to."
     }
 
     static func initials(_ name: String) -> String {

@@ -39,6 +39,7 @@ targets:
         CFBundleDisplayName: Bearings
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        BearingsLinkedInConnectURL: $(LINKEDIN_CONNECT_URL)
         ITSAppUsesNonExemptEncryption: false
         LSApplicationCategoryType: public.app-category.business
         LSRequiresIPhoneOS: true

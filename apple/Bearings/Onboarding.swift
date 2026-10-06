@@ -39,7 +39,7 @@ enum ExportReminder {
         center.removePendingNotificationRequests(withIdentifiers: ["export-1", "export-2"])
         let first = UNMutableNotificationContent()
         first.title = "Your LinkedIn data may be ready"
-        first.body = "Look for an email from LinkedIn, download the file, then share it to Bearings. The quick version usually arrives in about 10 minutes."
+        first.body = "Look for an email from LinkedIn, download the file, then share it to Bearings or choose it in Import."
         first.sound = .default
         first.userInfo = ["refresh": true]
         try? await center.add(UNNotificationRequest(identifier: "export-1", content: first, trigger: UNTimeIntervalNotificationTrigger(timeInterval: 20 * 60, repeats: false)))
@@ -239,8 +239,8 @@ struct OnboardingView: View {
                    hasRealNetwork ? "Every few weeks, grab a new LinkedIn export. Bearings spots job changes and new connections." : "LinkedIn adds everyone you’re connected to, who you message, and who changed jobs. Ask for your data now; it arrives by email.",
                    top: built == nil)
             VStack(alignment: .leading, spacing: 14) {
-                numbered(1, "Ask LinkedIn for your data", "Pick the larger archive so Bearings can see who you talk to.")
-                numbered(2, "Wait for the email", "Usually about 10 minutes, up to a day for the full archive. We’ll remind you.")
+                numbered(1, "Ask LinkedIn for your data", "Choose “Want something in particular?” and tick Connections, Messages and Invitations.")
+                numbered(2, "Wait for the email", "Usually about 10 minutes. We’ll remind you.")
                 numbered(3, "Share the file to Bearings", "Open it from Mail or Files and choose Bearings.")
             }
             .padding(.horizontal, 24)

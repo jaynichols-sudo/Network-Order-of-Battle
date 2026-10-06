@@ -20,6 +20,7 @@ struct BearingsApp: App {
                     await model.start()
                     await TripMode.refresh(model: model)
                     if !model.info.isSample { await WeeklyBrief.schedule() }
+                    model.checkDownloads()
                 }
                 .onOpenURL { url in
                     if url.scheme == "bearings" {
@@ -48,6 +49,7 @@ struct BearingsApp: App {
                             await model.drainWatch()
                             await CalendarService.shared.scan(model: model, force: true)
                             await TripMode.refresh(model: model)
+                            model.checkDownloads()
                         }
                     }
                 }

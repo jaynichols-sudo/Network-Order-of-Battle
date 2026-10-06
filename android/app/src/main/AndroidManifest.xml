@@ -32,6 +32,14 @@
                 <data android:mimeType="text/comma-separated-values" />
             </intent-filter>
 
+            <!-- LinkedIn's answer after "Connect LinkedIn" (EEA and Switzerland) -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="bearings" android:host="linkedin" />
+            </intent-filter>
+
             <!-- "Share to Bearings" from Gmail, Files or Drive; MainActivity turns it into a VIEW -->
             <intent-filter>
                 <action android:name="android.intent.action.SEND" />

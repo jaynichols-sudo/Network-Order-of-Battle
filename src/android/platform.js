@@ -196,7 +196,7 @@ export async function exportRequested(){
     await cancelIds([N_EXPORT1, N_EXPORT2]);
     const next = new Date(); next.setDate(next.getDate() + 1); next.setHours(9, 30, 0, 0);
     await LocalNotifications.schedule({notifications: [
-      {id: N_EXPORT1, title: 'Your LinkedIn data may be ready', body: 'Look for an email from LinkedIn, download the file, then open it with Bearings. The quick version usually arrives in about 10 minutes.', schedule: {at: new Date(Date.now() + 20 * 60000), allowWhileIdle: true}, extra: {refresh: true}},
+      {id: N_EXPORT1, title: 'Your LinkedIn data may be ready', body: 'Look for an email from LinkedIn, download the file, then open it with Bearings.', schedule: {at: new Date(Date.now() + 20 * 60000), allowWhileIdle: true}, extra: {refresh: true}},
       {id: N_EXPORT2, title: 'Your full LinkedIn archive should be in', body: 'The full archive, with messages, takes up to a day. Open the email from LinkedIn and open the zip with Bearings to see who you talk to.', schedule: {at: next, allowWhileIdle: true}, extra: {refresh: true}},
     ]});
   } catch {}

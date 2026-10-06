@@ -35,6 +35,16 @@ struct RootView: View {
             IntroFinderView(query: w.id).environment(AppModel.shared)
         }
         .sheet(item: $model.shareFile) { f in ActivityView(items: [f.url]).ignoresSafeArea().environment(AppModel.shared) }
+        .alert("Found your LinkedIn export", isPresented: Binding(get: { model.foundExport != nil }, set: { if !$0 { model.foundExport = nil } })) {
+            Button("Import it") {
+                model.pendingImportURL = model.foundExport
+                model.foundExport = nil
+                model.showImport = true
+            }
+            Button("Not now", role: .cancel) { model.foundExport = nil }
+        } message: {
+            Text("\(model.foundExport?.lastPathComponent ?? "A LinkedIn file") is in your Downloads. Only what changed is updated, and your notes stay put.")
+        }
         .fullScreenCover(isPresented: $model.showOnboarding) { OnboardingView().environment(AppModel.shared) }
     }
 
