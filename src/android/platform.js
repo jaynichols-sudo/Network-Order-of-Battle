@@ -140,7 +140,9 @@ export function statusBar(dark){
 }
 
 /* ---------- notifications ---------- */
-// ids: 1 refresh nudge, 2 Monday brief, 3 and 4 the LinkedIn export reminders, 10+ follow-ups
+// ids: 1 refresh nudge, 2 Monday brief, 3 and 4 the LinkedIn export reminders, 10+ follow-ups,
+// and 2.1 billion and up for the morning-after nudge for each event
+const N_EVENT0 = 2100000000;
 const N_REFRESH = 1, N_MONDAY = 2, N_EXPORT1 = 3, N_EXPORT2 = 4;
 export async function askNotify(){
   if (!NATIVE || !prefs.notify) return false;
@@ -154,7 +156,7 @@ export async function scheduleFollowUps(reminders, lastImport, live){
   if (!NATIVE) return;
   try {
     const pend = await LocalNotifications.getPending();
-    await cancelIds(pend.notifications.map(n => n.id).filter(id => id >= 10 || id === N_REFRESH));
+    await cancelIds(pend.notifications.map(n => n.id).filter(id => (id >= 10 && id < N_EVENT0) || id === N_REFRESH));
     if (!prefs.notify || !live || !(await granted())) return;
     const at9 = iso => { const [y, m, d] = iso.split('-').map(Number); return new Date(y, m - 1, d, 9, 0, 0); };
     const now = Date.now(), list = [];
@@ -201,6 +203,24 @@ export async function exportRequested(){
 }
 export function exportRequestedAt(){ const t = +ls.get('bearings.exportRequested'); return t > 0 ? new Date(t) : null; }
 export function clearExportReminder(){ ls.del('bearings.exportRequested'); if (NATIVE) cancelIds([N_EXPORT1, N_EXPORT2]); }
+
+/** The morning after an event at 9: who still needs a follow-up. */
+export async function scheduleEventNudge(e){
+  if (!NATIVE) return;
+  try {
+    const id = N_EVENT0 + (hashId(e.id) % 1000000);
+    await cancelIds([id]);
+    if (!prefs.notify) return;
+    const [y, m, d] = e.end.split('-').map(Number), at = new Date(y, m - 1, d + 1, 9, 0, 0);
+    if (at.getTime() <= Date.now()) return;
+    if (!(await askNotify())) return;
+    const n = (e.met || []).length;
+    await LocalNotifications.schedule({notifications: [{id, title: `Follow up from ${e.name}`,
+      body: n ? `You met ${n} ${n === 1 ? 'person' : 'people'}. A short note this week makes the connection stick.` : 'Who did you meet? Add them while it’s fresh, then send a quick note.',
+      schedule: {at, allowWhileIdle: true}, extra: {event: e.id}}]});
+  } catch {}
+}
+export async function cancelEventNudge(eventId){ if (NATIVE) await cancelIds([N_EVENT0 + (hashId(eventId) % 1000000)]).catch(() => {}); }
 
 export function onNotification(handler){
   if (!NATIVE) return;

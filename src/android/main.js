@@ -10,6 +10,9 @@ import './explore.js';
 import './catchup.js';
 import './profile.js';
 import './sheets.js';
+import './events.js';
+import './trips.js';
+import './birthdays.js';
 import { applyTheme, openImport, openOnboarding } from './setup.js';
 import { open, openPerson } from './actions.js';
 import { migrate, onAppEvents, onNotification, readIncoming, scheduleMonday, ls, prefs } from './platform.js';
@@ -57,6 +60,7 @@ async function boot(){
     if (ex.k && (act === 'done' || act === 'snooze')){ if (!isSample()) followUp(ex.k, act === 'snooze' ? 7 : 0); return; }
     if (ex.k){ go('people'); openPerson(ex.k); return; }
     if (ex.weekly){ open('weekly'); return; }
+    if (ex.event){ go('home'); open('event', ex.event); return; }
     if (ex.refresh) open('import');
   });
   scheduleMonday();

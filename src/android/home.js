@@ -8,6 +8,9 @@ import { createCompass } from './compass.js';
 import { perform, showPeople, openPerson, open, openToday } from './actions.js';
 import { go } from './nav.js';
 import { exportRequested, exportRequestedAt, openURL, fx, prefs } from './platform.js';
+import { liveEvents, eventChip } from './events.js';
+import { nextTrip, tripChip } from './trips.js';
+import { birthdaysCard } from './birthdays.js';
 
 const LINKEDIN_EXPORT = 'https://www.linkedin.com/mypreferences/d/download-my-data';
 let compass = null, compassData = null, compassVersion = -1;
@@ -66,6 +69,8 @@ function chips(){
     const k = runList(s).length;
     out.push(`<button type="button" class="tchip" data-a="list" data-v="${esc(s.id)}">${icon('pin')}${esc(s.name)} <span class="mono">· ${fmt(k)}</span></button>`);
   }
+  for (const e of liveEvents().slice(0, 3)) out.push(eventChip(e));
+  const trip = nextTrip(); if (trip) out.push(tripChip(trip));
   return `<div class="tchips">${out.join('')}</div>`;
 }
 
@@ -91,7 +96,7 @@ export const HomeView = {
       <header class="today-head"><div><p class="date-line"></p><h1 class="headline"></h1></div>${accountButton()}</header>
       <div class="banner-slot"></div>
       <section class="card compass-card mini"><button type="button" class="mini-compass" data-a="explore" aria-label="Open Explore"></button><div class="tstats"></div></section>
-      <div class="needs-slot"></div><div class="chips-slot"></div><div class="cards-slot"></div></div>`;
+      <div class="needs-slot"></div><div class="chips-slot"></div><div class="bday-slot"></div><div class="cards-slot"></div></div>`;
     compass = createCompass({initials: myInitials(), interactive: false, labels: false});
     $('.mini-compass', el).appendChild(compass.el);
     this.ptr(el);
@@ -108,6 +113,7 @@ export const HomeView = {
     $('.tstats', el).innerHTML = stats(compassData);
     $('.needs-slot', el).innerHTML = needsYou();
     $('.chips-slot', el).innerHTML = chips();
+    $('.bday-slot', el).innerHTML = birthdaysCard();
     $('.cards-slot', el).innerHTML = worth();
     animateRings(el);
   },
@@ -133,6 +139,9 @@ export const HomeView = {
     askLinkedIn: () => { openURL(LINKEDIN_EXPORT); exportRequested(); HomeView.update(document.querySelector('.screen[data-tab="home"]')); },
     findCold: () => showPeople({sig: ['cold']}),
     list(id){ runSavedList(id); },
+    event: id => { fx.tap(); open('event', id); },
+    trip: id => { fx.tap(); open('trip', id); },
+    birthdays: () => open('birthdays'),
   },
 };
 export function runSavedList(id){ const s = M.lists.find(x => x.id === id); if (!s) return; fx.tap(); showPeople(s.filters, s.text); setQuery({sort: s.sort}); }

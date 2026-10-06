@@ -6,6 +6,8 @@ import { openSheet, closeSheet } from './nav.js';
 import { open, openToday } from './actions.js';
 import { runSavedList, listMenu } from './home.js';
 import { openURL, fx, prefs } from './platform.js';
+import { tripsAhead } from './trips.js';
+import { birthdaysWithin } from './birthdays.js';
 
 const row = (a, ic, label, detail = '', chev = true) => `<button type="button" class="row act" data-a="${a}">${icon(ic)}<span>${esc(label)}</span>${detail ? `<span class="muted">${esc(detail)}</span>` : ''}${chev ? icon('chevR', 'chev') : ''}</button>`;
 
@@ -48,6 +50,9 @@ export const YouView = {
         ${row('weekly', 'checkCircle', 'This week’s five')}
         ${row('lists', 'pin', 'Lists', M.lists.length ? fmt(M.lists.length) : '')}
         ${row('catchup', 'stack', 'Catch Up', M.info.deckCount ? `${fmt(M.info.deckCount)} new` : '')}
+        ${row('events', 'ticket', 'Events', M.events.length ? fmt(M.events.length) : '')}
+        ${row('trips', 'plane', 'Trips', tripsAhead().length ? fmt(tripsAhead().length) : '')}
+        ${row('birthdays', 'gift', 'Birthdays', birthdaysWithin(7).length ? `${fmt(birthdaysWithin(7).length)} this week` : '')}
         ${row('explore', 'scope', 'Explore', 'Compass, map, clusters')}
       </section>
       <section class="card list"><div class="card-head static"><h2>Data</h2></div>
@@ -67,6 +72,9 @@ export const YouView = {
     lists: () => openLists(),
     catchup: () => openToday('catchup'),
     explore: () => openToday('explore'),
+    events: () => open('events'),
+    trips: () => open('trips'),
+    birthdays: () => open('birthdays'),
     import: () => open('import'),
     backup: () => open('backup'),
     help: () => openURL('mailto:jay@jaynichols.net?subject=' + encodeURIComponent('Bearings for Android: help')),
