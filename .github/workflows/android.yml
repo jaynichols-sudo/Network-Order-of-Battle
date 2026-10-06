@@ -5,6 +5,12 @@ on:
     branches: [main]
     paths-ignore: ['**.md', 'ios/**', '.github/workflows/ios-testflight.yml']
   workflow_dispatch:
+    inputs:
+      play_track:
+        description: Also upload to Google Play (leave empty to skip)
+        type: choice
+        options: ['', internal, alpha]
+        default: ''
 
 jobs:
   android:
@@ -54,3 +60,13 @@ jobs:
           path: |
             android/app/build/outputs/apk/release/*.apk
             android/app/build/outputs/bundle/release/*.aab
+
+      - name: Upload to Google Play
+        if: ${{ inputs.play_track != '' && inputs.play_track != null }}
+        uses: r0adkll/upload-google-play@v1
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+          packageName: com.jaynichols.networkoob
+          releaseFiles: android/app/build/outputs/bundle/release/*.aab
+          track: ${{ inputs.play_track }}
+          status: completed
