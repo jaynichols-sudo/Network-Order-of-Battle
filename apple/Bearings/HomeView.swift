@@ -35,8 +35,15 @@ struct HomeView: View {
         .navigationTitle("Today")
         .toolbar(.hidden, for: .navigationBar)
         .refreshable { await model.reload() }
-        .task(id: "\(model.info.rev)-\(model.info.edits)-\(model.showWeekly)") {
-            picks = await model.weeklyPicks()
+        .task(id: "\(model.loaded)-\(model.people.count)-\(model.info.rev)-\(model.info.edits)-\(model.showWeekly)") {
+            guard model.loaded else { return }
+            var got = await model.weeklyPicks()
+            // the engine may still be warming up right after launch
+            for _ in 0..<4 where got.isEmpty && !model.people.isEmpty && !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 500_000_000)
+                got = await model.weeklyPicks()
+            }
+            picks = got
             picksLoaded = true
         }
     }

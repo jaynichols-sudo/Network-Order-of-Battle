@@ -64,7 +64,7 @@ struct ProfileView: View {
         .card()
     }
 
-    private struct Tag: Hashable { let text: String; let fg: Color; let bg: Color }
+    private struct Tag: Hashable { let text: String; let fg: Color; let bg: Color; var dot: Color? = nil }
 
     private func tagList(_ p: Person) -> [Tag] {
         var out: [Tag] = []
@@ -73,7 +73,7 @@ struct ProfileView: View {
         if let b = model.nextBirthday(p.k), b.timeIntervalSinceNow < 14 * 86400 {
             out.append(Tag(text: Calendar.current.isDateInToday(b) ? "Birthday today" : "Birthday \(b.formatted(.dateTime.month(.abbreviated).day()))", fg: Theme.bad, bg: Theme.bad.opacity(0.12)))
         }
-        out.append(Tag(text: p.cl.ind, fg: Color(hex: p.indColor), bg: Color(hex: p.indColor).opacity(0.14)))
+        out.append(Tag(text: p.cl.ind, fg: Theme.text2, bg: Theme.card2, dot: Color(hex: p.indColor)))
         if model.info.hasRel && p.rx != nil { out.append(Tag(text: "\(Band.label(p.band)) · \(p.score)", fg: Band.color(p.band), bg: Band.color(p.band).opacity(0.14))) }
         if let c = p.circle { out.append(Tag(text: p.over ? "\(c.title), overdue" : c.title, fg: Theme.primary, bg: Theme.soft)) }
         if p.isNew { out.append(Tag(text: "New connection", fg: Theme.primary, bg: Theme.soft)) }
@@ -85,7 +85,10 @@ struct ProfileView: View {
         if !items.isEmpty {
             FlowLayout(spacing: 6) {
                 ForEach(items, id: \.self) { t in
-                    Text(t.text)
+                    HStack(spacing: 5) {
+                        if let d = t.dot { Circle().fill(d).frame(width: 7, height: 7) }
+                        Text(t.text)
+                    }
                         .font(Theme.geist(.caption, .semibold))
                         .foregroundStyle(t.fg)
                         .padding(.horizontal, 10).padding(.vertical, 4)

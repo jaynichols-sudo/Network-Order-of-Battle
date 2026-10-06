@@ -16,7 +16,7 @@ struct TodayCompassCard: View {
                 Haptic.tap()
                 model.open(.explore)
             } label: {
-                CompassView(data: data, focus: .constant(nil), initials: model.myInitials, pings: true) { _ in }
+                CompassView(data: data, focus: .constant(nil), initials: model.myInitials, pings: true, labels: false) { _ in }
                     .allowsHitTesting(false)
                     .frame(width: 128, height: 128)
             }
@@ -43,8 +43,8 @@ struct TodayCompassCard: View {
         }
         .padding(16)
         .card()
-        .task(id: "\(model.people.count)-\(model.info.lens)-\(model.info.edits)-\(model.info.rev)") {
-            data = await model.compass()
+        .task(id: "\(model.loaded)-\(model.people.count)-\(model.info.lens)-\(model.info.edits)-\(model.info.rev)") {
+            data = await model.compassReady()
         }
     }
 

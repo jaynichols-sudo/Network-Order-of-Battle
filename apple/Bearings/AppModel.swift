@@ -705,6 +705,15 @@ final class AppModel {
     func addCandidates(_ q: String) async -> [NameCount] { (try? await engine.call("addTargetCandidates", [q], as: [NameCount].self)) ?? [] }
     func introPaths(_ q: String) async -> IntroPaths? { try? await engine.call("introPaths", [q], as: IntroPaths.self) }
     func compass() async -> CompassData { (try? await engine.call("compass", [["text": "", "filters": Filters().json]], as: CompassData.self)) ?? .empty }
+    /// The compass, retrying briefly if asked while the network is still loading.
+    func compassReady() async -> CompassData {
+        for _ in 0..<6 {
+            let d = await compass()
+            if !d.wedges.isEmpty || (loaded && people.isEmpty) || Task.isCancelled { return d }
+            try? await Task.sleep(nanoseconds: 500_000_000)
+        }
+        return await compass()
+    }
     func radar() async -> RadarData { (try? await engine.call("radar", [queryArgs], as: RadarData.self)) ?? .empty }
     func ranks() async -> RanksData? { try? await engine.call("ranks", [queryArgs], as: RanksData.self) }
     func clusters() async -> ClustersData? { try? await engine.call("clusters", [queryArgs, ["max": 40]], as: ClustersData.self) }

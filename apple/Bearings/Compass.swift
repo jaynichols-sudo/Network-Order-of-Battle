@@ -96,6 +96,8 @@ struct CompassView: View {
     var still = false
     /// Ping softly as the sweep passes people waiting on you (the first few turns only).
     var pings = false
+    /// Sector and ring labels; off for the small compass on Today.
+    var labels = true
     let onOpen: (String) -> Void
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -314,7 +316,7 @@ struct CompassView: View {
     }
 
     private func drawLabels(_ ctx: inout GraphicsContext, center: CGPoint, r: CGFloat) {
-        guard focused == nil else { return }
+        guard focused == nil, labels else { return }
         for ring in data.rings.dropLast() {
             let y = center.y - r * CGFloat(ring.r) + 2
             ctx.draw(Text(ring.label.uppercased()).font(.custom("GeistMono-Medium", fixedSize: 9)).foregroundStyle(Color.secondary.opacity(0.85)),
@@ -415,8 +417,8 @@ struct CompassCard: View {
         }
         .padding(16)
         .card(24)
-        .task(id: "\(model.people.count)-\(model.info.lens)-\(model.info.edits)-\(model.info.rev)") {
-            data = await model.compass()
+        .task(id: "\(model.loaded)-\(model.people.count)-\(model.info.lens)-\(model.info.edits)-\(model.info.rev)") {
+            data = await model.compassReady()
         }
     }
 
