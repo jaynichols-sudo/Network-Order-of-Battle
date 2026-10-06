@@ -172,7 +172,7 @@ struct SettingsView: View {
         } footer: {
             Text("Sends contacts, follow-up tasks and notes from Bearings to Salesforce. You sign in with Salesforce directly; Bearings never sees your password, and there’s no Bearings server in between.")
         }
-        .sheet(isPresented: $sfGuide) { SalesforceGuide() }
+        .sheet(isPresented: $sfGuide) { SalesforceGuide().environment(AppModel.shared) }
         .sheet(isPresented: $feedback) {
             FeedbackMail(to: AppInfo.supportEmail, body: "\n\n\n—\n" + Diagnostics.shared.summary(model: model), attachments: Diagnostics.shared.reports)
                 .ignoresSafeArea()

@@ -184,13 +184,13 @@ struct EventView: View {
             .fileImporter(isPresented: $pickingList, allowedContentTypes: [.commaSeparatedText, .plainText, .text]) { r in
                 if case .success(let url) = r { loadList(url: url, e) }
             }
-            .sheet(isPresented: $pasting) { pasteSheet(e) }
-            .sheet(isPresented: $addingKnown) { PersonPicker { k in addKnown(k, e) } }
-            .sheet(item: $draft) { m in MetForm(met: m, event: e) }
+            .sheet(isPresented: $pasting) { pasteSheet(e).environment(AppModel.shared) }
+            .sheet(isPresented: $addingKnown) { PersonPicker { k in addKnown(k, e) }.environment(AppModel.shared) }
+            .sheet(item: $draft) { m in MetForm(met: m, event: e).environment(AppModel.shared) }
             .sheet(item: Binding(get: { writingTo.map { IntroFinderView.Wrapped(id: $0) } }, set: { writingTo = $0?.id })) { w in
-                MessageSheet(k: w.id, event: e.name)
+                MessageSheet(k: w.id, event: e.name).environment(AppModel.shared)
             }
-            .sheet(item: $savingContact) { m in NewContactView(name: m.name, company: m.company, title: m.title, email: m.email, phone: m.phone).ignoresSafeArea() }
+            .sheet(item: $savingContact) { m in NewContactView(name: m.name, company: m.company, title: m.title, email: m.email, phone: m.phone).ignoresSafeArea().environment(AppModel.shared) }
             #if !targetEnvironment(macCatalyst)
             .fullScreenCover(isPresented: $scanning) {
                 CardScanner { lines in

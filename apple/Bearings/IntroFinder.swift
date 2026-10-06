@@ -56,7 +56,7 @@ struct IntroFinderView: View {
                 suggestions = query.count >= 2 ? Array(await model.addCandidates(query).prefix(6)) : []
                 paths = query.count >= 2 ? await model.introPaths(query) : nil
             }
-            .sheet(item: Binding(get: { writingTo.map { Wrapped(id: $0) } }, set: { writingTo = $0?.id })) { w in MessageSheet(k: w.id, intro: paths?.company ?? query) }
+            .sheet(item: Binding(get: { writingTo.map { Wrapped(id: $0) } }, set: { writingTo = $0?.id })) { w in MessageSheet(k: w.id, intro: paths?.company ?? query).environment(AppModel.shared) }
         }
     }
 

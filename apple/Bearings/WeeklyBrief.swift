@@ -150,7 +150,7 @@ struct WeeklyBriefView: View {
             .navigationDestination(for: Route.self) { r in
                 if case .person(let k) = r { ProfileView(k: k) } else if case .about(let k) = r { PersonAboutView(k: k) }
             }
-            .sheet(item: $writing) { p in MessageSheet(k: p.k) }
+            .sheet(item: $writing) { p in MessageSheet(k: p.k).environment(AppModel.shared) }
             .task(id: model.info.edits) {
                 picks = await model.weeklyPicks()
                 loaded = true

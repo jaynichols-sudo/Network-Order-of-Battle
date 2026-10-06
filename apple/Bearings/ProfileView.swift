@@ -29,7 +29,7 @@ struct ProfileView: View {
             .frame(maxWidth: .infinity)
             }
             .background(Theme.bg)
-            .sheet(isPresented: $writing) { MessageSheet(k: p.k) }
+            .sheet(isPresented: $writing) { MessageSheet(k: p.k).environment(AppModel.shared) }
             .navigationTitle(p.f)
             .navigationBarTitleDisplayMode(.inline)
             .task(id: k) { await model.loadFull(k) }

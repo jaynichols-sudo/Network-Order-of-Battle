@@ -87,7 +87,7 @@ struct PeopleView: View {
                 .badge(model.filters.activeCount)
             }
         }
-        .sheet(isPresented: $showFilters) { FilterSheet() }
+        .sheet(isPresented: $showFilters) { FilterSheet().environment(AppModel.shared) }
         .modifier(PinSearchAlert(asking: $pinning))
         .onAppear { if model.showFiltersOnLaunch { model.showFiltersOnLaunch = false; showFilters = true } }
     }

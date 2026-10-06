@@ -91,7 +91,7 @@ struct PeopleMapView: View {
             if center != nil { nearbyList } else { topPlaces }
             footnote
         }
-        .sheet(item: $selected) { g in PlaceSheet(group: g) }
+        .sheet(item: $selected) { g in PlaceSheet(group: g).environment(AppModel.shared) }
     }
 
     private var controls: some View {

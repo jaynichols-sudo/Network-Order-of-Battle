@@ -144,7 +144,7 @@ struct MeetingView: View {
                 also = await model.alsoAt(m.matched)
             }
             .sheet(item: Binding(get: { writingTo.map { IDString(id: $0) } }, set: { writingTo = $0?.id })) { w in
-                MessageSheet(k: w.id, meeting: m.title)
+                MessageSheet(k: w.id, meeting: m.title).environment(AppModel.shared)
             }
         } else {
             ContentUnavailableView("Meeting not found", systemImage: "calendar", description: Text("It may have moved or been cancelled."))
@@ -244,7 +244,7 @@ struct TripView: View {
             .navigationTitle("Trip")
             .navigationBarTitleDisplayMode(.inline)
             .sheet(item: Binding(get: { writingTo.map { IDString(id: $0) } }, set: { writingTo = $0?.id })) { w in
-                MessageSheet(k: w.id, trip: (t.city.components(separatedBy: ",").first ?? t.city, t.whenPhrase))
+                MessageSheet(k: w.id, trip: (t.city.components(separatedBy: ",").first ?? t.city, t.whenPhrase)).environment(AppModel.shared)
             }
         } else {
             ContentUnavailableView("Trip not found", systemImage: "airplane", description: Text("It may have been removed from your calendar."))

@@ -23,19 +23,19 @@ struct RootView: View {
         .tabViewStyle(.sidebarAdaptable)
         .modifier(ModernTabBar())
         .overlay(alignment: .bottom) { ToastView() }
-        .sheet(isPresented: $model.showImport) { ImportView() }
-        .sheet(isPresented: $model.showSettings) { SettingsView() }
-        .sheet(isPresented: $model.showAddTarget) { AddTargetView() }
-        .sheet(isPresented: $model.showPayoff) { PayoffView() }
-        .sheet(isPresented: $model.showShareCard) { ShareCardSheet() }
-        .sheet(isPresented: $model.newEvent) { NewEventSheet() }
-        .sheet(isPresented: $model.showQuickFind) { QuickFind() }
-        .sheet(isPresented: $model.showWeekly) { WeeklyBriefView() }
+        .sheet(isPresented: $model.showImport) { ImportView().environment(AppModel.shared) }
+        .sheet(isPresented: $model.showSettings) { SettingsView().environment(AppModel.shared) }
+        .sheet(isPresented: $model.showAddTarget) { AddTargetView().environment(AppModel.shared) }
+        .sheet(isPresented: $model.showPayoff) { PayoffView().environment(AppModel.shared) }
+        .sheet(isPresented: $model.showShareCard) { ShareCardSheet().environment(AppModel.shared) }
+        .sheet(isPresented: $model.newEvent) { NewEventSheet().environment(AppModel.shared) }
+        .sheet(isPresented: $model.showQuickFind) { QuickFind().environment(AppModel.shared) }
+        .sheet(isPresented: $model.showWeekly) { WeeklyBriefView().environment(AppModel.shared) }
         .sheet(item: Binding(get: { model.introQuery.map { IntroFinderView.Wrapped(id: $0) } }, set: { model.introQuery = $0?.id })) { w in
-            IntroFinderView(query: w.id)
+            IntroFinderView(query: w.id).environment(AppModel.shared)
         }
-        .sheet(item: $model.shareFile) { f in ActivityView(items: [f.url]).ignoresSafeArea() }
-        .fullScreenCover(isPresented: $model.showOnboarding) { OnboardingView() }
+        .sheet(item: $model.shareFile) { f in ActivityView(items: [f.url]).ignoresSafeArea().environment(AppModel.shared) }
+        .fullScreenCover(isPresented: $model.showOnboarding) { OnboardingView().environment(AppModel.shared) }
     }
 
     /// On iOS 26 People becomes the search tab, which floats on its own beside the tab bar.

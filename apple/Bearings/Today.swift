@@ -95,7 +95,7 @@ struct NeedsYouCard: View {
             .padding(.horizontal, 16)
             .padding(.bottom, 6)
             .card()
-            .sheet(item: $writing) { w in MessageSheet(k: w.k) }
+            .sheet(item: $writing) { w in MessageSheet(k: w.k).environment(AppModel.shared) }
         }
     }
 
