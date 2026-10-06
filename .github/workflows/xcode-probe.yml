@@ -1,0 +1,15 @@
+name: Xcode probe
+on: workflow_dispatch
+jobs:
+  probe:
+    runs-on: xcode-27
+    timeout-minutes: 15
+    steps:
+      - run: |
+          sw_vers
+          ls -d /Applications/Xcode*.app
+          xcodebuild -version
+          xcrun simctl list runtimes
+          xcrun simctl list devicetypes | grep -i -E "duo|iphone 1[78]|fold" || true
+          xcrun simctl list devices available | grep -i -E "duo|==" || true
+          for x in /Applications/Xcode*.app; do echo "== $x"; ls "$x/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/" 2>/dev/null; done
