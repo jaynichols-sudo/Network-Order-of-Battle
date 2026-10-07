@@ -102,7 +102,8 @@ struct DailyFiveCard: View {
             }
             .animation(Motion.spring, value: open.map(\.k))
             .onChange(of: done) { old, new in
-                if new == picks.count && old < new { celebrate = Date(); Haptic.success() }
+                if new == picks.count && old < new { celebrate = Date(); Signature.complete() }
+                else if new > old { Signature.done() }
             }
             .sheet(item: $writing) { w in MessageSheet(k: w.k).environment(AppModel.shared) }
             .task(id: "\(open.first?.k ?? "")-\(model.info.edits)") {

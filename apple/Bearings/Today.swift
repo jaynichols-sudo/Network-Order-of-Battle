@@ -187,6 +187,9 @@ struct TodayChips: View {
                 let todo = model.toFollowUp(e).count
                 chip(e.isUpcoming || e.isOn || todo == 0 ? e.name : "\(e.name) · \(todo)", icon: "ticket") { model.open(.event(e.id)) }
             }
+            if let live = events.first(where: \.isOn) {
+                chip("Scan a badge", icon: "camera.viewfinder") { model.scanBadge = true; model.open(.event(live.id)) }
+            }
             if let trip {
                 chip("\(trip.city) trip", icon: "airplane") { model.open(.trip(trip.id)) }
             }

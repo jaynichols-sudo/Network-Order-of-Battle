@@ -213,7 +213,7 @@ struct MeetingNotesSheet: View {
                 added += 1
             }
         }
-        Haptic.success()
+        Signature.done()
         let n = picked.count
         model.show("Saved to \(n) \(n == 1 ? "person" : "people")\(added > 0 ? ", \(added) to-do\(added == 1 ? "" : "s") added" : "")")
         dismiss()

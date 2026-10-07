@@ -140,6 +140,8 @@ final class AppModel {
     /// Meeting notes waiting to be matched to people (from Plaud, Notes, reMarkable or a file).
     var notesDraft: NotesDraft?
     var feedback: FeedbackRequest?
+    /// Open the scanner as soon as the event page appears (the Today "Scan a badge" chip).
+    var scanBadge = false
     var pendingImportURL: URL?
     /// A LinkedIn export spotted in Downloads (Mac), waiting for a yes.
     var foundExport: URL?
@@ -304,7 +306,7 @@ final class AppModel {
         syncNote = ""
         var texts: [String: Any] = [:]
         if case .data(let t) = net, let t { texts["network"] = t }
-        for (key, file) in [("edits", "edits.json"), ("review", "review.json"), ("targets", "targets.json"), ("industries", "industries.json"), ("team", "team.json")] {
+        for (key, file) in [("edits", "edits.json"), ("review", "review.json"), ("targets", "targets.json"), ("industries", "industries.json"), ("team", "team.json"), ("prospects", "prospects.json")] {
             if case .data(let t) = await store.read(file), let t { texts[key] = t }
         }
         do {

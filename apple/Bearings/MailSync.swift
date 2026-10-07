@@ -347,11 +347,6 @@ extension MailRow {
     var dict: [String: String] { ["name": name, "email": email, "date": date, "dir": dir, "subject": subject] }
 }
 
-extension Data {
-    var base64URL: String {
-        base64EncodedString().replacingOccurrences(of: "+", with: "-").replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: "=", with: "")
-    }
-}
 
 /// Settings: connect Outlook or Gmail.
 struct MailSettingsSection: View {

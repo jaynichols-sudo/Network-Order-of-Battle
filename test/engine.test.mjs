@@ -324,3 +324,26 @@ test('email dates and subjects feed memory, waiting and the weekly five', () => 
   assert.equal(call('clearMail').cleared, 2);
   assert.equal(call('memory', by.get('Grace')).mail, null);
 });
+
+test('people from an enrichment file you are not connected to fill empty org chart seats', () => {
+  const net = ['First Name,Last Name,URL,Email Address,Company,Position,Connected On',
+    'Grace,Hopper,,,Acme Corp,Software Engineer,01 Jan 2020'].join('\n');
+  call('importTexts', { connections: net }, 'test');
+  call('loadFiles', { network: globalThis.Bearings.fileJSON('network') }, null);
+  const file = 'First Name,Last Name,Job Title,Company Name,Email Address\nGrace,Hopper,Engineer,Acme Corp,g@acme.com\nAda,Lovelace,Chief Technology Officer,Acme Corp,ada@acme.com\nNo,Company,CEO,,x@y.com';
+  const m = call('matchEnrichment', file, 'zoominfo');
+  assert.equal(m.matched, 1);
+  assert.equal(m.added, 1);
+  const o = call('orgChart', 'Acme');
+  assert.equal(o.known, 1);
+  assert.equal(o.listed, 1);
+  const top = o.levels.find(l => l.id === 'C-suite / Owner').people[0];
+  assert.equal(top.name, 'Ada Lovelace');
+  assert.equal(top.src, 'list');
+  assert.equal(top.owner, 'zoominfo');
+  assert.ok(o.gaps.length >= 1);
+  const saved = JSON.parse(globalThis.Bearings.fileJSON('prospects'));
+  assert.equal(saved.prospects.length, 1);
+  assert.equal(call('addProspects', [{name: 'Ada Lovelace', p: 'CTO', c: 'Acme Corp'}], 'zoominfo'), 0);
+  assert.equal(call('clearProspects', 'Acme').removed, 1);
+});

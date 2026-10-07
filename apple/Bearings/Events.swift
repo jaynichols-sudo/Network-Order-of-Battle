@@ -181,6 +181,13 @@ struct EventView: View {
             .listStyle(.insetGrouped)
             .navigationTitle(e.name)
             .navigationBarTitleDisplayMode(.inline)
+            .onAppear {
+                guard model.scanBadge else { return }
+                model.scanBadge = false
+                #if !targetEnvironment(macCatalyst)
+                if VNDocumentCameraViewController.isSupported { scanning = true }
+                #endif
+            }
             .fileImporter(isPresented: $pickingList, allowedContentTypes: [.commaSeparatedText, .plainText, .text]) { r in
                 if case .success(let url) = r { loadList(url: url, e) }
             }
@@ -467,7 +474,33 @@ enum AttendeeParser {
 enum CardParser {
     static func parse(_ lines: [String]) -> NetEvent.Met {
         var m = NetEvent.Met(name: "")
-        let clean = lines.map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+        // a QR code on the badge (vCard or MECARD) is the most reliable source; then the
+        // biggest line of text, which on a badge is nearly always the name
+        var tall = ""
+        var plain: [String] = []
+        for (i, l) in lines.enumerated() {
+            guard l.hasPrefix("§"), l.count > 3 else { plain.append(l); continue }
+            let v = String(l.dropFirst(3)).trimmingCharacters(in: .whitespaces)
+            switch l.dropFirst().prefix(1) {
+            case "N": m.name = v
+            case "T": m.title = v
+            case "O": m.company = v
+            case "E": m.email = v
+            case "P": m.phone = v
+            case "H":
+                tall = v
+                // first and last name stacked on two lines, the first one bigger
+                if !v.contains(" "), i + 1 < lines.count {
+                    let next = lines[i + 1].trimmingCharacters(in: .whitespaces)
+                    if !next.contains(" "), !next.hasPrefix("§"), next.first?.isUppercase == true, next.allSatisfy({ $0.isLetter || $0 == "-" || $0 == "'" }) { tall = v + " " + next }
+                }
+                plain.append(v)
+            default: break
+            }
+        }
+        if !m.name.isEmpty && !m.company.isEmpty { return m }
+        if m.name.isEmpty && tall.contains(" ") { m.name = tall == tall.uppercased() ? tall.capitalized : tall }
+        let clean = plain.map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty && $0 != m.name && !m.name.hasPrefix($0) }
         let emailRx = try? NSRegularExpression(pattern: "[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}", options: .caseInsensitive)
         let phoneRx = try? NSRegularExpression(pattern: "(\\+?\\d[\\d\\s().-]{8,}\\d)")
         let titleWords = ["director", "manager", "president", "vp", "vice", "chief", "officer", "engineer", "head", "lead", "specialist", "analyst", "consultant", "architect",
@@ -482,10 +515,10 @@ enum CardParser {
             rest.append(l)
         }
         func words(_ s: String) -> [String] { s.lowercased().components(separatedBy: CharacterSet.alphanumerics.inverted).filter { !$0.isEmpty } }
-        if let t = rest.first(where: { words($0).contains(where: titleWords.contains) }) { m.title = t; rest.removeAll { $0 == t } }
-        if let c = rest.first(where: { words($0).contains(where: coWords.contains) }) { m.company = c; rest.removeAll { $0 == c } }
+        if m.title.isEmpty, let t = rest.first(where: { words($0).contains(where: titleWords.contains) }) { m.title = t; rest.removeAll { $0 == t } }
+        if m.company.isEmpty, let c = rest.first(where: { words($0).contains(where: coWords.contains) }) { m.company = c; rest.removeAll { $0 == c } }
         // a name: two to four words, mostly letters, no digits
-        if let n = rest.first(where: { l in
+        if m.name.isEmpty, let n = rest.first(where: { l in
             let w = l.split(separator: " ")
             return (2...4).contains(w.count) && !l.contains(where: \.isNumber) && w.allSatisfy { $0.first?.isUppercase == true }
         }) { m.name = n; rest.removeAll { $0 == n } }
@@ -497,15 +530,69 @@ enum CardParser {
         return m
     }
 
+    /// vCard or MECARD from a badge QR code, as marker lines parse() understands.
+    static func codeLines(_ payload: String) -> [String] {
+        var out: [String] = []
+        let p = payload.replacingOccurrences(of: "\r", with: "")
+        if p.uppercased().hasPrefix("MECARD:") {
+            for part in p.dropFirst(7).split(separator: ";") {
+                let kv = part.split(separator: ":", maxSplits: 1).map(String.init)
+                guard kv.count == 2 else { continue }
+                switch kv[0].uppercased() {
+                case "N": let n = kv[1].split(separator: ","); out.append("§N:" + (n.count == 2 ? "\(n[1]) \(n[0])" : kv[1]))
+                case "ORG": out.append("§O:" + kv[1])
+                case "EMAIL": out.append("§E:" + kv[1])
+                case "TEL": out.append("§P:" + kv[1])
+                case "TITLE": out.append("§T:" + kv[1])
+                default: break
+                }
+            }
+            return out
+        }
+        guard p.uppercased().contains("BEGIN:VCARD") else { return [] }
+        for line in p.components(separatedBy: "\n") {
+            guard let c = line.firstIndex(of: ":") else { continue }
+            let key = line[..<c].split(separator: ";").first.map { $0.uppercased() } ?? ""
+            let v = String(line[line.index(after: c)...]).trimmingCharacters(in: .whitespaces)
+            guard !v.isEmpty else { continue }
+            switch key {
+            case "FN": out.append("§N:" + v)
+            case "N" where !out.contains(where: { $0.hasPrefix("§N:") }):
+                let n = v.split(separator: ";", omittingEmptySubsequences: false)
+                if n.count >= 2 { out.append("§N:\(n[1]) \(n[0])") }
+            case "ORG": out.append("§O:" + (v.split(separator: ";").first.map(String.init) ?? v))
+            case "TITLE": out.append("§T:" + v)
+            case "EMAIL": out.append("§E:" + v)
+            case "TEL": out.append("§P:" + v)
+            default: break
+            }
+        }
+        return out
+    }
+
     /// Reads the text in an image, top to bottom.
     static func text(in image: CGImage) async -> [String] {
         await Task.detached(priority: .userInitiated) { () -> [String] in
             let req = VNRecognizeTextRequest()
             req.recognitionLevel = .accurate
             req.usesLanguageCorrection = false
-            try? VNImageRequestHandler(cgImage: image).perform([req])
-            let obs = req.results ?? []
-            return obs.sorted { $0.boundingBox.minY > $1.boundingBox.minY }.compactMap { $0.topCandidates(1).first?.string }
+            let codes = VNDetectBarcodesRequest()
+            codes.symbologies = [.qr, .pdf417, .aztec]
+            try? VNImageRequestHandler(cgImage: image).perform([req, codes])
+            let fromCode = (codes.results ?? []).compactMap(\.payloadStringValue).flatMap(CardParser.codeLines)
+            let obs = (req.results ?? []).sorted { $0.boundingBox.minY > $1.boundingBox.minY }
+            // the tallest line that reads like a name (letters only, one to three words)
+            let nameLike = obs.filter { o in
+                guard let t = o.topCandidates(1).first?.string else { return false }
+                let w = t.split(separator: " ")
+                return (1...3).contains(w.count) && t.count >= 3 && t.allSatisfy { $0.isLetter || $0 == " " || $0 == "-" || $0 == "'" || $0 == "." }
+            }
+            let tallest = nameLike.max { $0.boundingBox.height < $1.boundingBox.height }
+            let text = obs.compactMap { o -> String? in
+                guard let t = o.topCandidates(1).first?.string else { return nil }
+                return o === tallest ? "§H:" + t : t
+            }
+            return fromCode + text
         }.value
     }
 }

@@ -188,6 +188,54 @@ enum ZoomInfo {
     }
 }
 
+extension ZoomInfo {
+    static var configured: Bool { !(SecretStore.get("enrich.zoominfo.user") ?? "").isEmpty }
+
+    /// Senior people at a company from ZoomInfo's contact search (search results don't use credits).
+    static func searchCompany(_ company: String) async throws -> [[String: String]] {
+        var req = URLRequest(url: URL(string: "https://api.zoominfo.com/search/contact")!)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.setValue("Bearer \(try await token())", forHTTPHeaderField: "Authorization")
+        req.httpBody = try JSONSerialization.data(withJSONObject: ["companyName": company, "managementLevel": "C Level Exec,VP Level Exec,Director", "rpp": 100, "page": 1])
+        var (status, body) = try await EnrichClient.json(req)
+        if status == 401 {
+            req.setValue("Bearer \(try await token(fresh: true))", forHTTPHeaderField: "Authorization")
+            (status, body) = try await EnrichClient.json(req)
+        }
+        guard status == 200 else {
+            throw EnrichFailure(message: status == 429 ? "ZoomInfo’s rate limit was reached. Try again in a minute." : "ZoomInfo search returned an error (\(status)).")
+        }
+        let rows = (body as? [String: Any])?["data"] as? [[String: Any]] ?? []
+        return rows.compactMap { d in
+            let name = [EnrichClient.str(d["firstName"]), EnrichClient.str(d["lastName"])].compactMap { $0 }.joined(separator: " ")
+            let co = EnrichClient.str((d["company"] as? [String: Any])?["name"]) ?? EnrichClient.str(d["companyName"]) ?? company
+            guard !name.isEmpty else { return nil }
+            return ["name": name, "p": EnrichClient.str(d["jobTitle"]) ?? "", "c": co]
+        }
+    }
+}
+
+extension AppModel {
+    /// Fills an org chart's empty seats from ZoomInfo. Returns how many new people were added.
+    func fillOrgFromZoomInfo(_ company: String) async -> Int? {
+        do {
+            let found = try await ZoomInfo.searchCompany(company)
+            let n = (try? await engine.call("addProspects", [found, "zoominfo"], as: Int.self)) ?? 0
+            if n > 0 { await saveFile("prospects", "prospects.json") }
+            return n
+        } catch {
+            show(error.localizedDescription)
+            return nil
+        }
+    }
+
+    func clearProspects(_ company: String) async {
+        _ = try? await engine.call("clearProspects", [company], as: [String: Int].self)
+        await saveFile("prospects", "prospects.json")
+    }
+}
+
 /// ZoomInfo's PKI sign-in: a short-lived token signed on this device with the account's private key (RS256).
 enum ZoomInfoPKI {
     static func clientJWT(user: String, client: String, pem: String, now: Date = Date()) throws -> String {
@@ -347,6 +395,7 @@ struct EnrichFileMatch: Decodable {
     var rows: Int
     var matched: Int
     var people: [String: Row]
+    var added: Int?
 }
 
 extension AppModel {
@@ -355,7 +404,8 @@ extension AppModel {
         defer { if access { url.stopAccessingSecurityScopedResource() } }
         do {
             let text = try String(contentsOf: url, encoding: .utf8)
-            let m = try await engine.call("matchEnrichment", [text], as: EnrichFileMatch.self)
+            let m = try await engine.call("matchEnrichment", [text, "file"], as: EnrichFileMatch.self)
+            if (m.added ?? 0) > 0 { await saveFile("prospects", "prospects.json") }
             var found: [String: Enriched] = [:]
             for (k, r) in m.people {
                 found[k] = Enriched(src: "file", at: Day.today, email: r.email, phone: r.phone, mobile: r.mobile, title: r.title,
@@ -363,7 +413,8 @@ extension AppModel {
             }
             await saveEnriched(found)
             Haptic.success()
-            show("Matched \(m.matched.formatted()) of \(m.rows.formatted()) people in the file")
+            let more = m.added ?? 0
+            show("Matched \(m.matched.formatted()) of \(m.rows.formatted()) people in the file" + (more > 0 ? ". \(more.formatted()) more now fill org charts" : ""))
         } catch {
             show("Couldn’t read that file: \(error.localizedDescription)")
         }

@@ -15,7 +15,7 @@ permissions:
 jobs:
   build:
     runs-on: xcode-27  # Xcode 27.1: the iPhone Duo SDK
-    timeout-minutes: 70
+    timeout-minutes: 100
     steps:
       - uses: actions/checkout@v7
       - uses: maxim-lobanov/setup-xcode@v1

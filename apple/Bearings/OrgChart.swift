@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 // The org chart: everyone you and your team know at a company or agency, laid out by
 // level from the top down, with the seats nobody covers called out. LinkedIn doesn't
@@ -16,14 +17,19 @@ struct OrgChart: Decodable {
         var src: String
         var owner: String?
         var rt: String
-        var id: String { k.isEmpty ? "team|\(owner ?? "")|\(name)" : k }
-        enum CodingKeys: String, CodingKey { case k, name, p, sen, func_ = "func", band, score, src, owner, rt }
+        var e: String?
+        var li: String?
+        var id: String { k.isEmpty ? "\(src)|\(owner ?? "")|\(name)" : k }
+        enum CodingKeys: String, CodingKey { case k, name, p, sen, func_ = "func", band, score, src, owner, rt, e, li }
     }
     struct Level: Decodable, Hashable { var id: String; var people: [Card] }
     struct Func: Decodable, Hashable { var id: String; var n: Int }
     struct Link: Decodable, Hashable { var from: String; var to: String }
     var company: String
     var total: Int?
+    var known: Int?
+    var team: Int?
+    var listed: Int?
     var levels: [Level]
     var allLevels: [String]?
     var funcs: [Func]
@@ -45,6 +51,9 @@ struct OrgChartView: View {
     @State private var chart: OrgChart?
     @State private var dropTarget: String?
     @State private var pickingBossFor: OrgChart.Card?
+    @State private var outside: OrgChart.Card?
+    @State private var filling = false
+    @State private var importing = false
 
     private static let short: [String: String] = [
         "C-suite / Owner": "Executives", "VP": "Vice presidents", "Director / Head": "Directors and heads",
@@ -75,17 +84,62 @@ struct OrgChartView: View {
         .navigationTitle("Org chart")
         .navigationBarTitleDisplayMode(.inline)
         .task(id: "\(name)-\(model.info.edits)-\(model.info.rev)") { chart = await model.orgChart(name) }
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Menu {
+                    if ZoomInfo.configured {
+                        Button { fill() } label: { Label("Fill empty seats from ZoomInfo", systemImage: "person.crop.rectangle.stack") }
+                    }
+                    Button { importing = true } label: { Label("Import a ZoomInfo or Seamless file", systemImage: "tablecells.badge.ellipsis") }
+                    if (chart?.listed ?? 0) > 0 {
+                        Button(role: .destructive) { Task { await model.clearProspects(chart?.company ?? name); chart = await model.orgChart(name) } } label: {
+                            Label("Remove people you don’t know", systemImage: "person.crop.circle.badge.minus")
+                        }
+                    }
+                } label: {
+                    if filling { ProgressView() } else { Image(systemName: "person.crop.rectangle.stack") }
+                }
+                .accessibilityLabel("Fill empty seats")
+            }
+        }
+        .fileImporter(isPresented: $importing, allowedContentTypes: [.commaSeparatedText, .plainText]) { r in
+            if case .success(let url) = r { Task { await model.importEnrichment(url); chart = await model.orgChart(name) } }
+        }
+        .confirmationDialog(outside?.name ?? "", isPresented: Binding(get: { outside != nil }, set: { if !$0 { outside = nil } }), titleVisibility: .visible, presenting: outside) { c in
+            Button("Find on LinkedIn") { openLinkedIn(c) }
+            Button("Find a way in") { model.introQuery = chart?.company ?? name }
+            if let e = c.e, !e.isEmpty { Button("Copy email") { UIPasteboard.general.string = e } }
+        } message: { c in
+            Text("\(c.p.isEmpty ? "" : c.p + ". ")Not in your network yet. From \(c.owner == "zoominfo" ? "ZoomInfo" : "your imported file").")
+        }
         .sheet(item: $pickingBossFor) { card in
             PersonPicker { boss in Task { await model.setReportsTo(card.k, boss) } }
                 .environment(AppModel.shared)
         }
     }
 
+    private func fill() {
+        filling = true
+        Task {
+            let n = await model.fillOrgFromZoomInfo(chart?.company ?? name)
+            chart = await model.orgChart(name)
+            filling = false
+            if let n { Haptic.success(); model.show(n == 0 ? "No new senior people found in ZoomInfo" : "Added \(n) people from ZoomInfo") }
+        }
+    }
+
+    private func openLinkedIn(_ c: OrgChart.Card) {
+        let url: URL? = (c.li.flatMap { $0.isEmpty ? nil : ($0.hasPrefix("http") ? $0 : "https://" + $0) }).flatMap(URL.init(string:))
+            ?? URL(string: "https://www.linkedin.com/search/results/people/?keywords=" + ("\(c.name) \(chart?.company ?? name)".addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""))
+        if let url { UIApplication.shared.open(url) }
+    }
+
     private func header(_ c: OrgChart) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             Text(c.company).font(Theme.serif(.title, .semibold))
-            let team = c.levels.flatMap(\.people).filter { $0.src == "team" }.count
-            Text("\((c.total ?? 0) - team) you know\(team > 0 ? " · \(team) through your team" : "")")
+            let team = c.team ?? c.levels.flatMap(\.people).filter { $0.src == "team" }.count
+            let listed = c.listed ?? 0
+            Text("\(c.known ?? ((c.total ?? 0) - team - listed)) you know\(team > 0 ? " · \(team) through your team" : "")\(listed > 0 ? " · \(listed) to meet" : "")")
                 .font(Theme.geist(.subheadline)).foregroundStyle(Theme.text2)
             if !c.gaps.isEmpty {
                 FlowLayout(spacing: 6) {
@@ -115,7 +169,7 @@ struct OrgChartView: View {
                     Image(systemName: "person.crop.circle.dashed").font(.title2).foregroundStyle(Theme.text3)
                     VStack(alignment: .leading, spacing: 2) {
                         Text("No one here yet").font(Theme.geist(.subheadline, .semibold))
-                        Text("A gap worth filling. Ways in shows who could introduce you.").font(Theme.geist(.footnote)).foregroundStyle(Theme.text2)
+                        Text(ZoomInfo.configured ? "A gap worth filling. Ways in shows who could introduce you, and ZoomInfo can show who sits here." : "A gap worth filling. Ways in shows who could introduce you.").font(Theme.geist(.footnote)).foregroundStyle(Theme.text2)
                     }
                     Spacer()
                     Button("Ways in") { model.introQuery = c.company }.buttonStyle(PillButtonStyle(kind: .soft))
@@ -153,7 +207,9 @@ struct OrgChartView: View {
             Text(c.name).font(Theme.geist(.subheadline, .semibold)).lineLimit(1)
             Text(c.p.isEmpty ? c.func_ : c.p).font(Theme.geist(.caption)).foregroundStyle(Theme.text2).lineLimit(2).multilineTextAlignment(.leading)
             Spacer(minLength: 0)
-            if c.src == "team", let o = c.owner {
+            if c.src == "list" {
+                Text(c.owner == "zoominfo" ? "From ZoomInfo" : "From your file").font(Theme.geist(.caption2, .semibold)).foregroundStyle(Theme.needs)
+            } else if c.src == "team", let o = c.owner {
                 Text("Through \(o)").font(Theme.geist(.caption2, .semibold)).foregroundStyle(Theme.info)
             } else if let boss {
                 Text("Reports to \(boss.f)").font(Theme.geist(.caption2, .semibold)).foregroundStyle(Theme.violet).lineLimit(1)
@@ -163,17 +219,19 @@ struct OrgChartView: View {
         }
         .padding(12)
         .frame(width: 150, height: 150, alignment: .topLeading)
-        .background(c.src == "team" ? Theme.bg : Theme.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .background(c.src == "you" ? Theme.card : Theme.bg, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .strokeBorder(dropTarget == c.k ? Theme.primary : c.src == "team" ? Theme.info.opacity(0.5) : .clear,
-                              style: StrokeStyle(lineWidth: dropTarget == c.k ? 2 : 1.2, dash: c.src == "team" ? [5, 4] : []))
+                .strokeBorder(dropTarget == c.k ? Theme.primary : c.src == "team" ? Theme.info.opacity(0.5) : c.src == "list" ? Theme.needs.opacity(0.5) : .clear,
+                              style: StrokeStyle(lineWidth: dropTarget == c.k ? 2 : 1.2, dash: c.src == "you" ? [] : [5, 4]))
         }
         .scaleEffect(dropTarget == c.k ? 1.04 : 1)
         .animation(Motion.bouncy, value: dropTarget)
         .accessibilityElement(children: .combine)
 
-        if c.k.isEmpty {
+        if c.src == "list" {
+            Button { outside = c } label: { face }.buttonStyle(.pressable)
+        } else if c.k.isEmpty {
             face
         } else {
             Button { model.open(.person(c.k)) } label: { face }

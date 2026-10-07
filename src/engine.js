@@ -10,7 +10,7 @@ import { parseQuery, matchNL } from './nlq.js';
 import { INDUSTRIES, indColor, indShort, setIndustryOverrides, companyKey, UNCLASSIFIED, GOV_IND } from './industry.js';
 
 /* ---------- state ---------- */
-const S = {all: [], byK: new Map(), edits: {}, review: {}, targets: [], meta: null, mode: 'sample', coInd: Object.create(null), coLink: Object.create(null), coLoc: Object.create(null), lensPref: null, lens: false, hasRel: false, team: []};
+const S = {all: [], byK: new Map(), edits: {}, review: {}, targets: [], meta: null, mode: 'sample', coInd: Object.create(null), coLink: Object.create(null), coLoc: Object.create(null), lensPref: null, lens: false, hasRel: false, team: [], prospects: []};
 const SEG_COLORS = ['#7A9A1E', '#3E7BE0', '#1E9E8F', '#7556E8', '#C79100', '#D9467F', '#E0683A', '#A07C50', '#6B7F99', '#5B6B83'];
 const segColor = seg => SEG_COLORS[SEGI[seg] ?? 9];
 const GOV_SEGS3 = ['DoD & Military', 'Federal Civilian', 'State & Local'];
@@ -830,7 +830,7 @@ const ENRICH_COLS = {
   country: ['country', 'person country', 'contact country'],
   linkedin: ['linkedin', 'linkedin url', 'linkedin profile', 'linkedin profile url', 'person linkedin url', 'li profile url', 'linkedin contact profile url', 'contact linkedin url'],
 };
-function matchEnrichment(text){
+function matchEnrichment(text, src){
   const grid = parseCSV(String(text || '').replace(/^\ufeff/, ''));
   const norm = h => String(h || '').trim().toLowerCase().replace(/[_]+/g, ' ').replace(/\s+/g, ' ');
   const hi = grid.findIndex(r => r.map(norm).some(c => ENRICH_COLS.first.includes(c) || ENRICH_COLS.name.includes(c)));
@@ -846,7 +846,7 @@ function matchEnrichment(text){
     byNameCo.set(n + '|' + coKey(r.c), r.k);
     byName.set(n, byName.has(n) ? null : r.k);
   }
-  const out = {}; let rows = 0;
+  const out = {}; let rows = 0; const others = [];
   for (const g of grid.slice(hi + 1)){
     const get = k => col[k] != null ? String(g[col[k]] || '').trim() : '';
     const full = get('name') || `${get('first')} ${get('last')}`.trim();
@@ -854,13 +854,32 @@ function matchEnrichment(text){
     rows++;
     const email = get('email');
     const k = bySlug.get(slugOf(get('linkedin'))) || (email && byEmail.get(email.toLowerCase())) || byNameCo.get(nm(full) + '|' + coKey(get('company'))) || byName.get(nm(full));
-    if (!k) continue;
+    if (!k){ if (full && get('company')) others.push({name: full, p: get('title'), c: get('company'), e: email, li: get('linkedin')}); continue; }
     const e = {email, phone: get('phone'), mobile: get('mobile'), title: get('title'), company: get('company'), city: get('city'), state: get('state'), country: get('country')};
     for (const f of Object.keys(e)) if (!e[f]) delete e[f];
     if (Object.keys(e).length) out[k] = Object.assign(out[k] || {}, e);
   }
-  return {rows, matched: Object.keys(out).length, people: out};
+  // people you don't know yet fill the empty seats on org charts
+  const added = addProspects(others, src || 'file');
+  return {rows, matched: Object.keys(out).length, people: out, added};
 }
+// People you aren't connected to (from an enrichment file or a provider search), kept only to
+// fill org charts. list: [{name, p, c, e?, li?}]
+function addProspects(list, src){
+  const key = x => fold_(x.name) + '|' + coKey(x.c);
+  const have = new Map(S.prospects.map(x => [key(x), x]));
+  let n = 0;
+  for (const x of (list || []).slice(0, 3000)){
+    if (!x || !x.name || !x.c) continue;
+    const o = {name: String(x.name).trim(), p: String(x.p || '').trim(), c: String(x.c).trim(), src: src || 'file', at: TODAY};
+    if (x.e) o.e = String(x.e).trim(); if (x.li) o.li = String(x.li).trim();
+    if (!have.has(key(o))) n++;
+    have.set(key(o), Object.assign(have.get(key(o)) || {}, o));
+  }
+  S.prospects = [...have.values()].slice(-5000);
+  return n;
+}
+function clearProspects(q){ const before = S.prospects.length; S.prospects = q ? S.prospects.filter(x => coKey(x.c) !== coKey(q)) : []; return {removed: before - S.prospects.length}; }
 
 /* ---------- memory ---------- */
 // What you'd want to remember walking into a room with someone: the last thing you
@@ -893,6 +912,7 @@ function memory(k){
 }
 
 /* ---------- org chart ---------- */
+const SRC_ORDER = {you: 0, team: 1, list: 2};
 // Who you (and your team) know at a company or agency, by level and function, with the
 // seats nobody covers. Reporting lines come from your own edits ("reports to").
 function orgChart(q){
@@ -908,15 +928,24 @@ function orgChart(q){
     const role = roleOf(t.p);
     cards.push({k: '', name: t.name, p: t.p, sen: role.sen, func: role.func, band: t.b, score: 0, src: 'team', owner: t.owner, rt: ''});
   }
-  const levels = SENIORITY.map(id => ({id, people: cards.filter(c => c.sen === id).sort((a, b) => (a.src === b.src ? 0 : a.src === 'you' ? -1 : 1) || b.score - a.score || a.name.localeCompare(b.name))}));
+  for (const x of S.prospects){
+    if (!hit(x.c) || seen.has(fold_(x.name))) continue;
+    seen.add(fold_(x.name));
+    const role = roleOf(x.p);
+    const card = {k: '', name: x.name, p: x.p, sen: role.sen, func: role.func, band: 'none', score: 0, src: 'list', owner: x.src, rt: ''};
+    if (x.e) card.e = x.e; if (x.li) card.li = x.li;
+    cards.push(card);
+  }
+  const levels = SENIORITY.map(id => ({id, people: cards.filter(c => c.sen === id).sort((a, b) => (SRC_ORDER[a.src] - SRC_ORDER[b.src]) || b.score - a.score || a.name.localeCompare(b.name))}));
   const fc = {}; for (const c of cards) fc[c.func] = (fc[c.func] || 0) + 1;
   const funcs = Object.entries(fc).sort((a, b) => b[1] - a[1]).map(([id, n]) => ({id, n}));
   // a function where you know someone, but no one at director level or above
-  const top = new Set(cards.filter(c => SENIORITY.indexOf(c.sen) <= 2).map(c => c.func));
+  const top = new Set(cards.filter(c => c.src !== 'list' && SENIORITY.indexOf(c.sen) <= 2).map(c => c.func));
   const gaps = funcs.filter(f => f.id !== 'Other / Unspecified' && !top.has(f.id)).map(f => f.id).slice(0, 6);
   const links = cards.filter(c => c.k && c.rt && cards.some(o => o.k === c.rt)).map(c => ({from: c.k, to: c.rt}));
-  const name = (mine[0] && (hit(mine[0].c) ? mine[0].c : mine[0].cl.agency)) || q;
-  return {company: name, total: cards.length, levels: levels.filter(l => l.people.length), allLevels: SENIORITY, funcs, gaps, links};
+  const name = (mine[0] && (hit(mine[0].c) ? mine[0].c : mine[0].cl.agency)) || (S.prospects.find(x => hit(x.c)) || {}).c || q;
+  const count = src => cards.filter(c => c.src === src).length;
+  return {company: name, total: cards.length, known: count('you'), team: count('team'), listed: count('list'), levels: levels.filter(l => l.people.length), allLevels: SENIORITY, funcs, gaps, links};
 }
 const fold_ = s => String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z ]/g, '').trim();
 const setReportsTo = (k, boss) => setEdit(k, {rt: boss && boss !== k ? boss : ''});
@@ -1135,6 +1164,7 @@ function load(st){
   S.coLink = Object.assign(Object.create(null), st.links || {});
   S.coLoc = Object.assign(Object.create(null), st.locations || {});
   S.team = Array.isArray(st.team) ? st.team : [];
+  S.prospects = Array.isArray(st.prospects) ? st.prospects : [];
   if ('lens' in st) S.lensPref = st.lens;
   hydrate(st.rows || []);
   return info();
@@ -1146,10 +1176,10 @@ function loadSample(){
 // Native apps hand over the raw saved files; parsing them here keeps one source of truth.
 function loadFiles(f, lens){
   const p = t => { if (!t) return null; try { return JSON.parse(t); } catch { return null; } };
-  const n = p(f.network), e = p(f.edits), rv = p(f.review), tg = p(f.targets), ci = p(f.industries), tm = p(f.team);
+  const n = p(f.network), e = p(f.edits), rv = p(f.review), tg = p(f.targets), ci = p(f.industries), tm = p(f.team), pr = p(f.prospects);
   if (!n || !n.rows) return Object.assign(loadSample(), {empty: true});
   return load({mode: 'live', rows: n.rows, meta: n.meta || {}, edits: (e && e.edits) || {}, review: (rv && rv.review) || {}, targets: (tg && tg.targets) || [],
-    companies: (ci && ci.companies) || {}, links: (ci && ci.links) || {}, locations: (ci && ci.locations) || {}, team: (tm && tm.packs) || [], lens});
+    companies: (ci && ci.companies) || {}, links: (ci && ci.links) || {}, locations: (ci && ci.locations) || {}, team: (tm && tm.packs) || [], prospects: (pr && pr.prospects) || [], lens});
 }
 function fileData(name){
   if (name === 'network'){ if (!S.pending) throw new Error('Nothing to save'); const p = S.pending; S.pending = null; return p; }
@@ -1158,6 +1188,7 @@ function fileData(name){
   if (name === 'targets') return {targets: S.targets};
   if (name === 'industries') return {companies: S.coInd, links: S.coLink, locations: S.coLoc};
   if (name === 'team') return {packs: S.team};
+  if (name === 'prospects') return {prospects: S.prospects};
   throw new Error('Unknown file ' + name);
 }
 function clearNotes(){ S.edits = {}; S.review = {}; S.targets = []; S.coInd = Object.create(null); S.coLink = Object.create(null); S.coLoc = Object.create(null); return true; }
@@ -1182,7 +1213,7 @@ function constants(){
 
 const api = {load, loadSample, loadFiles, clearNotes, clusters, placeClues, setCompanyLocation, companyPlaces, messages, matchAttendees, alsoAt, setLens, info, people, person, search, facets, home, payoff, targets, unit, addTargetCandidates, toggleTarget, setTargetNote, orgs,
   industries, industry, setCompanyIndustry, setCompanyLink, ranks, deck, deckCount, reviewed, radar, compass, startFromContacts, introPaths, weekly, touch, setCircle, setEdit, followUp, markReplied, addNote,
-  importTexts, importSnapshot, yearInReview, teamPack, addTeamPack, removeTeamPack, teamList, matchEnrichment, readNotes, memory, applyMail, clearMail, orgChart, setReportsTo, backup, restore, exportCSV, reminders, watch, constants};
+  importTexts, importSnapshot, yearInReview, teamPack, addTeamPack, removeTeamPack, teamList, matchEnrichment, readNotes, memory, applyMail, clearMail, addProspects, clearProspects, orgChart, setReportsTo, backup, restore, exportCSV, reminders, watch, constants};
 // Every call goes through here: JSON string in, JSON string out, errors as {error}.
 globalThis.Bearings = {
   call(name, argsJSON){
