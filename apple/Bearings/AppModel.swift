@@ -39,6 +39,7 @@ enum Route: Hashable {
     case events
     case about(String)
     case team
+    case org(String)
 }
 
 enum CompaniesMode: String, CaseIterable, Identifiable {
@@ -521,7 +522,7 @@ final class AppModel {
         do { try await store.write(file, json) } catch { show("Couldn’t save: \(error.localizedDescription)") }
     }
 
-    private func edit(_ k: String, call: String, _ args: [Any]) async {
+    func edit(_ k: String, call: String, _ args: [Any]) async {
         do {
             try await engine.run(call, args)
             await saveFile("edits", "edits.json")

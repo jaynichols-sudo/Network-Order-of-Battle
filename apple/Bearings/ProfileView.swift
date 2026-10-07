@@ -1,16 +1,19 @@
 import SwiftUI
+import PhotosUI
 
 struct ProfileView: View {
     @Environment(AppModel.self) private var model
     let k: String
     @State private var writing = false
     @State private var addingNotes = false
+    @State private var photoItem: PhotosPickerItem?
 
     var body: some View {
         if let p = model.person(k) {
             ScrollView {
                 VStack(spacing: 12) {
                     header(p).cascade(0, distance: 10)
+                    MemoryCard(person: p).cascade(1)
                     briefCard(p).cascade(1).edgeSettle()
                     TimelineCard(person: p).cascade(2).edgeSettle()
                     NavigationLink(value: Route.about(p.k)) {
@@ -65,7 +68,38 @@ struct ProfileView: View {
 
     private func header(_ p: Person) -> some View {
         VStack(spacing: 12) {
-            Avatar(person: p, size: 76)
+            PhotosPicker(selection: $photoItem, matching: .images) {
+                Avatar(person: p, size: 76)
+                    .overlay(alignment: .bottomTrailing) {
+                        if !PhotoStore.shared.hasChosen(p.k) && PhotoStore.shared.image(for: p.k) == nil {
+                            Image(systemName: "camera.fill")
+                                .font(.system(size: 11, weight: .bold))
+                                .foregroundStyle(Theme.primary)
+                                .frame(width: 26, height: 26)
+                                .background(Circle().fill(Theme.card))
+                                .overlay(Circle().stroke(Theme.line, lineWidth: 1))
+                                .offset(x: 4, y: 4)
+                        }
+                    }
+            }
+            .buttonStyle(.pressable(0.95))
+            .accessibilityLabel("Photo of \(p.f)")
+            .accessibilityHint("Choose a photo")
+            .contextMenu {
+                if PhotoStore.shared.hasChosen(p.k) {
+                    Button("Remove photo", role: .destructive) { PhotoStore.shared.setChosen(p.k, image: nil) }
+                }
+            }
+            .onChange(of: photoItem) { _, item in
+                guard let item else { return }
+                Task {
+                    if let data = try? await item.loadTransferable(type: Data.self), let img = UIImage(data: data) {
+                        PhotoStore.shared.setChosen(p.k, image: img)
+                        Haptic.success()
+                    }
+                    photoItem = nil
+                }
+            }
                 .shadow(color: p.tint.opacity(0.35), radius: 14, y: 4)
                 .visualEffect { view, proxy in
                     // pull down and the avatar swells a little, like it's coming toward you

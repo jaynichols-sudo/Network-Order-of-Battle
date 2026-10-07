@@ -163,6 +163,8 @@ struct Person: Decodable, Identifiable, Hashable {
         return (a + b).uppercased()
     }
     var tint: Color { Color(hex: color) }
+    /// 0 to 1, steady per person, so two people in the same sector still look different.
+    var shade: Double { Double(k.unicodeScalars.reduce(UInt32(7)) { ($0 &* 31) &+ $1.value } % 100) / 100 }
     var subtitle: String { [p, c].filter { !$0.isEmpty }.joined(separator: " · ") }
 
     enum K: String, CodingKey { case k, f, l, name, u, e, c, p, d, cl, group, color, indColor, indShort, band, score, isNew, moved, waiting, cooling, due, anniv, over, touch, next, x, jc, fs, pv, rx, ed, links }

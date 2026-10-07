@@ -224,10 +224,15 @@ struct Avatar: View {
                     .frame(width: size, height: size)
                     .clipShape(Circle())
             } else {
-                Circle().fill(person.tint.opacity(0.18))
+                // no photo: a face of its own, in the person's sector color, so a list of
+                // people never reads as a column of identical gray bubbles
+                Circle().fill(LinearGradient(colors: [person.tint, person.tint.mix(with: .white, by: 0.45)],
+                                             startPoint: UnitPoint(x: 0.2 + person.shade * 0.3, y: 0), endPoint: UnitPoint(x: 0.8 - person.shade * 0.3, y: 1)))
+                Circle().fill(RadialGradient(colors: [.white.opacity(0.28), .clear], center: UnitPoint(x: 0.3, y: 0.25), startRadius: 0, endRadius: size * 0.6))
                 Text(person.initials)
-                    .font(.custom("Geist-SemiBold", fixedSize: size * 0.36))
-                    .foregroundStyle(person.tint)
+                    .font(.custom("Geist-Bold", fixedSize: size * 0.37))
+                    .foregroundStyle(.white)
+                    .shadow(color: .black.opacity(0.15), radius: 1, y: 0.5)
                     .minimumScaleFactor(0.5)
             }
         }

@@ -153,6 +153,7 @@ struct MeetingView: View {
 
     @ViewBuilder private func brief(_ p: Person, meeting: CalendarService.Meeting) -> some View {
         NavigationLink(value: Route.person(p.k)) { PersonRow(person: p, lens: model.info.lens) }
+        MeetingMemoryLine(k: p.k)
         if let x = p.rx, !x.t.isEmpty {
             VStack(alignment: .leading, spacing: 4) {
                 Text("\(Band.label(p.band)). \(x.dir == "i" ? "\(p.f) wrote you" : "You wrote") \(Day.ago(x.t)).")
@@ -288,5 +289,21 @@ struct TripsView: View {
             }
         }
         .navigationTitle("Trips")
+    }
+}
+
+/// The one thing to remember about someone, in a meeting brief.
+struct MeetingMemoryLine: View {
+    @Environment(AppModel.self) private var model
+    let k: String
+    @State private var line = ""
+
+    var body: some View {
+        Group {
+            if !line.isEmpty {
+                Label { Text(line).font(Theme.geist(.subheadline, .medium)) } icon: { Image(systemName: "brain.head.profile").foregroundStyle(Theme.violet) }
+            }
+        }
+        .task(id: k) { line = await model.memory(k)?.line ?? "" }
     }
 }

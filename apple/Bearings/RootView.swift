@@ -81,6 +81,7 @@ struct RootView: View {
                     case .events: EventsList()
                     case .about(let k): PersonAboutView(k: k)
                     case .team: TeamView()
+                    case .org(let name): OrgChartView(name: name)
                     }
                 }
         }

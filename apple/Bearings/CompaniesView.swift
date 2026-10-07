@@ -213,6 +213,7 @@ struct UnitView: View {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
                     Button { model.introQuery = name } label: { Label("Find a way in", systemImage: "point.3.connected.trianglepath.dotted") }
+                    NavigationLink(value: Route.org(name)) { Label("Org chart", systemImage: "rectangle.3.group") }
                     if let u {
                         Button {
                             if let url = AccountMapDocument.pdf(u, model: model) { model.shareFile = ShareFile(url: url) }

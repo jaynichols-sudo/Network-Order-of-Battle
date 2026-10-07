@@ -19,6 +19,7 @@ struct BearingsApp: App {
                 .task {
                     await model.start()
                     await TripMode.refresh(model: model)
+                    await MeetingMode.refresh(model: model)
                     if !model.info.isSample { await WeeklyBrief.schedule() }
                     model.checkDownloads()
                     await model.drainNotesInbox()
@@ -55,6 +56,7 @@ struct BearingsApp: App {
                             await model.drainWatch()
                             await CalendarService.shared.scan(model: model, force: true)
                             await TripMode.refresh(model: model)
+                    await MeetingMode.refresh(model: model)
                             model.checkDownloads()
                             await model.drainNotesInbox()
                             await ReminderSync.shared.pullCompleted(model: model)

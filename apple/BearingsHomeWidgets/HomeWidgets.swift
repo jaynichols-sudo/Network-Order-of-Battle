@@ -320,6 +320,7 @@ struct BearingsWidgetBundle: WidgetBundle {
         BearingsHomeWidgets()
         #if os(iOS) && !targetEnvironment(macCatalyst)
         TripLiveActivity()
+        MeetingLiveActivity()
         CatchUpControl()
         NearbyControl()
         #endif

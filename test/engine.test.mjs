@@ -263,3 +263,38 @@ test('meeting notes find the people mentioned, the action items and a summary', 
   assert.equal(r.actions[2].text, 'intro to the program office');
   assert.equal(call('readNotes', '').people.length, 0);
 });
+
+test('memory recalls the last note, the last message and what is pending', () => {
+  const p = people().find(x => x.waiting);
+  let m = call('memory', p.k);
+  assert.match(m.line, /waiting on your reply/);
+  call('addNote', p.k, 'Talked about the OT summit and his new team', 'Plaud');
+  m = call('memory', p.k);
+  assert.match(m.line, /^Last time \(.+\): Talked about the OT summit/);
+  assert.equal(m.last.source, 'Plaud');
+  assert.equal(call('memory', 'nobody'), null);
+});
+
+test('org chart lays out who you and your team know at a company by level, with gaps', () => {
+  const net = ['First Name,Last Name,URL,Email Address,Company,Position,Connected On',
+    'Ada,Lovelace,,,Acme Corp,Chief Technology Officer,05 Oct 2020',
+    'Grace,Hopper,,,Acme Corp,Software Engineer,01 Jan 2020',
+    'Kate,Johnson,,,Acme Corp,Contracts Manager,01 Jan 2019',
+    'Alan,Turing,,,Other Co,Engineer,01 Jan 2019'].join('\n');
+  call('importTexts', { connections: net }, 'test');
+  call('loadFiles', { network: globalThis.Bearings.fileJSON('network') }, null);
+  call('addTeamPack', JSON.stringify({kind: 'bearings-team-pack', v: 1, owner: 'Sam', made: '2026-01-01', people: [{f: 'Mary', l: 'Jackson', c: 'Acme Corp', p: 'VP of Sales', b: 'warm'}]}));
+  const by = new Map(people().map(p => [p.f, p.k]));
+  call('setReportsTo', by.get('Grace'), by.get('Ada'));
+  const o = call('orgChart', 'Acme');
+  assert.equal(o.company, 'Acme Corp');
+  assert.equal(o.total, 4);
+  const top = o.levels[0];
+  assert.equal(top.id, 'C-suite / Owner');
+  assert.equal(top.people[0].name, 'Ada Lovelace');
+  const vp = o.levels.find(l => l.id === 'VP');
+  assert.equal(vp.people[0].src, 'team');
+  assert.equal(vp.people[0].owner, 'Sam');
+  assert.deepEqual(o.links, [{from: by.get('Grace'), to: by.get('Ada')}]);
+  assert.ok(!o.levels.flatMap(l => l.people).some(p => p.name === 'Alan Turing'));
+});

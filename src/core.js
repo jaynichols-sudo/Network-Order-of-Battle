@@ -186,6 +186,15 @@ const FUNC_RX = [
 export const CERTS = [['CISSP',/\bCISSP\b/],['CISM',/\bCISM\b/],['CCSP',/\bCCSP\b/],['GICSP',/\bGICSP\b/],['GRID / GCIP',/\b(GRID|GCIP)\b/],['PMP',/\bPMP\b/],['Security+',/Security\+|Sec\+/],['CEH',/\bCEH\b/],['CASP+',/\bCASP\+?/],['OSCP',/\bOSCP\b/],['CMMC',/\bCMMC[- ]?(RP|RPA|CCP|CCA|LTP)?\b/],['ISA/IEC 62443',/\b62443\b/],['PE',/,\s*P\.?E\.?\b/],['ITIL',/\bITIL\b/]];
 const CLR_RX = /\b(TS\/SCI|TS-SCI|Top Secret|Secret Clearance|Active Secret|Q Clearance|DOE Q|Polygraph|CI Poly|FS Poly|Cleared)\b/i;
 
+/** Seniority and function from a title alone (for people in a teammate's pack or from a provider). */
+export function roleOf(title){
+  const pos = String(title || '');
+  let sen = 'Individual contributor', func = 'Other / Unspecified';
+  for (const [s, rx] of SEN_RX) if (rx.test(pos)) { sen = s; break; }
+  for (const [f, rx] of FUNC_RX) if (rx.test(pos)) { func = f; break; }
+  return {sen, func};
+}
+
 export function classify(r, ed){
   ed = ed || {};
   const name = `${r.f||''} ${r.l||''}`, pos = r.p || '', co = r.c || '';

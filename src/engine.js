@@ -4,7 +4,7 @@
 import {
   fmt, isoDay, TODAY, daysAgo, niceDate, h01, hash,
   SEGS, SEGI, BRANCHES, STATUSES, TIERS, SENIORITY, FUNCS, SINCE, SIGNALS, GRADE_OPTS, CERTS,
-  classify, keyOf, stripRow, rowsFromCSV, relationsFromArchive, mergeImport, sampleNetwork, warmth, parseCSV, slugOf,
+  classify, roleOf, keyOf, stripRow, rowsFromCSV, relationsFromArchive, mergeImport, sampleNetwork, warmth, parseCSV, slugOf,
 } from './core.js';
 import { parseQuery, matchNL } from './nlq.js';
 import { INDUSTRIES, indColor, indShort, setIndustryOverrides, companyKey, UNCLASSIFIED, GOV_IND } from './industry.js';
@@ -816,6 +816,58 @@ function matchEnrichment(text){
   return {rows, matched: Object.keys(out).length, people: out};
 }
 
+/* ---------- memory ---------- */
+// What you'd want to remember walking into a room with someone: the last thing you
+// noted, the last thing either of you wrote, whether they're waiting on you, and news.
+const NOTE_LINE = /^(\d{4}-\d{2}-\d{2})(?:\s*\(([^)]*)\))?:\s*(.+)$/;
+function memory(k){
+  const r = S.byK.get(k); if (!r) return null;
+  const he = r.f || 'They';
+  const notes = String((r.ed && r.ed.note) || '').split('\n').map(x => x.trim()).filter(Boolean);
+  let last = null;
+  for (let i = notes.length - 1; i >= 0 && !last; i--){ const m = notes[i].match(NOTE_LINE); if (m) last = {date: m[1], source: m[2] || '', text: m[3]}; }
+  if (!last && notes.length) last = {date: (r.ed && r.ed.updated) || '', source: '', text: notes[notes.length - 1]};
+  const x = r.rx || {};
+  const msg = x.t ? {date: x.t, mine: x.dir === 'o', text: String(x.s || '').slice(0, 160)} : null;
+  const parts = [];
+  if (last) parts.push(`Last time${last.date ? ' (' + niceDate(last.date) + ')' : ''}: ${last.text.length > 120 ? last.text.slice(0, 117).replace(/\s+\S*$/, '') + '…' : last.text}`);
+  else if (msg && msg.text) parts.push(`${msg.mine ? 'You wrote' : he + ' wrote'} ${niceDate(msg.date)}: “${msg.text.length > 90 ? msg.text.slice(0, 87).replace(/\s+\S*$/, '') + '…' : msg.text}”`);
+  else if (msg) parts.push(`Last message ${niceDate(msg.date)}.`);
+  if (isWaiting(r)) parts.push(`${he} is waiting on your reply.`);
+  if (r.jc && daysAgo(r.jc) <= 120) parts.push(`New role${r.p ? ' as ' + r.p : ''}${r.c ? ' at ' + r.c : ''} since ${niceDate(r.jc)}.`);
+  if (!parts.length) parts.push(r.d ? `Connected ${niceDate(r.d)}. No notes yet.` : 'No notes yet.');
+  return {k, line: parts.join(' '), last, msg, waiting: isWaiting(r)};
+}
+
+/* ---------- org chart ---------- */
+// Who you (and your team) know at a company or agency, by level and function, with the
+// seats nobody covers. Reporting lines come from your own edits ("reports to").
+function orgChart(q){
+  const want = coKey(q);
+  if (want.length < 2) return {company: '', levels: [], funcs: [], gaps: [], links: []};
+  const hit = c => { const k = coKey(c); return !!k && (k === want || (want.length >= 4 && (k.startsWith(want + ' ') || k.includes(' ' + want + ' ') || k.endsWith(' ' + want)))); };
+  const mine = live().filter(r => hit(r.c) || hit(r.cl.agency));
+  const cards = mine.map(r => ({k: r.k, name: `${r.f} ${r.l}`.trim(), p: r.p || '', sen: r.cl.sen, func: r.cl.func, band: r.wm.band, score: r.wm.score, src: 'you', rt: (r.ed && r.ed.rt) || ''}));
+  const seen = new Set(cards.map(c => fold_(c.name)));
+  for (const t of teamPaths(hit)){
+    if (seen.has(fold_(t.name))) continue;
+    seen.add(fold_(t.name));
+    const role = roleOf(t.p);
+    cards.push({k: '', name: t.name, p: t.p, sen: role.sen, func: role.func, band: t.b, score: 0, src: 'team', owner: t.owner, rt: ''});
+  }
+  const levels = SENIORITY.map(id => ({id, people: cards.filter(c => c.sen === id).sort((a, b) => (a.src === b.src ? 0 : a.src === 'you' ? -1 : 1) || b.score - a.score || a.name.localeCompare(b.name))}));
+  const fc = {}; for (const c of cards) fc[c.func] = (fc[c.func] || 0) + 1;
+  const funcs = Object.entries(fc).sort((a, b) => b[1] - a[1]).map(([id, n]) => ({id, n}));
+  // a function where you know someone, but no one at director level or above
+  const top = new Set(cards.filter(c => SENIORITY.indexOf(c.sen) <= 2).map(c => c.func));
+  const gaps = funcs.filter(f => f.id !== 'Other / Unspecified' && !top.has(f.id)).map(f => f.id).slice(0, 6);
+  const links = cards.filter(c => c.k && c.rt && cards.some(o => o.k === c.rt)).map(c => ({from: c.k, to: c.rt}));
+  const name = (mine[0] && (hit(mine[0].c) ? mine[0].c : mine[0].cl.agency)) || q;
+  return {company: name, total: cards.length, levels: levels.filter(l => l.people.length), allLevels: SENIORITY, funcs, gaps, links};
+}
+const fold_ = s => String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z ]/g, '').trim();
+const setReportsTo = (k, boss) => setEdit(k, {rt: boss && boss !== k ? boss : ''});
+
 /* ---------- meeting notes ---------- */
 // Text from anywhere (a Plaud transcript or summary, an Apple Note, a reMarkable page read
 // on the phone): who in your network it mentions, the action items, and a short summary.
@@ -1077,7 +1129,7 @@ function constants(){
 
 const api = {load, loadSample, loadFiles, clearNotes, clusters, placeClues, setCompanyLocation, companyPlaces, messages, matchAttendees, alsoAt, setLens, info, people, person, search, facets, home, payoff, targets, unit, addTargetCandidates, toggleTarget, setTargetNote, orgs,
   industries, industry, setCompanyIndustry, setCompanyLink, ranks, deck, deckCount, reviewed, radar, compass, startFromContacts, introPaths, weekly, touch, setCircle, setEdit, followUp, markReplied, addNote,
-  importTexts, importSnapshot, yearInReview, teamPack, addTeamPack, removeTeamPack, teamList, matchEnrichment, readNotes, backup, restore, exportCSV, reminders, watch, constants};
+  importTexts, importSnapshot, yearInReview, teamPack, addTeamPack, removeTeamPack, teamList, matchEnrichment, readNotes, memory, orgChart, setReportsTo, backup, restore, exportCSV, reminders, watch, constants};
 // Every call goes through here: JSON string in, JSON string out, errors as {error}.
 globalThis.Bearings = {
   call(name, argsJSON){

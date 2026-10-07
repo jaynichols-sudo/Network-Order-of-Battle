@@ -232,16 +232,18 @@ final class CalendarService {
             guard UserDefaults.standard.object(forKey: "notify") as? Bool ?? true else { return }
             let now = Date()
             for m in meetings.prefix(20) {
-                let at = m.start.addingTimeInterval(-30 * 60)
+                // ten minutes out: who, and the one thing worth remembering
+                let at = m.start.addingTimeInterval(-10 * 60)
                 guard at > now else { continue }
-                let names = m.matched.compactMap { model.person($0) }
+                let names = m.matched.compactMap { model.person($0) }.sorted { $0.score > $1.score }
                 guard let first = names.first else { continue }
                 let c = UNMutableNotificationContent()
-                c.title = "Meeting prep: \(m.title)"
-                var line = first.fullName
-                if let t = first.rx?.t, !t.isEmpty { line += " (\(Band.label(first.band).lowercased()), last talked \(Day.ago(t)))" }
-                if names.count > 1 { line += " and \(names.count - 1) more you know" }
-                c.body = "With \(line). Tap for your notes."
+                c.title = "\(first.fullName)\(names.count > 1 ? " +\(names.count - 1)" : "") in 10 minutes"
+                c.subtitle = m.title
+                let mem = await model.memory(first.k)?.line
+                c.body = mem ?? "\(Band.label(first.band)). Tap for your notes."
+                c.interruptionLevel = .timeSensitive
+                c.relevanceScore = 1
                 c.userInfo = ["meeting": m.id]
                 c.sound = .default
                 let comps = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: at)

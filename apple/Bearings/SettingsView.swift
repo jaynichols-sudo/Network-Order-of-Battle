@@ -129,6 +129,12 @@ struct SettingsView: View {
                         }
                     }
                 }))
+            Toggle("Next meeting on the Lock Screen", isOn: Binding(
+                get: { MeetingMode.enabled },
+                set: { on in
+                    MeetingMode.enabled = on
+                    Task { await MeetingMode.refresh(model: model) }
+                }))
             Toggle("Trip mode on the Lock Screen", isOn: Binding(
                 get: { TripMode.enabled },
                 set: { on in
@@ -157,7 +163,7 @@ struct SettingsView: View {
         } header: {
             Text("Calendar")
         } footer: {
-            Text("Bearings reads your calendar on this device to brief you 30 minutes before meetings with people you know, and to spot trips more than 75 miles from home. In Trip mode, a trip shows on your Lock Screen two days ahead with who you know nearby. With arrival alerts, landing in a city away from home tells you who you know there (choose “Always” for location when asked). With Reminders on, follow-ups go on a Bearings list in Apple Reminders, and checking one off there marks it done here. Nothing is uploaded.")
+            Text("Bearings reads your calendar on this device to brief you before meetings with people you know (what you talked about last time, on the Lock Screen and your watch), and to spot trips more than 75 miles from home. In Trip mode, a trip shows on your Lock Screen two days ahead with who you know nearby. With arrival alerts, landing in a city away from home tells you who you know there (choose “Always” for location when asked). With Reminders on, follow-ups go on a Bearings list in Apple Reminders, and checking one off there marks it done here. Nothing is uploaded.")
         }
     }
 
