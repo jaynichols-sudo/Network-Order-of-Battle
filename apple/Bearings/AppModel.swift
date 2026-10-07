@@ -139,6 +139,7 @@ final class AppModel {
     var shareFile: ShareFile?
     /// Meeting notes waiting to be matched to people (from Plaud, Notes, reMarkable or a file).
     var notesDraft: NotesDraft?
+    var feedback: FeedbackRequest?
     var pendingImportURL: URL?
     /// A LinkedIn export spotted in Downloads (Mac), waiting for a yes.
     var foundExport: URL?

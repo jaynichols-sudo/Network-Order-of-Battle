@@ -300,6 +300,7 @@ struct YouView: View {
 
                 group(nil) {
                     row(Pro.shared.owned ? "Bearings Pro (thank you!)" : "Bearings Pro", icon: "sparkles") { model.showPaywall = true }
+                    row("Send feedback", icon: "bubble.left.and.exclamationmark.bubble.right") { model.feedback = FeedbackRequest(screenshot: nil) }
                     row("Settings", icon: "gearshape") { model.showSettings = true }
                     row("Help and support", icon: "questionmark.circle") {
                         if let u = URL(string: "https://www.jaynichols.net/bearings/support.html") { UIApplication.shared.open(u) }

@@ -41,6 +41,8 @@ targets:
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         BearingsConnectURL: $(CONNECT_URL)
+        BearingsMSClientID: $(MS_CLIENT_ID)
+        BearingsGoogleClientID: $(GOOGLE_CLIENT_ID)
         ITSAppUsesNonExemptEncryption: false
         LSApplicationCategoryType: public.app-category.business
         LSRequiresIPhoneOS: true

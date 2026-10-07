@@ -298,3 +298,29 @@ test('org chart lays out who you and your team know at a company by level, with 
   assert.deepEqual(o.links, [{from: by.get('Grace'), to: by.get('Ada')}]);
   assert.ok(!o.levels.flatMap(l => l.people).some(p => p.name === 'Alan Turing'));
 });
+
+test('email dates and subjects feed memory, waiting and the weekly five', () => {
+  const net = ['First Name,Last Name,URL,Email Address,Company,Position,Connected On',
+    'Ada,Lovelace,,ada@acme.com,Acme Corp,Chief Technology Officer,05 Oct 2020',
+    'Grace,Hopper,,,Navy,Rear Admiral,01 Jan 2020'].join('\n');
+  call('importTexts', { connections: net }, 'test');
+  call('loadFiles', { network: globalThis.Bearings.fileJSON('network') }, null);
+  const by = new Map(people().map(p => [p.f, p.k]));
+  const today = call('info').today;
+  const r = call('applyMail', [
+    {email: 'ADA@acme.com', name: 'Someone', date: today, dir: 'i', subject: 'OT roadmap review'},
+    {email: 'ada@acme.com', date: '2026-01-02', dir: 'o', subject: 'Older'},
+    {email: 'ghopper@navy.mil', name: 'Hopper, Grace', date: '2026-02-03T10:00:00Z', dir: 'o', subject: 'Thanks'},
+    {email: 'nobody@x.com', name: 'No One', date: today, dir: 'i', subject: 'Spam'}]);
+  assert.equal(r.matched, 2);
+  let m = call('memory', by.get('Ada'));
+  assert.match(m.line, /^Last email .*: “OT roadmap review”\. Ada is waiting on your email reply\./);
+  assert.equal(m.waiting, true);
+  assert.ok(call('weekly', []).some(w => w.k === by.get('Ada') && w.kind === 'reply' && /Emailed you/.test(w.why)));
+  call('markReplied', by.get('Ada'));
+  assert.equal(call('memory', by.get('Ada')).waiting, false);
+  assert.equal(call('memory', by.get('Grace')).mail.mine, true);
+  assert.equal(call('applyMail', [{email: 'ghopper@navy.mil', name: 'Grace Hopper', date: '2026-01-01', dir: 'i', subject: 'old'}]).changed, 0);
+  assert.equal(call('clearMail').cleared, 2);
+  assert.equal(call('memory', by.get('Grace')).mail, null);
+});

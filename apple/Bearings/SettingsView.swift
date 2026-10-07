@@ -33,6 +33,7 @@ struct SettingsView: View {
                 networkSection
                 contactsSection
                 calendarSection
+                MailSettingsSection()
                 salesforceSection
                 EnrichSettingsSection()
                 dataSection

@@ -26,11 +26,17 @@ const SAMPLE_TARGETS = ['NAVFAC', 'USACE', 'DISA', 'Duke Energy', 'CISA'];
 
 const daysSince = d => d ? Math.floor((Date.parse(TODAY) - Date.parse(d)) / 864e5) : 99999;
 const isWaiting = r => !!(r.rx && r.rx.dir === 'i' && r.rx.o && daysSince(r.rx.t) <= 45 && !(r.ed && r.ed.replied === r.rx.t));
-const isCooling = r => { const x = r.rx; if (!x || x.m < 8 || (x.o || 0) < 3 || (x.i || 0) < 3) return false; const d = daysSince(x.t); return d > 150 && d < 900; };
+const isCooling = r => { const x = r.rx; if (!x || x.m < 8 || (x.o || 0) < 3 || (x.i || 0) < 3) return false; if (mailOf(r) && daysSince(mailOf(r).t) <= 150) return false; const d = daysSince(x.t); return d > 150 && d < 900; };
+// the latest email with them (dates, direction and subject only), from the mail sync
+const mailOf = r => (r.ed && r.ed.mail && r.ed.mail.t) ? r.ed.mail : null;
+// they emailed last, recently, and you haven't written back (in email or on LinkedIn) since
+const isMailWaiting = r => { const m = mailOf(r); if (!m || m.dir !== 'i' || daysSince(m.t) > 14) return false;
+  const after = [(r.rx && r.rx.dir === 'o' && r.rx.t) || '', (r.ed && r.ed.touched) || '', (r.ed && r.ed.replied) || ''];
+  return !after.some(t => t && t >= m.t) && !isWaiting(r); };
 const isDue = r => !!(r.ed && r.ed.due && r.ed.due <= TODAY);
 // keep-in-touch circles: how often you mean to be in touch, in days
 const CIRCLES = {inner: 30, key: 90, wide: 365};
-const lastTouch = r => { const a = (r.rx && r.rx.t) || '', b = (r.ed && r.ed.touched) || ''; return a > b ? a : b; };
+const lastTouch = r => [(r.rx && r.rx.t) || '', (r.ed && r.ed.touched) || '', (mailOf(r) && mailOf(r).t) || ''].reduce((a, b) => (b > a ? b : a), '');
 const isOverdue = r => { const c = r.ed && CIRCLES[r.ed.circle]; return !!c && !r.x && daysSince(lastTouch(r)) > c; };
 const touchDue = r => { const c = r.ed && CIRCLES[r.ed.circle]; if (!c) return ''; const t = lastTouch(r); return t ? isoDay(Date.parse(t) + c * 864e5) : TODAY; };
 const addDays = n => isoDay(Date.now() + n * 864e5);
@@ -655,7 +661,46 @@ function setEdit(k, patch){
   return {edits: S.edits};
 }
 const followUp = (k, days) => setEdit(k, {due: days ? addDays(days) : ''});
-function markReplied(k){ const r = S.byK.get(k); if (!r || !r.rx || !r.rx.t) return {edits: S.edits}; return setEdit(k, {replied: r.rx.t}); }
+function markReplied(k){ const r = S.byK.get(k); const t = [(r && r.rx && r.rx.t) || '', (r && mailOf(r) && mailOf(r).t) || ''].sort().pop(); if (!r || !t) return {edits: S.edits}; return setEdit(k, {replied: t}); }
+
+/* ---------- email ---------- */
+// The phone reads only who, when and the subject line from the user's mailbox and hands
+// them over; matching to people happens here. rows: [{name, email, date, dir: 'i'|'o', subject}].
+function applyMail(rows){
+  const list = (rows || []).filter(x => x && x.date && (x.email || x.name));
+  const keys = matchAttendees(list.map(x => ({email: x.email, name: x.name})));
+  const best = new Map();
+  list.forEach((x, i) => {
+    const k = keys[i]; if (!k) return;
+    const t = String(x.date).slice(0, 10);
+    const b = best.get(k) || {n: 0, t: '', dir: '', s: '', em: ''};
+    b.n++;
+    if (t > b.t || (t === b.t && x.dir === 'o')){ b.t = t; b.dir = x.dir === 'o' ? 'o' : 'i'; b.s = String(x.subject || '').replace(/\s+/g, ' ').trim().slice(0, 120); }
+    if (x.email && !b.em) b.em = String(x.email).toLowerCase();
+    best.set(k, b);
+  });
+  let changed = 0;
+  for (const [k, b] of best){
+    const r = S.byK.get(k); if (!r) continue;
+    const cur = mailOf(r);
+    if (cur && cur.t > b.t) continue;
+    if (cur && cur.t === b.t && cur.dir === b.dir && cur.s === b.s) continue;
+    const ed = Object.assign({}, S.edits[k] || {});
+    ed.mail = {t: b.t, dir: b.dir, s: b.s, n: Math.max(b.n, (cur && cur.n) || 0)};
+    if (b.em && !r.e && !ed.em) ed.em = b.em;
+    S.edits[k] = Object.assign(ed, {updated: TODAY});
+    changed++;
+  }
+  if (changed) rehydrate();
+  return {matched: best.size, changed, scanned: list.length};
+}
+// Forget every email detail (the user turned the mail source off).
+function clearMail(){
+  let n = 0;
+  for (const k of Object.keys(S.edits)){ const e = S.edits[k]; if (e.mail || e.em){ delete e.mail; delete e.em; n++; if (Object.keys(e).filter(f => f !== 'updated').length === 0) delete S.edits[k]; } }
+  if (n) rehydrate();
+  return {cleared: n};
+}
 function addNote(k, text, source){
   const r = S.byK.get(k); if (!r) return {edits: S.edits};
   const cur = (r.ed && r.ed.note) || '';
@@ -682,6 +727,7 @@ function weekly(skip){
     }
   };
   take(A.filter(isWaiting).sort((a, b) => b.rx.t.localeCompare(a.rx.t)), 'reply', r => `Wrote you ${ago(r.rx.t)} and is waiting on a reply.`, 2);
+  take(A.filter(isMailWaiting).sort((a, b) => b.ed.mail.t.localeCompare(a.ed.mail.t)), 'reply', r => `Emailed you ${ago(r.ed.mail.t)}${r.ed.mail.s ? ' about “' + r.ed.mail.s + '”' : ''} and is waiting on a reply.`, 2);
   take(A.filter(isOverdue).sort((a, b) => CIRCLES[a.ed.circle] - CIRCLES[b.ed.circle]), 'circle', r => `In your ${({inner: 'inner circle', key: 'key relationships', wide: 'wider network'})[r.ed.circle]}; ${lastTouch(r) ? 'last in touch ' + ago(lastTouch(r)) : 'not in touch yet'}.`, 2);
   take(A.filter(isDue).sort((a, b) => a.ed.due.localeCompare(b.ed.due)), 'due', r => `You planned to follow up ${r.ed.due < TODAY ? 'on ' + niceDate(r.ed.due) : 'today'}.`, 2);
   take(A.filter(r => r.movedNow).sort(bySenior), 'congrats', r => `New role${r.p ? ' as ' + r.p : ''}${r.c ? ' at ' + r.c : ''}. A good moment to say congratulations.`, 2);
@@ -829,14 +875,21 @@ function memory(k){
   if (!last && notes.length) last = {date: (r.ed && r.ed.updated) || '', source: '', text: notes[notes.length - 1]};
   const x = r.rx || {};
   const msg = x.t ? {date: x.t, mine: x.dir === 'o', text: String(x.s || '').slice(0, 160)} : null;
+  const ml = mailOf(r);
+  const mail = ml ? {date: ml.t, mine: ml.dir === 'o', subject: ml.s || '', count: ml.n || 1} : null;
   const parts = [];
-  if (last) parts.push(`Last time${last.date ? ' (' + niceDate(last.date) + ')' : ''}: ${last.text.length > 120 ? last.text.slice(0, 117).replace(/\s+\S*$/, '') + '…' : last.text}`);
+  const mailNewest = mail && (!last || !last.date || mail.date > last.date) && (!msg || mail.date >= msg.date);
+  if (mailNewest) parts.push(`Last email ${niceDate(mail.date)}${mail.subject ? ': “' + mail.subject + '”' : ''}${mail.mine ? ', from you' : ''}.`);
+  if (mailNewest && last) parts.push(`Your last note${last.date ? ' (' + niceDate(last.date) + ')' : ''}: ${last.text.length > 90 ? last.text.slice(0, 87).replace(/\s+\S*$/, '') + '…' : last.text}`);
+  else if (mailNewest) {}
+  else if (last) parts.push(`Last time${last.date ? ' (' + niceDate(last.date) + ')' : ''}: ${last.text.length > 120 ? last.text.slice(0, 117).replace(/\s+\S*$/, '') + '…' : last.text}`);
   else if (msg && msg.text) parts.push(`${msg.mine ? 'You wrote' : he + ' wrote'} ${niceDate(msg.date)}: “${msg.text.length > 90 ? msg.text.slice(0, 87).replace(/\s+\S*$/, '') + '…' : msg.text}”`);
   else if (msg) parts.push(`Last message ${niceDate(msg.date)}.`);
   if (isWaiting(r)) parts.push(`${he} is waiting on your reply.`);
+  else if (isMailWaiting(r)) parts.push(`${he} is waiting on your email reply.`);
   if (r.jc && daysAgo(r.jc) <= 120) parts.push(`New role${r.p ? ' as ' + r.p : ''}${r.c ? ' at ' + r.c : ''} since ${niceDate(r.jc)}.`);
   if (!parts.length) parts.push(r.d ? `Connected ${niceDate(r.d)}. No notes yet.` : 'No notes yet.');
-  return {k, line: parts.join(' '), last, msg, waiting: isWaiting(r)};
+  return {k, line: parts.join(' '), last, msg, mail, waiting: isWaiting(r) || isMailWaiting(r)};
 }
 
 /* ---------- org chart ---------- */
@@ -1129,7 +1182,7 @@ function constants(){
 
 const api = {load, loadSample, loadFiles, clearNotes, clusters, placeClues, setCompanyLocation, companyPlaces, messages, matchAttendees, alsoAt, setLens, info, people, person, search, facets, home, payoff, targets, unit, addTargetCandidates, toggleTarget, setTargetNote, orgs,
   industries, industry, setCompanyIndustry, setCompanyLink, ranks, deck, deckCount, reviewed, radar, compass, startFromContacts, introPaths, weekly, touch, setCircle, setEdit, followUp, markReplied, addNote,
-  importTexts, importSnapshot, yearInReview, teamPack, addTeamPack, removeTeamPack, teamList, matchEnrichment, readNotes, memory, orgChart, setReportsTo, backup, restore, exportCSV, reminders, watch, constants};
+  importTexts, importSnapshot, yearInReview, teamPack, addTeamPack, removeTeamPack, teamList, matchEnrichment, readNotes, memory, applyMail, clearMail, orgChart, setReportsTo, backup, restore, exportCSV, reminders, watch, constants};
 // Every call goes through here: JSON string in, JSON string out, errors as {error}.
 globalThis.Bearings = {
   call(name, argsJSON){

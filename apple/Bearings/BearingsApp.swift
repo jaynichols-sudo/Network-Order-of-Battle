@@ -24,6 +24,7 @@ struct BearingsApp: App {
                     model.checkDownloads()
                     await model.drainNotesInbox()
                     await ReminderSync.shared.pullCompleted(model: model)
+                    await MailSync.shared.sync(model: model)
                 }
                 .onOpenURL { url in
                     if url.scheme == "bearings" {
@@ -60,6 +61,7 @@ struct BearingsApp: App {
                             model.checkDownloads()
                             await model.drainNotesInbox()
                             await ReminderSync.shared.pullCompleted(model: model)
+                    await MailSync.shared.sync(model: model)
                         }
                     }
                 }
