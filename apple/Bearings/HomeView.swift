@@ -3,6 +3,7 @@ import UIKit
 
 struct HomeView: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.colorScheme) private var scheme
     @State private var picks: [WeeklyPick] = []
     @State private var picksLoaded = false
 
@@ -10,10 +11,15 @@ struct HomeView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
                 header.cascade(0, distance: 10)
-                TodayChips().cascade(1, distance: 10)
+                if !picks.isEmpty {
+                    ProgressStrip(done: picks.count - openCount, total: picks.count)
+                        .padding(.horizontal, 6).padding(.bottom, 2)
+                        .cascade(1, distance: 10)
+                }
                 banner.cascade(2).edgeSettle()
+                DailyFiveCard(picks: picks).cascade(2).edgeSettle()
                 TodayCompassCard().cascade(3).edgeSettle()
-                NeedsYouCard(picks: picks).cascade(4).edgeSettle()
+                TodayChips().cascade(4, distance: 10)
                 ComingUp().cascade(5).edgeSettle()
                 BirthdaysCard().cascade(6).edgeSettle()
                 if !model.home.cards.isEmpty {
@@ -34,14 +40,14 @@ struct HomeView: View {
             .frame(maxWidth: 680)
             .frame(maxWidth: .infinity)
             .background(alignment: .top) {
-                // the drifting light behind the headline, scrolling away with it
-                Aurora()
+                // the drifting light behind the headline, at night only: by day the page is white
+                if scheme == .dark { Aurora()
                     .frame(height: 460)
                     .mask(LinearGradient(stops: [.init(color: .black, location: 0), .init(color: .black, location: 0.45), .init(color: .clear, location: 1)],
                                          startPoint: .top, endPoint: .bottom))
                     .padding(.horizontal, -60)
                     .offset(y: -150)
-                    .allowsHitTesting(false)
+                    .allowsHitTesting(false) }
             }
         }
         .background(Theme.bg)
@@ -63,14 +69,26 @@ struct HomeView: View {
 
     private var openCount: Int { picks.filter { !model.weeklyDone($0.k) }.count }
 
-    /// "Five people need you this week." Spelled out, since it reads as a sentence.
+    /// "Good morning, Jay. Five people need you." Spelled out, since it reads as a sentence.
     private var headline: String {
         let n = openCount
-        if !picksLoaded { return greeting }
-        if n == 0 { return picks.isEmpty ? "You’re all caught up." : "Your week is done." }
-        if n == 1 { return "One person needs you this week." }
+        if !picksLoaded { return greeting + "." }
+        if n == 0 { return picks.isEmpty ? "\(greeting). You’re all caught up." : "\(greeting). Your week is done." }
+        return "\(greeting). \(countPhrase) \(n == 1 ? "needs" : "need") you."
+    }
+
+    private var countPhrase: String {
+        let n = openCount
+        if n == 1 { return "One person" }
         let words = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten"]
-        return "\(n <= 10 ? words[n] : String(n)) people need you this week."
+        return "\(n <= 10 ? words[n] : String(n)) people"
+    }
+
+    /// The headline with the count picked out in amber, like a magazine pull.
+    private var headlineText: Text {
+        let h = headline, c = countPhrase
+        guard picksLoaded, openCount > 0, let r = h.range(of: c) else { return Text(h) }
+        return Text(String(h[..<r.lowerBound])) + Text(c).foregroundColor(Theme.needs) + Text(String(h[r.upperBound...]))
     }
 
     private var greeting: String {
@@ -80,8 +98,8 @@ struct HomeView: View {
     }
 
     private var subline: String {
-        let date = Date().formatted(.dateTime.weekday(.wide).month(.wide).day())
-        if model.info.isSample && !UserDefaults.standard.bool(forKey: "storeMode") { return "\(date). A sample network" }
+        let date = Date().formatted(.dateTime.weekday(.wide).day().month(.wide)).uppercased()
+        if model.info.isSample && !UserDefaults.standard.bool(forKey: "storeMode") { return "\(date) · SAMPLE NETWORK" }
         return date
     }
 
@@ -89,10 +107,12 @@ struct HomeView: View {
         HStack(alignment: .top, spacing: 12) {
             VStack(alignment: .leading, spacing: 4) {
                 Text(subline)
-                    .font(Theme.geist(.footnote, .medium))
+                    .font(Theme.eyebrow)
+                    .tracking(1.2)
                     .foregroundStyle(Theme.text2)
-                Text(headline)
-                    .font(Theme.geist(.title, .bold))
+                headlineText
+                    .font(Theme.serif(.largeTitle))
+                    .tracking(-0.5)
                     .fixedSize(horizontal: false, vertical: true)
                     .contentTransition(.numericText(countsDown: true))
                     .animation(Motion.spring, value: headline)

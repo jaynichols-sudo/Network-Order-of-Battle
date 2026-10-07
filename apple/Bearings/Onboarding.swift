@@ -109,7 +109,13 @@ struct OnboardingView: View {
 
     var body: some View {
         ZStack {
-            Color(.systemBackground).ignoresSafeArea()
+            // first run happens under the night sky
+            ZStack {
+                Theme.night
+                StarField(count: 180, seed: 3)
+                Aurora().opacity(0.55).frame(height: 520).frame(maxHeight: .infinity, alignment: .top).offset(y: -160)
+            }
+            .ignoresSafeArea()
             Group {
                 switch step {
                 case 0: welcome
@@ -121,6 +127,7 @@ struct OnboardingView: View {
             .transition(reduceMotion ? .opacity : .asymmetric(insertion: .move(edge: .trailing).combined(with: .opacity), removal: .move(edge: .leading).combined(with: .opacity)))
         }
         .animation(.smooth(duration: 0.4), value: step)
+        .environment(\.colorScheme, .dark)
         .task(id: model.info.rev + model.info.mode) { compass = await model.compass() }
     }
 
@@ -135,7 +142,7 @@ struct OnboardingView: View {
                 .padding(.horizontal, 30)
             VStack(spacing: 10) {
                 Text("Your network, mapped.")
-                    .font(Theme.geist(.largeTitle, .bold))
+                    .font(Theme.serif(.largeTitle, .semibold))
                     .multilineTextAlignment(.center)
                 Text("See everyone you know at a glance: who’s close, who’s waiting on you, and who just changed jobs.")
                     .font(Theme.geist(.body))
@@ -261,7 +268,7 @@ struct OnboardingView: View {
 
     private func header(_ title: String, _ text: String, top: Bool = true) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(title).font(Theme.geist(.largeTitle, .bold)).fixedSize(horizontal: false, vertical: true)
+            Text(title).font(Theme.serif(.largeTitle, .semibold)).fixedSize(horizontal: false, vertical: true)
             Text(text).font(Theme.geist(.body)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
         }
         .padding(.horizontal, 24)

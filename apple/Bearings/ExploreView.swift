@@ -37,7 +37,11 @@ struct ExploreView: View {
             }
             .padding(16)
         }
-        .background(Theme.bg)
+        // Explore is the night sky, whatever the time of day
+        .environment(\.colorScheme, .dark)
+        .background { ZStack { Theme.night; StarField(count: 160, seed: 5) }.ignoresSafeArea() }
+        .toolbarColorScheme(.dark, for: .navigationBar)
+        .toolbarBackground(Theme.night, for: .navigationBar)
         .navigationTitle("Explore")
         .navigationBarTitleDisplayMode(.inline)
         .task(id: "\(model.people.count)-\(model.info.lens)-\(model.info.edits)-\(mode)") {

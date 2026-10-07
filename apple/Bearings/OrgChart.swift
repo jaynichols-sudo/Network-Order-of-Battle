@@ -83,7 +83,7 @@ struct OrgChartView: View {
 
     private func header(_ c: OrgChart) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(c.company).font(Theme.geist(.title2, .bold))
+            Text(c.company).font(Theme.serif(.title, .semibold))
             let team = c.levels.flatMap(\.people).filter { $0.src == "team" }.count
             Text("\((c.total ?? 0) - team) you know\(team > 0 ? " · \(team) through your team" : "")")
                 .font(Theme.geist(.subheadline)).foregroundStyle(Theme.text2)

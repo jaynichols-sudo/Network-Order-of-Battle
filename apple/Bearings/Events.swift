@@ -208,7 +208,7 @@ struct EventView: View {
     private func header(_ e: NetEvent) -> some View {
         Section {
             VStack(alignment: .leading, spacing: 6) {
-                Text(e.name).font(Theme.geist(.title2, .bold))
+                Text(e.name).font(Theme.serif(.title, .semibold))
                 Text([e.when, e.place].filter { !$0.isEmpty }.joined(separator: " · ")).font(Theme.geist(.subheadline)).foregroundStyle(.secondary)
                 ViewThatFits(in: .horizontal) {
                     HStack(spacing: 18) { stats(e) }

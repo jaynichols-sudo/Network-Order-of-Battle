@@ -32,6 +32,7 @@ struct TodayCompassCard: View {
             .accessibilityLabel("Your network compass. Opens Explore")
 
             VStack(alignment: .leading, spacing: 10) {
+                Text("YOUR NETWORK · \(data.total.formatted())").font(Theme.eyebrow).tracking(1.1).foregroundStyle(Theme.text2)
                 stat(t.w, "waiting on you", big: true, color: Theme.needs) {
                     model.perform(CardAction(kind: "filter", sig: ["waiting"]))
                 }
@@ -50,7 +51,7 @@ struct TodayCompassCard: View {
             Spacer(minLength: 0)
         }
         .padding(16)
-        .card()
+        .nightCard()
         .task(id: "\(model.loaded)-\(model.people.count)-\(model.info.lens)-\(model.info.edits)-\(model.info.rev)") {
             data = await model.compassReady()
             if bloom < 1 && data.total > 0 {
@@ -256,7 +257,7 @@ struct YouView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
-                Text("You").font(Theme.geist(.title, .bold)).padding(.horizontal, 6).padding(.top, 8)
+                Text("You").font(Theme.serif(.largeTitle)).padding(.horizontal, 6).padding(.top, 8)
 
                 VStack(spacing: 14) {
                     MyPhotoRow()

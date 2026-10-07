@@ -163,7 +163,7 @@ struct WeeklyBriefView: View {
     private var header: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text("Week of \(Day.nice(WeeklyBrief.weekStart))").font(Theme.mono(.caption, .semibold)).foregroundStyle(Theme.accent)
-            Text("Five people worth your time").font(Theme.geist(.title, .bold))
+            Text("Five people worth your time").font(Theme.serif(.title))
             Text("One reason and a ready-made message for each. Mark them done as you go.").font(Theme.geist(.subheadline)).foregroundStyle(.secondary)
             if !picks.isEmpty {
                 ProgressView(value: Double(done), total: Double(picks.count)).tint(Theme.amber).padding(.top, 4)

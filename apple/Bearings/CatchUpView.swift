@@ -269,7 +269,7 @@ struct DeckCard: View {
                 Circle().fill(Color(hex: person.color)).frame(width: 10, height: 10).padding(6)
             }
             VStack(alignment: .leading, spacing: 6) {
-                Text(person.fullName).font(Theme.geist(.largeTitle, .bold)).minimumScaleFactor(0.6).lineLimit(2)
+                Text(person.fullName).font(Theme.serif(.largeTitle, .semibold)).minimumScaleFactor(0.6).lineLimit(2)
                 if !person.p.isEmpty { Text(person.p).font(Theme.geist(.title3)).foregroundStyle(.secondary).lineLimit(3) }
                 if !person.c.isEmpty { Text(person.c).font(Theme.geist(.title3, .semibold)) }
                 if let t = person.rx?.t, !t.isEmpty {

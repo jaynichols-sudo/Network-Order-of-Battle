@@ -26,13 +26,15 @@ enum Theme {
     static let violet = Color.dynamic("#7556E8", "#A992FF")
     static let plum = Color(hex: "#2A2448")
 
-    // "Calm cards" (docs/design-c.md): light gray screens with white cards, the
-    // brand's deep plum for main actions; dark keeps the night-sky purple and amber.
-    static let bg = Color.dynamic("#F3F3F6", "#0D0A17")
+    // "Editorial" (the recommended mix): white pages, hairline cards and a serif voice
+    // for headlines in light; dark is the night sky, purple and amber.
+    static let bg = Color.dynamic("#FFFFFF", "#0D0A17")
+    static let night = Color(hex: "#0D0A17")
+    static let hairline = Color.dynamic("#E6E3EC", "#2A2440")
     static let card = Color.dynamic("#FFFFFF", "#17132A")
-    static let card2 = Color.dynamic("#F3F3F6", "#221C38")
+    static let card2 = Color.dynamic("#F4F2FA", "#221C38")
     static let line = Color.dynamic("#F0EFF4", "#26203A")
-    static let text2 = Color.dynamic("#7A7590", "#9C95B8")
+    static let text2 = Color.dynamic("#6B6678", "#9C95B8")
     static let text3 = Color.dynamic("#9A96AC", "#6F6890")
     static let primary = Color.dynamic("#2A2448", "#FFB020")
     static let onPrimary = Color.dynamic("#FFFFFF", "#1B1830")
@@ -74,6 +76,14 @@ enum Theme {
         return Font.custom(name(for: style == .headline && weight == .regular ? .semibold : weight), size: size, relativeTo: style)
     }
 
+    /// The editorial voice: Apple's New York serif for headlines and names, scaled with Dynamic Type.
+    static func serif(_ style: Font.TextStyle, _ weight: Font.Weight = .regular) -> Font {
+        .system(style, design: .serif).weight(weight)
+    }
+
+    /// A small uppercase mono label over a headline ("WEDNESDAY 7 OCTOBER").
+    static let eyebrow = Font.custom("GeistMono-Medium", size: 11, relativeTo: .caption2)
+
     /// Geist Mono for figures, so numbers read as data and line up.
     static func mono(_ style: Font.TextStyle, _ weight: Font.Weight = .medium) -> Font {
         let size: CGFloat
@@ -106,9 +116,10 @@ enum Theme {
     static func configureAppearance() {
         let metrics = UIFontMetrics(forTextStyle: .largeTitle)
         let nav = UINavigationBar.appearance()
-        if let big = UIFont(name: "Geist-Bold", size: 34) {
-            nav.largeTitleTextAttributes = [.font: metrics.scaledFont(for: big)]
-        }
+        // large titles in the serif, like a magazine section head
+        let base = UIFont.systemFont(ofSize: 34, weight: .semibold)
+        let big = base.fontDescriptor.withDesign(.serif).map { UIFont(descriptor: $0, size: 34) } ?? UIFont(name: "Geist-Bold", size: 34) ?? base
+        nav.largeTitleTextAttributes = [.font: metrics.scaledFont(for: big)]
         if let small = UIFont(name: "Geist-SemiBold", size: 17) {
             nav.titleTextAttributes = [.font: UIFontMetrics(forTextStyle: .headline).scaledFont(for: small)]
         }
@@ -149,6 +160,11 @@ extension View {
     func geist(_ style: Font.TextStyle, _ weight: Font.Weight = .regular) -> some View {
         font(Theme.geist(style, weight))
     }
+
+    /// The signature moments wear the night sky whatever the system appearance.
+    func nightSky() -> some View {
+        environment(\.colorScheme, .dark)
+    }
 }
 
 struct CardStyle: ViewModifier {
@@ -161,9 +177,9 @@ struct CardStyle: ViewModifier {
         content
             .padding(padding ?? 0)
             .background(Theme.card, in: shape)
-            .overlay(shape.strokeBorder(Color.white.opacity(scheme == .dark ? 0.06 : 0), lineWidth: 1))
-            .shadow(color: Color(red: 20/255, green: 16/255, blue: 40/255).opacity(scheme == .dark ? 0 : 0.05), radius: 1, y: 1)
-            .shadow(color: Color(red: 20/255, green: 16/255, blue: 40/255).opacity(scheme == .dark ? 0 : 0.05), radius: 10, y: 6)
+            // light: a hairline and a whisper of shadow on the white page; dark: a faint rim
+            .overlay(shape.strokeBorder(scheme == .dark ? Color.white.opacity(0.06) : Theme.hairline, lineWidth: 1))
+            .shadow(color: Color(red: 20/255, green: 16/255, blue: 40/255).opacity(scheme == .dark ? 0 : 0.05), radius: 12, y: 8)
     }
 }
 

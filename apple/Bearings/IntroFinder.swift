@@ -73,7 +73,7 @@ struct IntroFinderView: View {
         } else {
             Section {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(p.company).font(Theme.geist(.title2, .bold))
+                    Text(p.company).font(Theme.serif(.title, .semibold))
                     Text(summary(p)).font(Theme.geist(.subheadline)).foregroundStyle(.secondary)
                 }
                 .listRowBackground(Color.clear)

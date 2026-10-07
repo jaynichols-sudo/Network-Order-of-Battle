@@ -20,9 +20,9 @@ final class BearingsUITests: XCTestCase {
 
     func testTodayShowsTheWeekAndTheCompass() {
         let app = launch()
-        XCTAssertTrue(text(app, containing: "Needs you").waitForExistence(timeout: 30))
-        XCTAssertTrue(text(app, containing: "waiting on you").exists)
-        XCTAssertTrue(text(app, containing: "this week").exists || text(app, containing: "caught up").exists)
+        XCTAssertTrue(text(app, containing: "need").waitForExistence(timeout: 30) || text(app, containing: "caught up").exists)
+        XCTAssertTrue(text(app, containing: "waiting on you").waitForExistence(timeout: 10))
+        XCTAssertTrue(text(app, containing: "Later").exists || text(app, containing: "five are done").exists || text(app, containing: "caught up").exists)
     }
 
     func testOpenSomeoneAndSeeTheirDetails() {

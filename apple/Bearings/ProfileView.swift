@@ -108,7 +108,7 @@ struct ProfileView: View {
                 }
             VStack(spacing: 3) {
                 Text(p.fullName)
-                    .font(Theme.geist(.title2, .bold))
+                    .font(Theme.serif(.title, .semibold))
                     .multilineTextAlignment(.center)
                 if !p.p.isEmpty {
                     Text(p.p).font(Theme.geist(.subheadline)).foregroundStyle(Theme.text2).multilineTextAlignment(.center).lineLimit(3)
