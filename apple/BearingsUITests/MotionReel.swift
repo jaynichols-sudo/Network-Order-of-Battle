@@ -79,6 +79,7 @@ final class MotionReel: XCTestCase {
 
         // 6. the paywall: icons wave, the selection glides between plans, Continue shimmers
         app.terminate()
+        pause(1.5)
         let pay = launch(["-demoOpen", "paywall"])
         pause(2.5)
         for plan in ["Monthly", "Lifetime", "Yearly"] {
@@ -89,6 +90,7 @@ final class MotionReel: XCTestCase {
 
         // 7. the year card tilts toward your finger
         pay.terminate()
+        pause(1.5)
         let year = launch(["-demoOpen", "year"])
         pause(3)
         let yw = year.windows.firstMatch

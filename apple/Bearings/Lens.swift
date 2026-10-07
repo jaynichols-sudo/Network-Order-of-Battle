@@ -34,19 +34,6 @@ struct CompassLens: View {
             let radius = active ? open : docked
 
             ZStack {
-                // what the glass shows: the same compass, magnified around the lens
-                if active {
-                    // redrawn at full size rather than scaled, so the dots stay sharp
-                    let W = g.size.width * magnify, H = g.size.height * magnify
-                    CompassView(data: data, focus: .constant(nil), initials: initials, labels: false) { _ in }
-                        .frame(width: W, height: H)
-                        .position(x: W / 2 + p.x - p.x * magnify, y: H / 2 + p.y - p.y * magnify)
-                        .frame(width: g.size.width, height: g.size.height)
-                        .mask(Circle().frame(width: radius * 2, height: radius * 2).position(p))
-                        .allowsHitTesting(false)
-                        .transition(.opacity)
-                }
-
                 // the glass itself
                 Circle()
                     .fill(Color.clear)
@@ -57,8 +44,6 @@ struct CompassLens: View {
                                 .font(.system(size: 15, weight: .semibold))
                                 .foregroundStyle(Theme.primary)
                                 .symbolEffect(.breathe, isActive: !used && !reduce)
-                        } else if target != nil {
-                            Circle().stroke(Theme.amber.opacity(0.9), lineWidth: 1.5).frame(width: 18, height: 18)
                         }
                     }
                     .lensGlass(active: active)
@@ -68,17 +53,42 @@ struct CompassLens: View {
                     .position(p)
                     .accessibilityHidden(true)
 
+                // the sharp magnified view sits on the glass, which shows as the rim around it
+                if active {
+                    // redrawn at full size rather than scaled, so the dots stay sharp
+                    let W = g.size.width * magnify, H = g.size.height * magnify
+                    CompassView(data: data, focus: .constant(nil), initials: initials, labels: false) { _ in }
+                        .frame(width: W, height: H)
+                        .position(x: W / 2 + p.x - p.x * magnify, y: H / 2 + p.y - p.y * magnify)
+                        .frame(width: g.size.width, height: g.size.height)
+                        .mask(Circle().frame(width: radius * 2 - 7, height: radius * 2 - 7).position(p))
+                        .allowsHitTesting(false)
+                        .transition(.opacity)
+                }
+                if active {
+                    Circle()
+                        .strokeBorder(LinearGradient(colors: [.white.opacity(0.75), .white.opacity(0.05), .white.opacity(0.35)],
+                                                     startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 2)
+                        .frame(width: radius * 2 - 4, height: radius * 2 - 4)
+                        .shadow(color: .black.opacity(0.35), radius: 3)
+                        .position(p)
+                        .allowsHitTesting(false)
+                    if target != nil {
+                        Circle().stroke(Theme.amber.opacity(0.95), lineWidth: 1.5).frame(width: 20, height: 20)
+                            .position(p).allowsHitTesting(false)
+                    }
+                }
+
                 // who's under the glass
                 if active, !under.isEmpty {
                     Text(caption)
+                        .animation(nil, value: caption)
                         .font(Theme.geist(.footnote, .semibold))
                         .lineLimit(1)
                         .padding(.horizontal, 12).padding(.vertical, 7)
                         .liquidGlass(Capsule())
                         .fixedSize()
                         .position(x: min(max(p.x, 90), g.size.width - 90), y: max(16, p.y - radius - 22))
-                        .contentTransition(.opacity)
-                        .animation(.easeOut(duration: 0.15), value: caption)
                         .transition(.opacity.combined(with: .scale(scale: 0.9)))
                         .allowsHitTesting(false)
                 }
