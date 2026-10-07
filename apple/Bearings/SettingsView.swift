@@ -24,6 +24,7 @@ struct SettingsView: View {
     @State private var sfWorking = false
     @State private var homeText = UserDefaults.standard.string(forKey: "homeName") ?? ""
     @State private var arrivals = ArrivalAlerts.enabled
+    @State private var remindersOn = ReminderSync.shared.enabled && ReminderSync.shared.authorized
 
     var body: some View {
         NavigationStack {
@@ -113,6 +114,21 @@ struct SettingsView: View {
                         await CalendarService.shared.scan(model: model, force: true)
                     }
                 }))
+            Toggle("Follow-ups in Apple Reminders", isOn: Binding(
+                get: { remindersOn },
+                set: { on in
+                    Task {
+                        if on {
+                            let ok = await ReminderSync.shared.requestAccess()
+                            ReminderSync.shared.enabled = ok
+                            remindersOn = ok
+                            if !ok { model.show("Allow Reminders for Bearings in Settings to turn this on") }
+                        } else {
+                            ReminderSync.shared.enabled = false
+                            remindersOn = false
+                        }
+                    }
+                }))
             Toggle("Trip mode on the Lock Screen", isOn: Binding(
                 get: { TripMode.enabled },
                 set: { on in
@@ -141,7 +157,7 @@ struct SettingsView: View {
         } header: {
             Text("Calendar")
         } footer: {
-            Text("Bearings reads your calendar on this device to brief you 30 minutes before meetings with people you know, and to spot trips more than 75 miles from home. In Trip mode, a trip shows on your Lock Screen two days ahead with who you know nearby. With arrival alerts, landing in a city away from home tells you who you know there (choose “Always” for location when asked). Nothing is uploaded.")
+            Text("Bearings reads your calendar on this device to brief you 30 minutes before meetings with people you know, and to spot trips more than 75 miles from home. In Trip mode, a trip shows on your Lock Screen two days ahead with who you know nearby. With arrival alerts, landing in a city away from home tells you who you know there (choose “Always” for location when asked). With Reminders on, follow-ups go on a Bearings list in Apple Reminders, and checking one off there marks it done here. Nothing is uploaded.")
         }
     }
 

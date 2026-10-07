@@ -39,6 +39,7 @@ struct RootView: View {
         .sheet(item: Binding(get: { model.introQuery.map { IntroFinderView.Wrapped(id: $0) } }, set: { model.introQuery = $0?.id })) { w in
             Group { if Pro.shared.unlocked { IntroFinderView(query: w.id) } else { PaywallView(feature: .waysIn) } }.environment(AppModel.shared)
         }
+        .sheet(item: $model.notesDraft) { d in MeetingNotesSheet(draft: d).environment(AppModel.shared) }
         .sheet(item: $model.shareFile) { f in ActivityView(items: [f.url]).ignoresSafeArea().environment(AppModel.shared) }
         .alert("Found your LinkedIn export", isPresented: Binding(get: { model.foundExport != nil }, set: { if !$0 { model.foundExport = nil } })) {
             Button("Import it") {

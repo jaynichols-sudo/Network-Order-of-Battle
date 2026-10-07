@@ -292,6 +292,8 @@ struct YouView: View {
                     if !model.info.isSample {
                         row("Back up notes", icon: "externaldrive") { Task { await model.backup() } }
                     }
+                    AddNotesButton { rowLabel("Add meeting notes", icon: "text.badge.plus", detail: "Plaud, Notes, reMarkable") }
+                        .buttonStyle(.plain)
                     row("Import an enrichment file", icon: "tablecells.badge.ellipsis") { importingEnrichment = true }
                 }
 
@@ -344,6 +346,12 @@ struct YouView: View {
             Haptic.tap()
             action()
         } label: {
+            rowLabel(title, icon: icon, detail: detail)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func rowLabel(_ title: String, icon: String, detail: String? = nil) -> some View {
             HStack(spacing: 14) {
                 Image(systemName: icon)
                     .font(.system(size: 15, weight: .semibold))
@@ -357,8 +365,6 @@ struct YouView: View {
             }
             .padding(.vertical, 12)
             .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
     }
 }
 

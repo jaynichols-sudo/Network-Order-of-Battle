@@ -136,6 +136,8 @@ final class AppModel {
     var showQuickFind = false
     var showWeekly = false
     var shareFile: ShareFile?
+    /// Meeting notes waiting to be matched to people (from Plaud, Notes, reMarkable or a file).
+    var notesDraft: NotesDraft?
     var pendingImportURL: URL?
     /// A LinkedIn export spotted in Downloads (Mac), waiting for a yes.
     var foundExport: URL?
@@ -534,8 +536,12 @@ final class AppModel {
         await edit(k, call: "setEdit", [k, ["star": on]])
     }
 
-    func followUp(_ k: String, days: Int) async {
+    func followUp(_ k: String, days: Int, quiet: Bool = false) async {
         await edit(k, call: "followUp", [k, days])
+        if let p = person(k) {
+            ReminderSync.shared.setFollowUp(k: k, name: p.fullName, due: days > 0 ? Day.date(Day.plus(days)) : nil, why: p.p.isEmpty ? nil : "\(p.p)\(p.c.isEmpty ? "" : ", " + p.c)")
+        }
+        if quiet { return }
         if days > 0 {
             Haptic.star()
             show("We’ll remind you on \(Day.nice(Day.plus(days)))")

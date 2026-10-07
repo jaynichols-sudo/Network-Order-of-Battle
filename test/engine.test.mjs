@@ -231,3 +231,35 @@ test('enrichment files from any provider match by LinkedIn link, email or name a
   assert.equal(r.people[by.get('Katherine')].state, 'Virginia', 'matched by name and company');
   assert.throws(() => call('matchEnrichment', 'foo,bar\n1,2'), /no name columns/);
 });
+
+test('meeting notes find the people mentioned, the action items and a summary', () => {
+  const net = ['First Name,Last Name,URL,Email Address,Company,Position,Connected On',
+    'Ada,Lovelace,https://www.linkedin.com/in/ada,,Analytical Engines,Engineer,05 Oct 2020',
+    'Grace,Hopper,https://www.linkedin.com/in/grace,,US Navy,Admiral,01 Jan 2020',
+    'José,Núñez,,,NASA,Mathematician,01 Jan 2019'].join('\n');
+  call('importTexts', { connections: net }, 'test');
+  call('loadFiles', { network: globalThis.Bearings.fileJSON('network') }, null);
+  const by = new Map(people().map(p => [p.f, p.k]));
+  const notes = [
+    '# OT security sync with Navy',
+    '',
+    '## Summary',
+    'Grace Hopper walked through the shipyard network refresh. Jose Nunez joined late.',
+    '',
+    '## Action items',
+    '- Send Grace the one-way gateway brief',
+    '- Schedule a demo for the OT team in November',
+    '',
+    'Speaker 2: Ada Lovelaceish is not a person here. Grace Hopper again.',
+    'TODO: intro to the program office',
+  ].join('\n');
+  const r = call('readNotes', notes);
+  assert.equal(r.title, 'OT security sync with Navy');
+  assert.match(r.summary, /shipyard network refresh/);
+  assert.deepEqual(r.people.map(p => p.name), ['Grace Hopper', 'José Núñez'], 'accent-folded, whole names only, most mentioned first');
+  assert.equal(r.people[0].n, 2, 'full-name mentions only');
+  assert.equal(r.actions.length, 3);
+  assert.equal(r.actions[0].k, by.get('Grace'), 'action assigned by first name');
+  assert.equal(r.actions[2].text, 'intro to the program office');
+  assert.equal(call('readNotes', '').people.length, 0);
+});

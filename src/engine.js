@@ -816,6 +816,64 @@ function matchEnrichment(text){
   return {rows, matched: Object.keys(out).length, people: out};
 }
 
+/* ---------- meeting notes ---------- */
+// Text from anywhere (a Plaud transcript or summary, an Apple Note, a reMarkable page read
+// on the phone): who in your network it mentions, the action items, and a short summary.
+function readNotes(text){
+  const t = String(text || '').replace(/\r/g, '').replace(/\u00a0/g, ' ').slice(0, 200000);
+  const fold = s => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const hay = fold(t);
+  const word = c => !!c && /[a-z0-9]/.test(c);
+  const found = [];
+  for (const r of live()){
+    const f = String(r.f || '').trim(), l = String(r.l || '').trim();
+    if (f.length < 2 || l.length < 2) continue;
+    const full = fold(`${f} ${l}`);
+    let i = hay.indexOf(full), n = 0, at = -1;
+    while (i >= 0){
+      if (!word(hay[i - 1]) && !word(hay[i + full.length])){ n++; if (at < 0) at = i; }
+      i = hay.indexOf(full, i + full.length);
+    }
+    if (n) found.push({k: r.k, name: `${f} ${l}`, first: f, n, at});
+  }
+  found.sort((a, b) => b.n - a.n || a.at - b.at);
+  const people = found.slice(0, 25);
+  const whoIn = s => { const x = fold(s); const p = people.find(q => x.includes(fold(q.name))) || people.find(q => new RegExp('\\b' + fold(q.first).replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b').test(x)); return p ? p.k : ''; };
+
+  const lines = t.split('\n').map(x => x.trim());
+  const head = /^(?:#+\s*)?(?:\*\*)?(action items?|next steps?|follow[- ]?ups?|to[- ]?dos?|tasks|takeaways)(?:\*\*)?\s*:?\s*$/i;
+  const sumHead = /^(?:#+\s*)?(?:\*\*)?(summary|overview|key points|meeting summary|highlights)(?:\*\*)?\s*:?\s*$/i;
+  const anyHead = /^(?:#+\s+\S|\*\*[^*]{2,60}\*\*\s*:?$|[A-Z][A-Za-z /&]{2,40}:$)/;
+  const actions = [];
+  let section = '';
+  const summary = [];
+  let gap = false;
+  for (const line of lines){
+    if (!line){ gap = true; continue; }
+    const wasGap = gap; gap = false;
+    if (head.test(line)){ section = 'actions'; continue; }
+    if (sumHead.test(line)){ section = 'summary'; continue; }
+    if (anyHead.test(line)){ section = ''; continue; }
+    const bullet = line.match(/^(?:[-*•▪◦]|\d+[.)]|\[[ x]?\])\s+(.*)$/i);
+    const tagged = line.match(/^(?:todo|to-do|action(?: item)?|follow[- ]?up|next step)\s*[:\-–]\s*(.+)$/i);
+    // in an action list, a plain line after a blank line means the list is over
+    if (section === 'actions' && !bullet && !tagged && wasGap) section = '';
+    const txt = tagged ? tagged[1] : (section === 'actions' ? (bullet ? bullet[1] : line) : null);
+    if (txt && txt.length > 3 && actions.length < 20) actions.push({text: txt.replace(/\s+/g, ' ').replace(/^\*\*|\*\*$/g, '').slice(0, 200), k: whoIn(txt)});
+    else if (section === 'summary' && summary.join(' ').length < 420) summary.push(bullet ? bullet[1] : line);
+  }
+  const plain = lines.filter(Boolean);
+  const title = (plain[0] || '').replace(/^#+\s*/, '').replace(/\*\*/g, '').slice(0, 90);
+  let sum = summary.join(' ');
+  if (!sum){
+    const body = plain.slice(1).filter(x => !head.test(x) && !anyHead.test(x) && !/^(?:[-*•]|\d+[.)])\s/.test(x));
+    sum = body.join(' ');
+  }
+  sum = sum.replace(/\s+/g, ' ').trim();
+  if (sum.length > 360) sum = sum.slice(0, 357).replace(/\s+\S*$/, '') + '…';
+  return {title, summary: sum, people: people.map(({k, name, n}) => ({k, name, n})), actions, words: t.split(/\s+/).filter(Boolean).length};
+}
+
 /* ---------- year in review ---------- */
 // A shareable look back at the year: who joined your network, the job changes you caught,
 // who you talked with and who you reconnected with. Counts only, for the card.
@@ -1019,7 +1077,7 @@ function constants(){
 
 const api = {load, loadSample, loadFiles, clearNotes, clusters, placeClues, setCompanyLocation, companyPlaces, messages, matchAttendees, alsoAt, setLens, info, people, person, search, facets, home, payoff, targets, unit, addTargetCandidates, toggleTarget, setTargetNote, orgs,
   industries, industry, setCompanyIndustry, setCompanyLink, ranks, deck, deckCount, reviewed, radar, compass, startFromContacts, introPaths, weekly, touch, setCircle, setEdit, followUp, markReplied, addNote,
-  importTexts, importSnapshot, yearInReview, teamPack, addTeamPack, removeTeamPack, teamList, matchEnrichment, backup, restore, exportCSV, reminders, watch, constants};
+  importTexts, importSnapshot, yearInReview, teamPack, addTeamPack, removeTeamPack, teamList, matchEnrichment, readNotes, backup, restore, exportCSV, reminders, watch, constants};
 // Every call goes through here: JSON string in, JSON string out, errors as {error}.
 globalThis.Bearings = {
   call(name, argsJSON){

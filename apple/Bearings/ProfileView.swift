@@ -4,6 +4,7 @@ struct ProfileView: View {
     @Environment(AppModel.self) private var model
     let k: String
     @State private var writing = false
+    @State private var addingNotes = false
 
     var body: some View {
         if let p = model.person(k) {
@@ -43,6 +44,19 @@ struct ProfileView: View {
             .sheet(isPresented: $writing) { MessageSheet(k: p.k).environment(AppModel.shared) }
             .navigationTitle(p.f)
             .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Menu {
+                        Button { addingNotes = true } label: { Label("Add meeting notes", systemImage: "text.badge.plus") }
+                        Button { model.sharePaperBrief(p.k) } label: { Label("Paper brief for reMarkable or print", systemImage: "doc.richtext") }
+                        ShareLink(item: model.personText(p.k)) { Label("Share as text, for Notes or Mail", systemImage: "square.and.arrow.up") }
+                    } label: {
+                        Image(systemName: "ellipsis.circle")
+                    }
+                    .accessibilityLabel("More")
+                }
+            }
+            .modifier(AddNotesPrompt(isPresented: $addingNotes, forPerson: p.k))
             .task(id: k) { await model.loadFull(k) }
         } else {
             ContentUnavailableView("Not found", systemImage: "person.crop.circle.badge.xmark", description: Text("This person isn’t in your network anymore."))

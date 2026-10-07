@@ -68,6 +68,23 @@ struct OpenPersonIntent: AppIntent {
     }
 }
 
+/// Sends text into Bearings to file against the people it mentions. Works from Shortcuts
+/// (including a "Show in Share Sheet" shortcut) for apps that only share plain text.
+struct AddMeetingNotesIntent: AppIntent {
+    static var title: LocalizedStringResource = "Add meeting notes"
+    static var description = IntentDescription("Matches notes or a transcript to the people you know, adds a short note to each, and turns action items into reminders.")
+    static var openAppWhenRun = true
+    @Parameter(title: "Notes", inputOptions: String.IntentInputOptions(multiline: true)) var text: String
+    @Parameter(title: "From", default: "Shortcuts") var source: String
+
+    @MainActor func perform() async throws -> some IntentResult {
+        let m = AppModel.shared
+        await m.start()
+        await m.ingestNotes(text, source: source)
+        return .result()
+    }
+}
+
 struct WhoIsWaitingIntent: AppIntent {
     static var title: LocalizedStringResource = "Who’s waiting on me"
     static var description = IntentDescription("Lists the people who wrote last and are waiting on your reply.")
@@ -119,6 +136,8 @@ struct BearingsShortcuts: AppShortcutsProvider {
                     shortTitle: "Follow-ups due", systemImageName: "bell")
         AppShortcut(intent: WhoIsNearbyIntent(), phrases: ["Who do I know nearby in \(.applicationName)"],
                     shortTitle: "Who’s nearby", systemImageName: "location")
+        AppShortcut(intent: AddMeetingNotesIntent(), phrases: ["Add meeting notes to \(.applicationName)", "File meeting notes in \(.applicationName)"],
+                    shortTitle: "Add meeting notes", systemImageName: "text.badge.plus")
         AppShortcut(intent: OpenPersonIntent(), phrases: ["Open \(\.$person) in \(.applicationName)", "Show \(\.$person) in \(.applicationName)"],
                     shortTitle: "Open a person", systemImageName: "person.crop.circle")
     }

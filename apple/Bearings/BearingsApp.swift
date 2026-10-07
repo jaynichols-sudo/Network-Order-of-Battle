@@ -21,6 +21,8 @@ struct BearingsApp: App {
                     await TripMode.refresh(model: model)
                     if !model.info.isSample { await WeeklyBrief.schedule() }
                     model.checkDownloads()
+                    await model.drainNotesInbox()
+                    await ReminderSync.shared.pullCompleted(model: model)
                 }
                 .onOpenURL { url in
                     if url.scheme == "bearings" {
@@ -28,8 +30,12 @@ struct BearingsApp: App {
                         return
                     }
                     guard url.isFileURL else { return }
-                    if url.pathExtension.lowercased() == "json" {
+                    let ext = url.pathExtension.lowercased()
+                    if ext == "json" {
                         Task { await model.openJSON(url) }
+                    } else if AppModel.notesFileTypes.contains(ext) {
+                        // meeting notes, a transcript, a PDF or a photo of a page
+                        Task { await model.ingestNotesFile(url) }
                     } else {
                         model.pendingImportURL = url
                         model.showOnboarding = false
@@ -50,6 +56,8 @@ struct BearingsApp: App {
                             await CalendarService.shared.scan(model: model, force: true)
                             await TripMode.refresh(model: model)
                             model.checkDownloads()
+                            await model.drainNotesInbox()
+                            await ReminderSync.shared.pullCompleted(model: model)
                         }
                     }
                 }

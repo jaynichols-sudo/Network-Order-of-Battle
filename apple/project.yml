@@ -33,6 +33,7 @@ targets:
       - path: Bearings/Fonts
         buildPhase: resources
       - path: Shared
+      - path: NoteText
     info:
       path: Bearings/Info.plist
       properties:
@@ -44,6 +45,7 @@ targets:
         LSApplicationCategoryType: public.app-category.business
         LSRequiresIPhoneOS: true
         NSContactsUsageDescription: Bearings matches your LinkedIn connections to your contacts on this device to work out roughly where they are, so you can see who's nearby when you travel. Nothing is uploaded.
+        NSRemindersFullAccessUsageDescription: With Reminders on, Bearings adds your follow-ups to a Bearings list in Apple Reminders and marks them done when you check them off there. Nothing is uploaded.
         NSCalendarsFullAccessUsageDescription: Bearings reads your calendar on this device to brief you before meetings with people you know and to spot upcoming trips. Nothing is uploaded.
         NSCameraUsageDescription: Bearings uses the camera to scan business cards and badges at events. The picture is read on this device and not kept.
         NSLocationWhenInUseUsageDescription: Bearings uses your location to show which of your connections are nearby.
@@ -85,6 +87,15 @@ targets:
             LSHandlerRank: Alternate
             LSItemContentTypes:
               - public.json
+          - CFBundleTypeName: Meeting notes
+            CFBundleTypeRole: Viewer
+            LSHandlerRank: Alternate
+            LSItemContentTypes:
+              - public.plain-text
+              - net.daringfireball.markdown
+              - public.rtf
+              - com.adobe.pdf
+              - public.image
     entitlements:
       path: Bearings/Bearings.entitlements
       properties:
@@ -119,6 +130,9 @@ targets:
     dependencies:
       - target: BearingsHomeWidgets
         embed: true
+      - target: BearingsShare
+        embed: true
+        platformFilter: iOS
       - target: BearingsWatch
         embed: true
         platformFilter: iOS
@@ -128,6 +142,47 @@ targets:
     scheme:
       testTargets:
         - BearingsUITests
+
+  BearingsShare:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: BearingsShare
+        excludes:
+          - "Info.plist"
+          - "*.entitlements"
+      - path: Shared
+      - path: NoteText
+    info:
+      path: BearingsShare/Info.plist
+      properties:
+        CFBundleDisplayName: Bearings
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.share-services
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).ShareViewController
+          NSExtensionAttributes:
+            NSExtensionActivationRule: >-
+              SUBQUERY(extensionItems, $e, SUBQUERY($e.attachments, $a,
+              ANY $a.registeredTypeIdentifiers UTI-CONFORMS-TO "public.plain-text" ||
+              ANY $a.registeredTypeIdentifiers UTI-CONFORMS-TO "public.rtf" ||
+              ANY $a.registeredTypeIdentifiers UTI-CONFORMS-TO "com.adobe.pdf" ||
+              ANY $a.registeredTypeIdentifiers UTI-CONFORMS-TO "public.image").@count >= 1).@count >= 1
+    entitlements:
+      path: BearingsShare/BearingsShare.entitlements
+      properties:
+        keychain-access-groups:
+          - $(AppIdentifierPrefix)com.jaynichols.networkoob.watch
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.jaynichols.networkoob.share
+        PRODUCT_NAME: BearingsShare
+        TARGETED_DEVICE_FAMILY: "1,2"
+        CODE_SIGN_STYLE: Manual
+        CODE_SIGN_IDENTITY: Apple Distribution
+        PROVISIONING_PROFILE_SPECIFIER: ${OOB_PROFILE_SHARE}
+        SKIP_INSTALL: YES
 
   BearingsUITests:
     type: bundle.ui-testing
