@@ -165,9 +165,9 @@ struct PersonRow: View {
 
     @ViewBuilder private var avatar: some View {
         if let zoom {
-            Avatar(person: person, size: 40).matchedTransitionSource(id: person.k, in: zoom)
+            Avatar(person: person, size: 40).matchedTransitionSource(id: ZoomID.person(.people, person.k), in: zoom)
         } else {
-            Avatar(person: person, size: 40)
+            Avatar(person: person, size: 40).zoomSource(person: person.k)
         }
     }
 

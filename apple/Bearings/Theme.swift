@@ -188,7 +188,24 @@ struct PillButtonStyle: ButtonStyle {
             .frame(minHeight: 32)
             .foregroundStyle(fg)
             .background(bg, in: Capsule())
-            .opacity(configuration.isPressed ? 0.7 : 1)
+            .opacity(configuration.isPressed ? 0.85 : 1)
+            .scaleEffect(configuration.isPressed ? 0.94 : 1)
+            .animation(Motion.bouncy, value: configuration.isPressed)
+    }
+}
+
+/// A Today chip: Liquid Glass on iOS 26 (it ripples under your finger), a white pill before.
+struct GlassChipStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(Theme.geist(.footnote, .semibold))
+            .lineLimit(1)
+            .padding(.horizontal, 14)
+            .frame(minHeight: 34)
+            .foregroundStyle(.primary)
+            .liquidGlass(Capsule())
+            .scaleEffect(configuration.isPressed ? 0.95 : 1)
+            .animation(Motion.bouncy, value: configuration.isPressed)
     }
 }
 
@@ -242,12 +259,12 @@ struct CoverageRing: View {
                 .trim(from: 0, to: shown)
                 .stroke(Theme.coverage(score), style: StrokeStyle(lineWidth: size * 0.11, lineCap: .round))
                 .rotationEffect(.degrees(-90))
-            Text("\(score)")
+            CountingText(value: shown * 100)
                 .font(.system(size: size * 0.3, weight: .semibold, design: .rounded))
                 .monospacedDigit()
         }
         .frame(width: size, height: size)
-        .onAppear { withAnimation(.easeOut(duration: 0.7)) { shown = Double(score) / 100 } }
+        .onAppear { withAnimation(.timingCurve(0.2, 0.9, 0.25, 1, duration: 1.1)) { shown = Double(score) / 100 } }
         .onChange(of: score) { _, v in withAnimation(.easeOut(duration: 0.5)) { shown = Double(v) / 100 } }
         .accessibilityElement()
         .accessibilityLabel("Coverage \(score) percent")

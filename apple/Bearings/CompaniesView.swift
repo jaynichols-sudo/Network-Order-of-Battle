@@ -48,7 +48,7 @@ struct WatchlistList: View {
                 ForEach(model.targets) { t in
                     NavigationLink(value: Route.unit(t.name)) {
                         HStack(spacing: 14) {
-                            CoverageRing(score: t.score, size: 50)
+                            CoverageRing(score: t.score, size: 50).zoomSource(unit: t.name)
                             VStack(alignment: .leading, spacing: 3) {
                                 Text(t.name).font(Theme.geist(.body, .semibold))
                                 Text(knowLine(t)).font(Theme.geist(.subheadline)).foregroundStyle(.secondary)

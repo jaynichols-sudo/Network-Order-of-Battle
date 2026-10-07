@@ -141,8 +141,9 @@ struct YearInReviewView: View {
                         Image(uiImage: image)
                             .resizable().scaledToFit()
                             .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-                            .shadow(color: .black.opacity(0.2), radius: 18, y: 8)
+                            .holoTilt()
                             .padding(.horizontal, 36)
+                            .transition(.asymmetric(insertion: .scale(scale: 0.85).combined(with: .opacity), removal: .opacity))
                             .accessibilityLabel(review.map(Self.spoken) ?? "Your year in networking")
                         Label("Only counts and sectors. No names.", systemImage: "lock.fill")
                             .font(Theme.geist(.footnote, .medium)).foregroundStyle(Theme.text2)
@@ -197,7 +198,7 @@ struct YearInReviewView: View {
             }
             .task {
                 review = await model.yearInReview(model.reviewYear)
-                if let review { image = YearCardView.render(review, sample: model.info.isSample) }
+                if let review { let img = YearCardView.render(review, sample: model.info.isSample); withAnimation(Motion.bouncy) { image = img } }
             }
         }
     }

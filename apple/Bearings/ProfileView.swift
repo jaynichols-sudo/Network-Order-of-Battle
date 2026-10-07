@@ -9,9 +9,9 @@ struct ProfileView: View {
         if let p = model.person(k) {
             ScrollView {
                 VStack(spacing: 12) {
-                    header(p)
-                    briefCard(p)
-                    TimelineCard(person: p)
+                    header(p).cascade(0, distance: 10)
+                    briefCard(p).cascade(1).edgeSettle()
+                    TimelineCard(person: p).cascade(2).edgeSettle()
                     NavigationLink(value: Route.about(p.k)) {
                         HStack {
                             Text("Details, location and notes").font(Theme.geist(.subheadline, .medium)).foregroundStyle(.primary)
@@ -21,12 +21,23 @@ struct ProfileView: View {
                         .padding(.horizontal, 16).padding(.vertical, 15)
                         .card()
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.pressable)
+                    .cascade(3).edgeSettle()
                 }
                 .padding(.horizontal, 16)
                 .padding(.bottom, 24)
             .frame(maxWidth: 680)
             .frame(maxWidth: .infinity)
+            .background(alignment: .top) {
+                // a glow in the color of their sector, behind the header
+                Aurora(tint: p.tint)
+                    .frame(height: 420)
+                    .mask(LinearGradient(stops: [.init(color: .black, location: 0), .init(color: .black, location: 0.35), .init(color: .clear, location: 1)],
+                                         startPoint: .top, endPoint: .bottom))
+                    .padding(.horizontal, -60)
+                    .offset(y: -170)
+                    .allowsHitTesting(false)
+            }
             }
             .background(Theme.bg)
             .sheet(isPresented: $writing) { MessageSheet(k: p.k).environment(AppModel.shared) }
@@ -41,6 +52,12 @@ struct ProfileView: View {
     private func header(_ p: Person) -> some View {
         VStack(spacing: 12) {
             Avatar(person: p, size: 76)
+                .shadow(color: p.tint.opacity(0.35), radius: 14, y: 4)
+                .visualEffect { view, proxy in
+                    // pull down and the avatar swells a little, like it's coming toward you
+                    let y = proxy.frame(in: .scrollView).minY
+                    return view.scaleEffect(y > 40 ? min(1.25, 1 + (y - 40) / 300) : 1, anchor: .bottom)
+                }
             VStack(spacing: 3) {
                 Text(p.fullName)
                     .font(Theme.geist(.title2, .bold))
@@ -107,12 +124,12 @@ struct ProfileView: View {
                     .foregroundStyle(Theme.onPrimary)
                     .background(Theme.primary, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.pressable(0.94))
             Button {
                 Haptic.star()
                 Task { await model.toggleStar(p.k) }
             } label: { small(p.starred ? "Starred" : "Star", icon: p.starred ? "star.fill" : "star", on: p.starred) }
-            .buttonStyle(.plain)
+            .buttonStyle(.pressable(0.94))
             Menu {
                 ForEach([(7, "In a week"), (14, "In 2 weeks"), (30, "In a month"), (90, "In 3 months")], id: \.0) { d, l in
                     Button(l) { Task { await model.followUp(p.k, days: d) } }
@@ -149,6 +166,7 @@ struct ProfileView: View {
             Image(systemName: icon).font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(on ? Theme.needs : Theme.primary)
                 .contentTransition(.symbolEffect(.replace))
+                .symbolEffect(.bounce, value: on)
             Text(title).font(Theme.geist(.caption2, .medium)).foregroundStyle(.primary).lineLimit(1).minimumScaleFactor(0.8)
         }
         .frame(width: 64, height: 44)

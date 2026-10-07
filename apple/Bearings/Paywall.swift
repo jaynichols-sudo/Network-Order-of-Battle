@@ -10,6 +10,8 @@ struct PaywallView: View {
     @State private var plan = Pro.yearly
     @State private var buying = false
     @State private var note = ""
+    @State private var wave = 0
+    @Namespace private var pick
     private var pro: Pro { Pro.shared }
 
     var body: some View {
@@ -32,6 +34,7 @@ struct PaywallView: View {
                                 Image(systemName: f.icon)
                                     .font(.system(size: 15, weight: .semibold))
                                     .foregroundStyle(Theme.primary)
+                                    .symbolEffect(.bounce, options: .speed(0.8), value: wave)
                                     .frame(width: 32, height: 32)
                                     .background(f == feature ? Theme.needsSoft : Theme.soft, in: Circle())
                                 VStack(alignment: .leading, spacing: 2) {
@@ -42,6 +45,7 @@ struct PaywallView: View {
                             }
                             .padding(.vertical, 11)
                             .accessibilityElement(children: .combine)
+                            .cascade(i + 1, distance: 10)
                         }
                     }
                     .padding(.horizontal, 16)
@@ -61,8 +65,9 @@ struct PaywallView: View {
                             .frame(maxWidth: .infinity, minHeight: 50)
                             .foregroundStyle(Theme.onPrimary)
                             .background(Theme.primary, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                            .shimmer()
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.pressable)
                     .accessibilityHint("Buys the plan you picked")
                     .disabled(buying || pro.owned)
 
@@ -91,6 +96,7 @@ struct PaywallView: View {
                 .frame(maxWidth: .infinity)
             }
             .background(Theme.bg)
+            .task { try? await Task.sleep(nanoseconds: 450_000_000); wave += 1 }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Not now") { dismiss() } } }
         }
@@ -98,7 +104,7 @@ struct PaywallView: View {
 
     private func option(_ id: String, _ title: String, _ price: String, badge: String?) -> some View {
         let on = plan == id
-        return Button { plan = id; Haptic.tap() } label: {
+        return Button { withAnimation(Motion.spring) { plan = id }; Haptic.tap() } label: {
             HStack(spacing: 12) {
                 Image(systemName: on ? "largecircle.fill.circle" : "circle")
                     .font(.system(size: 20))
@@ -117,9 +123,16 @@ struct PaywallView: View {
             }
             .padding(14)
             .card(16)
-            .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(on ? Theme.primary : .clear, lineWidth: 1.5))
+            .overlay {
+                // the selection outline glides from plan to plan
+                if on {
+                    RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Theme.primary, lineWidth: 1.5)
+                        .matchedGeometryEffect(id: "pick", in: pick)
+                }
+            }
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.pressable)
+        .animation(Motion.spring, value: plan)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel([title, price, badge].compactMap { $0 }.joined(separator: ", "))
         .accessibilityAddTraits(on ? [.isButton, .isSelected] : .isButton)

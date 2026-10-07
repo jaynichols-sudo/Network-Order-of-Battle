@@ -86,11 +86,12 @@ final class CompassCache {
     }
 }
 
-struct CompassView: View {
+struct CompassView: View, Animatable {
     let data: CompassData
     @Binding var focus: String?
     /// 0 to 1: how far out the dots have appeared (for the first-run reveal).
     var reveal: Double = 1
+    var animatableData: Double { get { reveal } set { reveal = newValue } }
     var initials: String = ""
     /// Draw a single frame (for images): no animation, sweep parked at a flattering angle.
     var still = false
@@ -370,11 +371,18 @@ struct CompassCard: View {
     @Environment(AppModel.self) private var model
     @State private var data = CompassData.empty
     @State private var focus: String?
+    @AppStorage("lensUsed") private var lensUsed = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             ZStack(alignment: .topLeading) {
                 CompassView(data: data, focus: $focus, initials: model.myInitials, pings: true) { k in model.open(.person(k)) }
+                    .overlay {
+                        if focus == nil && data.total > 0 {
+                            CompassLens(data: data, initials: model.myInitials) { k in model.open(.person(k)) }
+                                .transition(.opacity)
+                        }
+                    }
                     .frame(maxWidth: 520)
                     .frame(maxWidth: .infinity)
                 if focus != nil {
@@ -412,6 +420,11 @@ struct CompassCard: View {
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             } else {
                 signals
+                if !lensUsed && data.total > 0 {
+                    Label("Drag the lens across your network to see who’s there", systemImage: "plus.magnifyingglass")
+                        .font(Theme.geist(.footnote)).foregroundStyle(Theme.text2)
+                        .transition(.opacity)
+                }
             }
             sectors
         }

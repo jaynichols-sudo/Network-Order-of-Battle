@@ -9,13 +9,13 @@ struct HomeView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
-                header
-                banner
-                TodayCompassCard()
-                NeedsYouCard(picks: picks)
-                TodayChips()
-                ComingUp()
-                BirthdaysCard()
+                header.cascade(0, distance: 10)
+                TodayChips().cascade(1, distance: 10)
+                banner.cascade(2).edgeSettle()
+                TodayCompassCard().cascade(3).edgeSettle()
+                NeedsYouCard(picks: picks).cascade(4).edgeSettle()
+                ComingUp().cascade(5).edgeSettle()
+                BirthdaysCard().cascade(6).edgeSettle()
                 if !model.home.cards.isEmpty {
                     VStack(alignment: .leading, spacing: 0) {
                         Text("Worth your time").font(Theme.geist(.headline, .bold)).padding(.top, 14).padding(.bottom, 4)
@@ -26,12 +26,23 @@ struct HomeView: View {
                     }
                     .padding(.horizontal, 16)
                     .card()
+                    .cascade(7).edgeSettle()
                 }
             }
             .padding(.horizontal, 16)
             .padding(.bottom, 24)
             .frame(maxWidth: 680)
             .frame(maxWidth: .infinity)
+            .background(alignment: .top) {
+                // the drifting light behind the headline, scrolling away with it
+                Aurora()
+                    .frame(height: 460)
+                    .mask(LinearGradient(stops: [.init(color: .black, location: 0), .init(color: .black, location: 0.45), .init(color: .clear, location: 1)],
+                                         startPoint: .top, endPoint: .bottom))
+                    .padding(.horizontal, -60)
+                    .offset(y: -150)
+                    .allowsHitTesting(false)
+            }
         }
         .background(Theme.bg)
         .navigationTitle("Today")
@@ -83,8 +94,8 @@ struct HomeView: View {
                 Text(headline)
                     .font(Theme.geist(.title, .bold))
                     .fixedSize(horizontal: false, vertical: true)
-                    .contentTransition(.opacity)
-                    .animation(.smooth, value: headline)
+                    .contentTransition(.numericText(countsDown: true))
+                    .animation(Motion.spring, value: headline)
             }
             Spacer(minLength: 0)
             AccountButton()

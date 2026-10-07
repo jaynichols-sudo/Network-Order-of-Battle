@@ -66,18 +66,16 @@ struct RootView: View {
                 .navigationDestination(for: Route.self) { route in
                     switch route {
                     case .person(let k):
-                        if tab == .people {
-                            ProfileView(k: k).navigationTransition(.zoom(sourceID: k, in: zoom))
-                        } else {
-                            ProfileView(k: k)
-                        }
-                    case .unit(let name): UnitView(name: name)
+                        ProfileView(k: k).navigationTransition(.zoom(sourceID: ZoomID.person(tab, k), in: zoom))
+                    case .unit(let name):
+                        UnitView(name: name).navigationTransition(.zoom(sourceID: ZoomID.unit(tab, name), in: zoom))
                     case .industry(let id): IndustryView(id: id)
                     case .meeting(let id): MeetingView(id: id)
                     case .trip(let id): TripView(id: id)
                     case .trips: TripsView()
                     case .event(let id): EventView(id: id)
-                    case .explore: ExploreView()
+                    case .explore:
+                        ExploreView().navigationTransition(.zoom(sourceID: ZoomID.explore(tab), in: zoom))
                     case .catchup: CatchUpView()
                     case .events: EventsList()
                     case .about(let k): PersonAboutView(k: k)
@@ -85,6 +83,8 @@ struct RootView: View {
                     }
                 }
         }
+        .environment(\.zoomNamespace, zoom)
+        .environment(\.zoomTab, tab)
     }
 }
 

@@ -8,7 +8,10 @@ import UIKit
 /// The compass at a glance. Tapping it opens Explore, where it's full size and interactive.
 struct TodayCompassCard: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.accessibilityReduceMotion) private var reduce
     @State private var data = CompassData.empty
+    /// The dots bloom outward from you the first time the compass has people in it.
+    @State private var bloom: Double = 0
 
     var body: some View {
         let t = data.tally
@@ -17,11 +20,12 @@ struct TodayCompassCard: View {
                 Haptic.tap()
                 model.open(.explore)
             } label: {
-                CompassView(data: data, focus: .constant(nil), initials: model.myInitials, pings: true, labels: false) { _ in }
+                CompassView(data: data, focus: .constant(nil), reveal: bloom, initials: model.myInitials, pings: true, labels: false) { _ in }
                     .allowsHitTesting(false)
                     .frame(width: 128, height: 128)
+                    .zoomSourceExplore()
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.pressable(0.94))
             .accessibilityLabel("Your network compass. Opens Explore")
 
             VStack(alignment: .leading, spacing: 10) {
@@ -46,22 +50,22 @@ struct TodayCompassCard: View {
         .card()
         .task(id: "\(model.loaded)-\(model.people.count)-\(model.info.lens)-\(model.info.edits)-\(model.info.rev)") {
             data = await model.compassReady()
+            if bloom < 1 && data.total > 0 {
+                if reduce { bloom = 1 } else { withAnimation(.timingCurve(0.2, 0.9, 0.25, 1, duration: 1.7)) { bloom = 1 } }
+            }
         }
     }
 
     private func stat(_ n: Int, _ label: String, big: Bool = false, color: Color = .primary, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             VStack(alignment: .leading, spacing: 0) {
-                Text(n.formatted())
-                    .font(Theme.geist(big ? .title2 : .title3, .bold))
-                    .foregroundStyle(color)
-                    .contentTransition(.numericText())
+                CountUp(value: n, font: Theme.geist(big ? .title2 : .title3, .bold), color: color, delay: big ? 0.35 : 0.5)
                 Text(label)
                     .font(Theme.geist(big ? .footnote : .caption))
                     .foregroundStyle(Theme.text2)
             }
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.pressable)
         .accessibilityElement(children: .combine)
     }
 }
@@ -71,6 +75,7 @@ struct NeedsYouCard: View {
     @Environment(AppModel.self) private var model
     let picks: [WeeklyPick]
     @State private var writing: WeeklyPick?
+    @State private var celebrate: Date?
 
     var body: some View {
         if !picks.isEmpty {
@@ -81,6 +86,8 @@ struct NeedsYouCard: View {
                         Text("Needs you").font(Theme.geist(.headline, .bold)).foregroundStyle(.primary)
                         Spacer()
                         Text("\(done) of \(picks.count) done").font(Theme.geist(.footnote)).foregroundStyle(Theme.text2)
+                            .contentTransition(.numericText(value: Double(done)))
+                        ProgressRing(done: done, total: picks.count, size: 18, line: 2.5)
                         Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(Theme.text3)
                     }
                     .padding(.top, 14).padding(.bottom, 4)
@@ -96,6 +103,11 @@ struct NeedsYouCard: View {
             .padding(.horizontal, 16)
             .padding(.bottom, 6)
             .card()
+            .overlay { Celebration(fire: celebrate).padding(-40) }
+            .onChange(of: done) { old, new in
+                // the week's five, all done: a ring that closes and a little confetti
+                if new == picks.count && old < new { celebrate = Date(); Haptic.success() }
+            }
             .sheet(item: $writing) { w in MessageSheet(k: w.k).environment(AppModel.shared) }
         }
     }
@@ -106,7 +118,7 @@ struct NeedsYouCard: View {
             HStack(spacing: 12) {
                 Button { model.open(.person(w.k)) } label: {
                     HStack(spacing: 12) {
-                        Avatar(person: p, size: 38)
+                        Avatar(person: p, size: 38).zoomSource(person: w.k)
                         VStack(alignment: .leading, spacing: 1) {
                             Text(p.fullName)
                                 .font(Theme.geist(.subheadline, .semibold))
@@ -125,17 +137,21 @@ struct NeedsYouCard: View {
                 }
                 .buttonStyle(.plain)
                 if isDone {
-                    Text("Done").padding(.horizontal, 14).frame(minHeight: 32)
+                    Label("Done", systemImage: "checkmark")
+                        .labelStyle(DoneLabel())
+                        .padding(.horizontal, 12).frame(minHeight: 32)
                         .font(Theme.geist(.footnote, .semibold))
                         .foregroundStyle(Theme.good)
                         .background(Theme.goodSoft, in: Capsule())
+                        .transition(.asymmetric(insertion: .scale(scale: 0.6).combined(with: .opacity), removal: .opacity))
                 } else {
                     Button(label(w.kind)) { writing = w }
                         .buttonStyle(PillButtonStyle(kind: w.kind == "reply" ? .primary : .soft))
+                        .transition(.scale(scale: 0.8).combined(with: .opacity))
                 }
             }
             .padding(.vertical, 10)
-            .animation(.smooth, value: isDone)
+            .animation(Motion.bouncy, value: isDone)
         }
     }
 
@@ -176,6 +192,7 @@ struct TodayChips: View {
             chip("Explore", icon: "scope") { model.open(.explore) }
         }
         .padding(.horizontal, 2)
+        .glassGroup(spacing: 10)
     }
 
     private func chip(_ title: String, icon: String, action: @escaping () -> Void) -> some View {
@@ -186,8 +203,7 @@ struct TodayChips: View {
             Label(title, systemImage: icon)
                 .labelStyle(ChipLabel())
         }
-        .buttonStyle(PillButtonStyle(kind: .plain))
-        .shadow(color: .black.opacity(0.05), radius: 1, y: 1)
+        .buttonStyle(GlassChipStyle())
     }
 }
 
@@ -340,5 +356,26 @@ struct YouView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+    }
+}
+
+/// "Done" with a check that bounces in.
+struct DoneLabel: LabelStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        DoneLabelBody(icon: configuration.icon, title: configuration.title)
+    }
+}
+
+private struct DoneLabelBody<I: View, T: View>: View {
+    let icon: I
+    let title: T
+    @State private var pop = 0
+
+    var body: some View {
+        HStack(spacing: 4) {
+            icon.font(.system(size: 11, weight: .heavy)).symbolEffect(.bounce, value: pop)
+            title
+        }
+        .onAppear { pop += 1 }
     }
 }
