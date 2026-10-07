@@ -1,0 +1,25 @@
+booted
+boot finished
+installed
+light-01-today: launch failed
+light-01-today: screenshot failed
+light-02-people: launch failed
+light-02-people: screenshot failed
+light-03-profile: launch failed
+light-03-profile: screenshot failed
+light-04-companies: launch failed
+light-04-companies: screenshot failed
+light-05-compass: launch failed
+light-05-compass: screenshot failed
+light-06-map: launch failed
+light-06-map: screenshot failed
+light-07-intro: launch failed
+light-07-intro: screenshot failed
+light-08-paywall: launch failed
+light-08-paywall: screenshot failed
+dark-01-today: launch failed
+dark-01-today: screenshot failed
+dark-02-people: launch failed
+dark-02-people: screenshot failed
+dark-03-profile: launch failed
+dark-03-profile: screenshot failed
