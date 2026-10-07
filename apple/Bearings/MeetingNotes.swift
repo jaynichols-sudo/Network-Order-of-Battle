@@ -251,7 +251,7 @@ struct AddNotesButton<Content: View>: View {
     @State private var asking = false
 
     var body: some View {
-        Button { asking = true } label: label
+        Button(action: { asking = true }, label: label)
             .modifier(AddNotesPrompt(isPresented: $asking, forPerson: forPerson))
     }
 }
