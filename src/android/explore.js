@@ -88,7 +88,7 @@ function createRadar(host){
   let data = M.api.radar({text: M.q.text, filters: M.q.filters}), paths = null, key = '';
   const wrap = document.createElement('div'); wrap.className = 'radar'; host.appendChild(wrap);
   const box = canvasBox(wrap, {square: true, draw(ctx, W, H, now){
-    const pal = palette(), size = Math.min(W, H), r = size / 2 - 8, cx = W / 2, cy = H / 2;
+    const pal = palette(wrap), size = Math.min(W, H), r = size / 2 - 8, cx = W / 2, cy = H / 2;
     const k = `${data.dots.length}|${W}`;
     if (k !== key){
       key = k; paths = new Map();
@@ -145,7 +145,7 @@ function createClusters(host, onFocus){
   const cam = () => { const s = fitScale * zoom; return {s, ox: pan.x - fitCenter.x * s, oy: pan.y - fitCenter.y * s}; };
   const visibleCount = i => d.people.reduce((a, p) => a + (p.h === i && (!p.y0 || p.y0 <= year) ? 1 : 0), 0);
   const box = canvasBox(wrap, {height: 520, draw(ctx, W, H, now){
-    const pal = palette();
+    const pal = palette(wrap);
     if (fitScale === 1 && W) fitScale = fit(W, H);
     if (settle < 1){ const p = Math.min(1, (now - settleT0) / 1100); settle = Math.min(1, 1 - Math.pow(1 - p, 3) + Math.sin(p * Math.PI) * 0.06); if (p >= 1) settle = 1; }
     if (fly){ const p = Math.min(1, (now - fly.t0) / 550), e = p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2; zoom = fly.z0 + (fly.z1 - fly.z0) * e; pan = {x: fly.p0.x + (fly.p1.x - fly.p0.x) * e, y: fly.p0.y + (fly.p1.y - fly.p0.y) * e}; if (p >= 1) fly = null; }
@@ -317,6 +317,8 @@ function ranks(){
 function teardown(){ if (radar){ radar.destroy(); radar = null; } if (clusters){ clusters.destroy(); clusters = null; } if (compass){ compass.destroy(); compass = null; } }
 export const ExploreView = {
   title: 'Explore',
+  // Explore is the night sky, whatever the time of day
+  pageCls: 'night',
   mount(el){
     root = el;
     el.innerHTML = `<div class="seg-wrap"></div><div class="ex-body"></div>`;

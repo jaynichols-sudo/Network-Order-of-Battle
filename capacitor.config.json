@@ -6,6 +6,6 @@
   "android": { "allowMixedContent": false },
   "plugins": {
     "SystemBars": { "insetsHandling": "css", "initialViewportFitValueHint": "cover" },
-    "SplashScreen": { "launchShowDuration": 400, "backgroundColor": "#F3F3F6", "showSpinner": false }
+    "SplashScreen": { "launchShowDuration": 400, "backgroundColor": "#FFFFFF", "showSpinner": false }
   }
 }

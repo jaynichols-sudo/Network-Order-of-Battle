@@ -1,7 +1,7 @@
 // Navigation: four tabs (Today, People, Companies, You), each with its own stack of
 // pushed pages (Explore and Catch Up are pushed from Today), plus bottom sheets on top. Views are plain objects: {title, mount(el), update(el, what), handlers}.
-import { $, $$, esc, icon, closeMenu, REDUCED } from './ui.js';
-import { fx, ls } from './platform.js';
+import { $, $$, esc, icon, menu, closeMenu, REDUCED } from './ui.js';
+import { fx, ls, statusBar } from './platform.js';
 
 export const TABS = [['home', 'Today', 'sun'], ['people', 'People', 'people'], ['companies', 'Companies', 'building'], ['you', 'You', 'user']];
 const roots = {};          // tab -> view
@@ -70,7 +70,14 @@ export function go(tab, {fromBar = false} = {}){
   if (!s.__mounted){ s.__mounted = true; wire(s, v.handlers || {}); v.mount(s); dirty.delete(tab); }
   else if (dirty.has(tab)){ dirty.delete(tab); v.update && v.update(s, 'all'); }
   v.onShow && v.onShow(s);
+  syncStatusBar();
   if (prev !== tab && roots[prev] && roots[prev].onHide) roots[prev].onHide(screenEl(prev));
+}
+
+/** Light status bar text over a night-sky page (Explore), the theme's everywhere else. */
+export function syncStatusBar(){
+  const st = N.stacks[N.tab], top = st[st.length - 1];
+  statusBar(document.documentElement.dataset.scheme === 'dark' || !!(top && top.el.classList.contains('night')) || !!document.querySelector('.onboard'));
 }
 
 /* ---------- pages ---------- */
@@ -79,7 +86,7 @@ export function push(kind, arg){
   const f = routes[kind]; if (!f) return;
   const v = f(arg);
   const el = document.createElement('div');
-  el.className = 'page'; el.dataset.tab = N.tab;
+  el.className = 'page' + (v.pageCls ? ' ' + v.pageCls : ''); el.dataset.tab = N.tab;
   el.innerHTML = `<header class="bar"><button type="button" class="bar-back" aria-label="Back">${icon('chevL')}<span>Back</span></button><h2 class="bar-title"></h2><div class="bar-right"></div></header><div class="page-body"></div>`;
   $('.bar-back', el).addEventListener('click', () => popPage());
   $('#pages', shell).appendChild(el);
@@ -90,8 +97,11 @@ export function push(kind, arg){
   wire(el, v.handlers || {});
   v.mount(body, el);
   setPageTitle(el, v.title);
+  // a page can put a "More" button in its bar: menu() returns the items
+  if (v.menu){ const r = $('.bar-right', el); r.insertAdjacentHTML('beforeend', `<button type="button" class="bar-act more" aria-label="More">${icon('more')}</button>`); r.lastElementChild.addEventListener('click', e => { const items = v.menu(); if (items && items.length) menu(e.currentTarget, items); }); }
   if (!REDUCED()){ el.classList.add('enter'); requestAnimationFrame(() => requestAnimationFrame(() => el.classList.remove('enter'))); }
   if (prevTop) setTimeout(() => { if (!prevTop.el.hidden) prevTop.el.classList.add('under'); }, 300);
+  syncStatusBar();
 }
 export function setPageTitle(el, t){ const h = $('.bar-title', el); if (h) h.textContent = t || ''; }
 export function popPage(instant = false){
@@ -101,6 +111,7 @@ export function popPage(instant = false){
   else { const s = screenEl(N.tab); roots[N.tab].update && roots[N.tab].update(s, 'all'); }
   if (instant || REDUCED()) top.el.remove();
   else { top.el.classList.add('leave'); setTimeout(() => top.el.remove(), 260); }
+  syncStatusBar();
   return true;
 }
 export function resetStack(tab){ const st = N.stacks[tab]; while (st.length){ const t = st.pop(); t.v.destroy && t.v.destroy(); t.el.remove(); } }

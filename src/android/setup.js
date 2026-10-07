@@ -114,7 +114,7 @@ export function applyTheme(){
   const root = document.documentElement;
   if (t === 'system') delete root.dataset.theme; else root.dataset.theme = t;
   root.dataset.scheme = dark ? 'dark' : 'light';
-  const meta = document.querySelector('meta[name="theme-color"]'); if (meta) meta.content = dark ? '#0D0A17' : '#F3F3F6';
+  const meta = document.querySelector('meta[name="theme-color"]'); if (meta) meta.content = dark ? '#0D0A17' : '#FFFFFF';
   statusBar(dark);
 }
 export function openSettings(){
@@ -178,12 +178,13 @@ export function openOnboarding(startStep = 0){
   document.querySelector('.onboard') && document.querySelector('.onboard').remove();
   const hasReal = () => !isSample() && !isStarter();
   const st = {step: startStep, use: prefs.useCase || '', working: false, error: '', built: null};
-  const el = document.createElement('div'); el.className = 'onboard';
+  const el = document.createElement('div'); el.className = 'onboard night'; // first run happens under the night sky
   document.body.appendChild(el);
   let compass = null;
   const finish = then => {
     ls.set('bearings.onboarded', '1');
     el.classList.add('out'); setTimeout(() => { if (compass) compass.destroy(); el.remove(); }, 300);
+    statusBar(document.documentElement.dataset.scheme === 'dark');
     setTimeout(() => { if (st.built) openPayoff(); if (then) then(); }, 420);
   };
   el.__back = () => { if (st.step > 0 && st.step < 3){ st.step--; render(); } else finish(); };
@@ -240,6 +241,7 @@ export function openOnboarding(startStep = 0){
     later(){ finish(); },
   };
   render();
+  statusBar(true);
   requestAnimationFrame(() => el.classList.add('in'));
 }
 register('onboarding', openOnboarding);

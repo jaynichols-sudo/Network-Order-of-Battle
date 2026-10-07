@@ -171,7 +171,7 @@ export function createCompass({initials = '', interactive = true, labels = true,
   const ctx = cv.getContext('2d');
   let data = {wedges: [], dots: [], rings: [], total: 0, tally: {}}, cache = null, cacheKey = '';
   let size = 0, dpr = 1, focusId = null, raf = 0, visible = false, alive = true;
-  let view = {scale: 1, ox: 0, oy: 0}, anim = null, pal = palette();
+  let view = {scale: 1, ox: 0, oy: 0}, anim = null, pal = null;
 
   const focused = () => focusId ? data.wedges.find(w => w.id === focusId) || null : null;
   function target(){
@@ -196,6 +196,7 @@ export function createCompass({initials = '', interactive = true, labels = true,
     }
     const key = `${data.total}|${data.dots.length && data.dots[0].k}|${size}`;
     if (key !== cacheKey) { cache = null; cacheKey = key; }
+    if (!pal) pal = palette(el); // read once it's on the page, so a night-sky card gets night colors
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, size, size);
     cache = drawCompass(ctx, data, size, {t: now / 1000, reduced: REDUCED(), focus: focused(), view, pal, cache, labels});
   }
@@ -247,7 +248,7 @@ export function createCompass({initials = '', interactive = true, labels = true,
     setData(d){ data = d; cache = null; cacheKey = ''; if (focusId && !data.wedges.some(w => w.id === focusId)) setFocus(null); kick(); },
     setFocus, focus: () => focusId,
     setInitials(s){ me.innerHTML = meAvatar(s, 46, 2); },
-    retheme(){ pal = palette(); kick(); },
+    retheme(){ pal = palette(el); kick(); },
     destroy(){ alive = false; ro.disconnect(); io.disconnect(); document.removeEventListener('visibilitychange', onVis); if (raf) cancelAnimationFrame(raf); },
   };
 }

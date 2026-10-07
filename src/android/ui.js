@@ -28,14 +28,35 @@ export const bandVar = b => `var(--${(BAND[b] || BAND.none)[1]})`;
 export const toneVar = t => ({coral: 'var(--bad)', violet: 'var(--violet)', sky: 'var(--info)', green: 'var(--good)'}[t] || 'var(--accent)');
 export const coverageVar = s => s >= 75 ? 'var(--good)' : s >= 45 ? 'var(--accent)' : 'var(--bad)';
 /** Resolved colors for canvases, which can't read CSS variables directly. */
-export function palette(){
-  const cs = getComputedStyle(document.documentElement), v = n => cs.getPropertyValue(n).trim();
-  return {dark: document.documentElement.dataset.scheme === 'dark', accent: v('--accent'), amber: v('--amber'), good: v('--good'), bad: v('--bad'), info: v('--info'), violet: v('--violet'),
+export function palette(el = document.documentElement){
+  // inside a night-sky card or screen the colors are the dark ones, whatever the theme
+  const night = !!(el && el.closest && el.closest('.night'));
+  const cs = getComputedStyle(night ? el : document.documentElement), v = n => cs.getPropertyValue(n).trim();
+  return {dark: night || document.documentElement.dataset.scheme === 'dark', accent: v('--accent'), amber: v('--amber'), good: v('--good'), bad: v('--bad'), info: v('--info'), violet: v('--violet'),
     text: v('--text'), text2: v('--text2-solid'), bg: v('--bg'), card: v('--card'), surface: v('--surface')};
 }
 export function rgba(hex, a){
   let h = String(hex || '#888').replace('#', ''); if (h.length === 3) h = h.split('').map(c => c + c).join('');
   const n = parseInt(h.slice(0, 6), 16); return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
+}
+
+/* ---------- the night sky ---------- */
+/** A still field of stars as an SVG data URL, the same every time for a seed. */
+export function starField(count = 70, seed = 11, w = 420, h = 420){
+  let s = seed >>> 0 || 1;
+  const rnd = () => { s ^= s << 13; s >>>= 0; s ^= s >>> 17; s ^= s << 5; s >>>= 0; return s / 4294967296; };
+  let dots = '';
+  for (let i = 0; i < count; i++){
+    const x = rnd() * w, y = rnd() * h, r = 0.4 + rnd() * (i % 9 === 0 ? 1.4 : 0.8), o = 0.25 + rnd() * 0.6;
+    dots += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${r.toFixed(2)}" fill="#fff" fill-opacity="${o.toFixed(2)}"/>`;
+  }
+  return `url("data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">${dots}</svg>`)}")`;
+}
+/** Sets the star fields the night-sky CSS uses (--stars for cards, --stars-wide for screens). */
+export function installStars(){
+  const r = document.documentElement.style;
+  r.setProperty('--stars', starField(60, 11, 420, 300));
+  r.setProperty('--stars-wide', starField(110, 5, 520, 620));
 }
 
 /* ---------- icons ---------- */
@@ -122,6 +143,12 @@ const ICONS = {
   waves: '<circle cx="12" cy="12" r="2.2"/><path d="M8.2 8.2a5.4 5.4 0 0 0 0 7.6M15.8 8.2a5.4 5.4 0 0 1 0 7.6M5.3 5.3a9.5 9.5 0 0 0 0 13.4M18.7 5.3a9.5 9.5 0 0 1 0 13.4"/>',
   trash: '<path d="M4.5 6.5h15M9.5 6.5V4.5h5v2M6.5 6.5l1 13a1.5 1.5 0 0 0 1.5 1.4h6a1.5 1.5 0 0 0 1.5-1.4l1-13M10 10.5v6.5M14 10.5v6.5"/>',
   circle: '<circle cx="12" cy="12" r="9"/>',
+  org: '<rect x="8.5" y="3" width="7" height="5" rx="1.2"/><rect x="2.5" y="16" width="7" height="5" rx="1.2"/><rect x="14.5" y="16" width="7" height="5" rx="1.2"/><path d="M12 8v4M6 16v-4h12v4"/>',
+  notePlus: '<path d="M13 3.5H6.5A1.5 1.5 0 0 0 5 5v14a1.5 1.5 0 0 0 1.5 1.5h11A1.5 1.5 0 0 0 19 19v-6"/><path d="M8.5 9h5M8.5 13h7M8.5 17h4M18.5 2.5v6M15.5 5.5h6"/>',
+  personDashed: '<circle cx="12" cy="12" r="9" stroke-dasharray="2.6 2.6"/><circle cx="12" cy="10" r="2.6"/><path d="M7.6 17.2a5 5 0 0 1 8.8 0"/>',
+  memory: '<path d="M12 4.5a5 5 0 0 0-5 5c0 1.4.5 2.5 1.3 3.4.5.6.7 1.2.7 2V17h6v-2.1c0-.8.3-1.4.7-2A5 5 0 0 0 12 4.5z"/><path d="M10 20h4M12 8v2.5M10.8 9.3h2.4"/>',
+  seal: '<path d="M12 2.8l2.1 1.6 2.6-.3.9 2.5 2.4 1.1-.3 2.6 1.6 2.1-1.6 2.1.3 2.6-2.4 1.1-.9 2.5-2.6-.3L12 21.2l-2.1-1.6-2.6.3-.9-2.5L4 16.3l.3-2.6L2.7 11.6l1.6-2.1L4 6.9l2.4-1.1.9-2.5 2.6.3z"/><path d="m8.4 12.2 2.4 2.4 4.8-4.8"/>',
+  upRight: '<path d="M7 17 17 7M9 7h8v8"/>',
 };
 export const icon = (name, cls = '') => `<svg class="i ${cls}" viewBox="0 0 24 24" aria-hidden="true">${ICONS[name] || ICONS.alert}</svg>`;
 

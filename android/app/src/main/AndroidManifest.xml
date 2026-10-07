@@ -52,6 +52,13 @@
                 <data android:mimeType="text/comma-separated-values" />
                 <data android:mimeType="application/json" />
             </intent-filter>
+
+            <!-- "Share to Bearings" for meeting notes as text (Plaud, Keep, Samsung Notes) -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
         </activity>
 
         <provider

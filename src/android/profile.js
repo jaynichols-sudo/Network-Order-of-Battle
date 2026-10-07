@@ -1,7 +1,7 @@
 // A person's dossier: header with relationship ring, actions, a plain brief, the
 // relationship, a timeline, follow-up, location, details, and notes. Ports
 // ProfileView.swift, Timeline.swift and Brief.swift (the template brief; no AI here).
-import { M, full, isSample, toggleStar, followUp, setCircle, touched, markReplied, setLocation, saveProfile, CIRCLES } from './model.js';
+import { M, full, memory, isSample, toggleStar, followUp, setCircle, touched, markReplied, setLocation, saveProfile, CIRCLES } from './model.js';
 import { esc, fmt, icon, avatar, flag, bandLabel, bandVar, Day, menu, $, empty } from './ui.js';
 import { registerRoute, setPageTitle, push } from './nav.js';
 import { openUnit, open } from './actions.js';
@@ -57,6 +57,14 @@ function timeline(p){
     <span class="tl-body"><b>${esc(e.title)}</b>${e.detail ? `<span>${esc(e.detail)}</span>` : ''}</span><span class="tl-date">${esc(Day.nice(e.date))}</span></div>`).join('')}</section>`;
 }
 
+/* ---------- what to remember ---------- */
+function memoryCard(k){
+  const m = memory(k);
+  if (!m || !(m.last || (m.msg && m.msg.text))) return '';
+  const src = m.last && m.last.source;
+  return `<section class="card memory"><div class="mem-top">${icon('memory')}<span class="eyebrow">What to remember</span>${src ? `<span class="mem-src">${esc(src)}</span>` : ''}</div><p>${esc(m.line)}</p></section>`;
+}
+
 /* ---------- pieces ---------- */
 function relSummary(x){
   const parts = [];
@@ -94,6 +102,11 @@ function personView(k, part){
   };
   const view = {
     title: '',
+    menu: () => [
+      {label: 'Add meeting notes', icon: 'notePlus', run: () => open('notes', k)},
+      {label: 'Write a message', icon: 'pencil', run: () => open('message', k)},
+      ...(part === 'main' ? [{label: 'Details, location and notes', icon: 'text', run: () => push('personDetails', k)}] : []),
+    ],
     mount(body){ this.render(body); },
     update(body){ this.render(body); },
     render(body){
@@ -125,7 +138,7 @@ function personView(k, part){
           ${p.waiting ? `<button type="button" class="pill-btn soft" data-a="replied">${icon('reply')}I replied</button>` : ''}
           ${ed.due ? `<div class="due-line"><span>${ed.due <= Day.today() ? '<b class="violet">Follow up now.</b> ' : ''}You planned to follow up on ${esc(Day.nice(ed.due))}.</span><button type="button" class="pill-btn soft" data-a="dueDone">Done</button></div>` : ''}</section>`;
       if (part === 'main'){
-        body.innerHTML = `<div class="prof">${header}${brief}${timeline(p)}
+        body.innerHTML = `<div class="prof">${header}${memoryCard(k)}${brief}${timeline(p)}
           <section class="card list"><button type="button" class="row act more-row" data-a="details">${icon('text')}<span>Details, location and notes</span>${icon('chevR', 'chev')}</button></section>
           ${isSample() ? '<p class="foot">Sample data: changes aren’t saved.</p>' : ''}</div>`;
         body.scrollTop = st0;

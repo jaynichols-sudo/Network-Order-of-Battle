@@ -63,6 +63,7 @@ export const YouView = {
       <section class="card list"><div class="card-head static"><h2>Data</h2></div>
         ${row('import', 'download', isSample() ? 'Import connections' : 'Refresh connections', M.info.lastImport && !isSample() ? Day.ago(M.info.lastImport) : '')}
         ${isSample() ? '' : row('backup', 'drive', 'Back up notes', b ? `Last ${Day.ago(b)}` : 'Never', false)}
+        ${row('notes', 'notePlus', 'Add meeting notes', 'Plaud, notes apps', false)}
         ${isSample() ? '' : row('enrichFile', 'download', 'Import an enrichment file', 'CSV', false)}
       </section>
       <section class="card list">
@@ -88,6 +89,7 @@ export const YouView = {
     year: () => open('year'),
     pro: () => open('paywall'),
     enrichFile: () => open('enrichFile'),
+    notes: () => { fx.tap(); open('notes'); },
     help: () => openURL('mailto:jay@jaynichols.net?subject=' + encodeURIComponent('Bearings for Android: help')),
   },
 };

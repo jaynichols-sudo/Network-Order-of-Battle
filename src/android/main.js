@@ -13,6 +13,9 @@ import './sheets.js';
 import './events.js';
 import './trips.js';
 import './birthdays.js';
+import './org.js';
+import { ingestNotes, guessSource } from './notes.js';
+import { installStars } from './ui.js';
 import { applyTheme, openImport, openOnboarding } from './setup.js';
 import { handleLinkedInUrl } from './linkedin.js';
 import { handleSeamlessUrl } from './enrich.js';
@@ -24,6 +27,7 @@ import { migrate, onAppEvents, onNotification, readIncoming, scheduleMonday, ls,
 
 async function boot(){
   applyTheme();
+  installStars();
   matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { if ((prefs.theme || 'system') === 'system'){ applyTheme(); refreshVisible('theme'); } });
   window.addEventListener('bearings:prefs', () => refreshVisible('all'));
 
@@ -46,6 +50,7 @@ async function boot(){
   else go(tab);
   if (start.get('person')){ const k = start.get('person') === 'top' ? M.people.slice().sort((a, b) => b.score - a.score)[0].k : start.get('person'); if (person(k)) openPerson(k); }
   if (start.get('open')) open(start.get('open'));
+  if (start.get('page')) push(start.get('page'), start.get('arg') || '');
 
   if (isSample() && !ls.get('bearings.onboarded') && !start.has('tab')) openOnboarding(0);
 
@@ -55,11 +60,15 @@ async function boot(){
     resume: () => { if (new Date().toDateString() !== bootDay) location.reload(); else checkArrival(); },
     url: async u => {
       if (handleLinkedInUrl(u) || handleSeamlessUrl(u)) return;
+      // text shared to Bearings (MainActivity turns it into bearings://notes?text=…)
+      if (/^bearings:\/\/notes/i.test(u)){ const t = new URL(u).searchParams.get('text') || ''; if (t.trim()){ go('home'); ingestNotes(t, guessSource(t, new URL(u).searchParams.get('from') || '')); } return; }
       if (!/^(content|file):/i.test(u)) return;
       try {
         const f = await readIncoming(u);
         // a teammate's pack arrives as JSON; everything else is a LinkedIn export
         if (f.type !== 'application/zip' && (await f.slice(0, 400).text()).includes('bearings-team-pack')){ await addTeamPackText(await f.text()); return; }
+        // a text file with no connections header is meeting notes, shared from a notes app
+        if (f.type !== 'application/zip'){ const head = await f.slice(0, 4000).text(); if (!/first name/i.test(head) && !/^\s*[\[{]/.test(head)){ const t = await f.text(); go('home'); ingestNotes(t, guessSource(t)); return; } }
         openImport(f);
       }
       catch (e) { openImport(); toast(`Couldn’t open that file (${(e && e.message) || 'unknown error'}). Choose it from here instead.`); }

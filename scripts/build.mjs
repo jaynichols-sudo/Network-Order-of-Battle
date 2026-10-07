@@ -10,6 +10,9 @@ mkdirSync('www/geo', { recursive: true });
 for (const f of ['geo-phone.json', 'geo-cities.json']) copyFileSync(`apple/Bearings/Resources/${f}`, `www/geo/${f}`);
 // the same Geist files the iPhone app ships
 for (const f of ['Geist-Regular.ttf', 'Geist-Medium.ttf', 'Geist-SemiBold.ttf', 'Geist-Bold.ttf', 'GeistMono-Medium.ttf', 'GeistMono-SemiBold.ttf', 'Geist-OFL.txt']) copyFileSync(`apple/Bearings/Fonts/${f}`, `www/fonts/${f}`);
+// Newsreader for the serif headlines (the iPhone uses Apple's New York, which Android doesn't have)
+for (const f of ['newsreader-latin-400-normal.woff2', 'newsreader-latin-500-normal.woff2', 'newsreader-latin-600-normal.woff2', 'newsreader-latin-400-italic.woff2']) copyFileSync(`node_modules/@fontsource/newsreader/files/${f}`, `www/fonts/${f}`);
+copyFileSync('node_modules/@fontsource/newsreader/LICENSE', 'www/fonts/Newsreader-OFL.txt');
 await build({ entryPoints: ['src/android/main.js'], bundle: true, minify: true, format: 'iife', target: ['chrome100', 'safari16'], outfile: 'www/app.js', logLevel: 'warning', define: { __CONNECT_URL__: JSON.stringify(process.env.CONNECT_URL || '') } });
 console.log('built www:', readdirSync('www').join(', '));
 // Headless engine for the native Apple apps (runs in JavaScriptCore).

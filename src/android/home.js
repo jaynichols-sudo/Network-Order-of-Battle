@@ -1,9 +1,10 @@
-// Today: the date and how many people need you, a callout when there is one, the
-// compass card (tap it for Explore), the week's five as a "Needs you" card, a row of
-// chips (catch up, your lists), and the "worth your time" cards. Ports HomeView.swift,
-// Compass.swift (CompassCard), WeeklyBrief.swift (WeeklyCard) and SavedSearches.swift.
-import { M, isSample, isStarter, myInitials, person, persons, weeklyPicks, weeklyDone, runList, deleteSearch, reload, lastBackup, setQuery } from './model.js';
-import { esc, fmt, icon, avatar, stack, meAvatar, callout, toneVar, ring, animateRings, Day, menu, $, plural } from './ui.js';
+// Today, in "the mix" (apple/Bearings/HomeView.swift and Editorial.swift): the date as an
+// eyebrow, a serif headline with the count in amber, the week's five as a strip, then the
+// daily five one person at a time (why them, what to remember, a draft, one button), the
+// import or refresh nudge, the night-sky compass card, chips for the rest, birthdays, and
+// the "worth your time" cards.
+import { M, isSample, isStarter, myInitials, firstName, person, persons, weeklyPicks, weeklyDone, runList, deleteSearch, reload, lastBackup, setQuery, memory, messages } from './model.js';
+import { esc, fmt, icon, avatar, stack, meAvatar, callout, toneVar, ring, animateRings, Day, menu, $, plural, REDUCED } from './ui.js';
 import { createCompass } from './compass.js';
 import { perform, showPeople, openPerson, open, openToday } from './actions.js';
 import { go } from './nav.js';
@@ -11,21 +12,90 @@ import { exportRequested, exportRequestedAt, openURL, fx, prefs } from './platfo
 import { liveEvents, eventChip } from './events.js';
 import { nextTrip, tripChip } from './trips.js';
 import { birthdaysCard } from './birthdays.js';
+import { reviewYear, yearSeason } from './team.js';
 
 const LINKEDIN_EXPORT = 'https://www.linkedin.com/mypreferences/d/download-my-data';
 let compass = null, compassData = null, compassVersion = -1;
+/** "Later" sends someone to the back of the line for this session. */
+let later = [];
+let shownK = '', lastDone = null;
 
 const WORDS = ['No', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten'];
-export function headline(open){
-  if (open <= 0) return 'You’re all caught up.';
-  if (open === 1) return 'One person needs you this week.';
-  return `${open <= 10 ? WORDS[open] : fmt(open)} people need you this week.`;
+function greeting(){
+  const h = new Date().getHours();
+  const base = h < 5 ? 'Good evening' : h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
+  const n = firstName();
+  return n ? `${base}, ${n}` : base;
 }
-const dateLine = () => new Date().toLocaleDateString('en-US', {weekday: 'long', month: 'long', day: 'numeric'});
+const countPhrase = n => n === 1 ? 'One person' : `${n <= 10 ? WORDS[n] : fmt(n)} people`;
+/** "Good morning, Jay. Five people need you." with the count picked out in amber. */
+export function headline(open, total){
+  const g = esc(greeting());
+  if (open <= 0) return total ? `${g}. Your week is done.` : `${g}. You’re all caught up.`;
+  return `${g}. <span class="count">${esc(countPhrase(open))}</span> ${open === 1 ? 'needs' : 'need'} you.`;
+}
+function eyebrowLine(){
+  const d = new Date().toLocaleDateString('en-US', {weekday: 'long', month: 'long', day: 'numeric'}).toUpperCase();
+  return isSample() ? `${d} · SAMPLE NETWORK` : d;
+}
 
 /** The avatar button on Today and elsewhere: it opens the You tab. */
 export const accountButton = () => `<button type="button" class="me-btn" data-a="account" aria-label="You: refresh, backup and settings">${meAvatar(myInitials(), 40)}</button>`;
 export function accountMenu(){ go('you'); }
+
+/* ---------- the daily five ---------- */
+const EYEBROW = {reply: ['WAITING ON YOU', 'var(--needs)'], congrats: ['NEW ROLE', 'var(--good)'], new: ['NEW CONNECTION', 'var(--info)']};
+const ACTION = {reply: 'Reply', congrats: 'Congratulate', new: 'Say thanks'};
+
+function openLine(picks){
+  const o = picks.filter(p => !weeklyDone(p.k));
+  return o.filter(p => !later.includes(p.k)).concat(later.map(k => o.find(p => p.k === k)).filter(Boolean));
+}
+function progressStrip(picks){
+  if (!picks.length) return '';
+  const done = picks.filter(p => weeklyDone(p.k)).length;
+  return `<div class="pstrip" role="img" aria-label="${done} of ${picks.length} done">${picks.map((_, i) => `<i class="${i < done ? 'on' : i === done ? 'next' : ''}"></i>`).join('')}</div>`;
+}
+function nextLine(rest){
+  const ps = persons(rest.map(w => w.k));
+  const names = ps.slice(0, 2).map(p => p.full), more = ps.length - names.length;
+  if (more > 0) return `Next: ${names.join(', ')} and ${more} more`;
+  return 'Next: ' + (names.length === 2 ? `${names[0]} and ${names[1]}` : names[0] || '');
+}
+function focusCard(w, p, enter){
+  const [tag, color] = EYEBROW[w.kind] || ['WORTH A NOTE', 'var(--violet)'];
+  const mem = memory(w.k);
+  const recall = (mem && mem.line) || w.why;
+  // the draft as a pull quote, without the sign-off
+  const me = (prefs.name || '').trim();
+  const draft = ((messages(w.k)[0] || {}).text || '').split('\n').map(l => l.trim()).filter(l => l && l !== me && !/^[-–—]\s*\S+$/.test(l)).join(' ');
+  const sub = [p.p, p.c].filter(Boolean).join(' · ');
+  const n = openLine(weeklyPicks()).length;
+  return `<section class="card daily-focus ${enter ? 'enter' : ''}" data-k="${esc(p.k)}">
+    <button type="button" class="df-who" data-a="open" data-v="${esc(p.k)}">${avatar(p, 64)}
+      <span class="df-text"><span class="eyebrow" style="color:${color}">${tag}</span><b class="serif">${esc(p.full)}</b>${sub ? `<span class="df-sub">${esc(sub)}</span>` : ''}</span></button>
+    <p class="df-memory">${esc(recall)}</p>
+    ${draft ? `<p class="df-draft serif">“${esc(draft)}”</p>` : ''}
+    <div class="df-btns"><button type="button" class="bigpill filled" data-a="write" data-v="${esc(p.k)}">${esc(ACTION[w.kind] || 'Write')}</button>
+      <button type="button" class="bigpill" data-a="later" data-v="${esc(p.k)}" ${n < 2 ? 'disabled' : ''}>Later</button></div>
+  </section>`;
+}
+function finished(celebrate){
+  const bits = celebrate && !REDUCED() ? `<span class="confetti" aria-hidden="true">${Array.from({length: 18}, (_, i) => { const a = i / 18 * Math.PI * 2, r = 70 + (i % 3) * 26; return `<i style="--x:${Math.round(Math.cos(a) * r)}px;--y:${Math.round(Math.sin(a) * r)}px;background:${['var(--needs)', 'var(--good)', 'var(--info)', 'var(--violet)'][i % 4]}"></i>`; }).join('')}</span>` : '';
+  return `<section class="card daily-done ${celebrate ? 'pop' : ''}">${bits}<span class="dd-ic">${icon('seal')}</span><h3 class="serif">This week’s five are done.</h3><p>Fresh picks arrive Monday morning.</p></section>`;
+}
+function dailyFive(){
+  const picks = weeklyPicks();
+  if (!picks.length){ lastDone = 0; return ''; }
+  const open = openLine(picks), done = picks.length - open.length;
+  const celebrate = lastDone != null && lastDone < done && done === picks.length;
+  lastDone = done;
+  later = later.filter(k => open.some(w => w.k === k));
+  const w = open[0], p = w && person(w.k);
+  if (!w || !p){ shownK = ''; return finished(celebrate); }
+  const enter = shownK && shownK !== w.k; shownK = w.k;
+  return focusCard(w, p, enter) + (open.length > 1 ? `<button type="button" class="next-line" data-a="weekly">${esc(nextLine(open.slice(1)))}</button>` : '');
+}
 
 /* ---------- pieces ---------- */
 function banner(){
@@ -44,33 +114,22 @@ function banner(){
 function stats(d){
   const t = d.tally || {};
   const stat = (v, label, act, cls = '') => `<button type="button" class="tstat ${cls}" data-a="sig" data-v="${act}" ${v ? '' : 'disabled'} aria-label="${fmt(v)} ${label}"><b class="mono">${fmt(v)}</b><span>${label}</span></button>`;
-  return `${stat(t.w, 'waiting on you', 'waiting', 'big')}<div class="tstat-row">${stat(t.j, 'new jobs', 'jcw')}${d.rel ? stat(t.close, 'close', 'close') : stat(t.n, 'new', 'new')}</div>`;
-}
-
-const ACTION = {reply: 'Reply', congrats: 'Congrats', due: 'Follow up', new: 'Thank', circle: 'Say hi', cold: 'Say hi', anniv: 'Say hi', checkin: 'Say hi'};
-function needsYou(){
-  const picks = weeklyPicks();
-  if (!picks.length) return '';
-  const done = picks.filter(p => weeklyDone(p.k)).length;
-  const rows = picks.map(w => {
-    const p = person(w.k); if (!p) return '';
-    const d = weeklyDone(w.k), label = ACTION[w.kind] || 'Write';
-    return `<div class="nrow ${d ? 'done' : ''}"><button type="button" class="nrow-main" data-a="open" data-v="${esc(p.k)}">${avatar(p, 40, {star: false})}<span class="nrow-text"><b>${esc(p.full)}</b><span>${esc(w.why)}</span></span></button>
-      ${d ? `<span class="pill-btn good">${icon('check')}Done</span>` : `<button type="button" class="pill-btn ${w.kind === 'reply' ? 'primary' : 'soft'}" data-a="write" data-v="${esc(p.k)}">${esc(label)}</button>`}</div>`;
-  }).join('');
-  return `<section class="card needs"><button type="button" class="card-head" data-a="weekly"><h2>Needs you</h2><span class="card-meta">${done} of ${picks.length} done${icon('chevR', 'chev')}</span></button>${rows}</section>`;
+  return `<p class="eyebrow">YOUR NETWORK · ${fmt(d.total || 0)}</p>${stat(t.w, 'waiting on you', 'waiting', 'big')}<div class="tstat-row">${stat(t.j, 'new jobs', 'jcw')}${d.rel ? stat(t.close, 'close', 'close') : stat(t.n, 'new', 'new')}</div>`;
 }
 
 function chips(){
   const out = [];
   const n = M.info.deckCount || 0;
-  out.push(`<button type="button" class="tchip" data-a="catchup">${icon('stack')}${n ? `<b>${fmt(n)}</b> to catch up` : 'Catch up'}</button>`);
+  if (n) out.push(`<button type="button" class="tchip" data-a="catchup">${icon('stack')}<b>${fmt(n)}</b> to catch up</button>`);
   for (const s of M.lists){
     const k = runList(s).length;
     out.push(`<button type="button" class="tchip" data-a="list" data-v="${esc(s.id)}">${icon('pin')}${esc(s.name)} <span class="mono">· ${fmt(k)}</span></button>`);
   }
   for (const e of liveEvents().slice(0, 3)) out.push(eventChip(e));
   const trip = nextTrip(); if (trip) out.push(tripChip(trip));
+  if (yearSeason() && !isSample()) out.push(`<button type="button" class="tchip" data-a="year">${icon('sparkles')}Your ${reviewYear()}</button>`);
+  out.push(`<button type="button" class="tchip" data-a="notes">${icon('notePlus')}Add meeting notes</button>`);
+  out.push(`<button type="button" class="tchip" data-a="explore">${icon('scope')}Explore</button>`);
   return `<div class="tchips">${out.join('')}</div>`;
 }
 
@@ -93,10 +152,11 @@ function worth(){
 export const HomeView = {
   mount(el){
     el.innerHTML = `<div class="scr home">
-      <header class="today-head"><div><p class="date-line"></p><h1 class="headline"></h1></div>${accountButton()}</header>
+      <header class="today-head"><div><p class="eyebrow date-line"></p><h1 class="headline serif"></h1></div>${accountButton()}</header>
+      <div class="strip-slot"></div><div class="five-slot"></div>
       <div class="banner-slot"></div>
-      <section class="card compass-card mini"><button type="button" class="mini-compass" data-a="explore" aria-label="Open Explore"></button><div class="tstats"></div></section>
-      <div class="needs-slot"></div><div class="chips-slot"></div><div class="bday-slot"></div><div class="cards-slot"></div></div>`;
+      <section class="card night night-card compass-card mini"><button type="button" class="mini-compass" data-a="explore" aria-label="Your network compass. Opens Explore"></button><div class="tstats"></div></section>
+      <div class="chips-slot"></div><div class="bday-slot"></div><div class="cards-slot"></div></div>`;
     compass = createCompass({initials: myInitials(), interactive: false, labels: false});
     $('.mini-compass', el).appendChild(compass.el);
     this.ptr(el);
@@ -104,14 +164,15 @@ export const HomeView = {
   },
   update(el, what){
     const picks = weeklyPicks(), open = picks.filter(p => !weeklyDone(p.k)).length;
-    $('.date-line', el).textContent = dateLine();
-    $('.headline', el).textContent = headline(open);
+    $('.date-line', el).textContent = eyebrowLine();
+    $('.headline', el).innerHTML = headline(open, picks.length);
     $('.today-head .me-btn', el).outerHTML = accountButton();
+    $('.strip-slot', el).innerHTML = progressStrip(picks);
+    $('.five-slot', el).innerHTML = dailyFive();
     $('.banner-slot', el).innerHTML = banner();
     if (compassVersion !== M.version){ compassVersion = M.version; compassData = M.api.compass({}); compass.setData(compassData); compass.setInitials(myInitials()); }
     if (what === 'theme') compass.retheme();
     $('.tstats', el).innerHTML = stats(compassData);
-    $('.needs-slot', el).innerHTML = needsYou();
     $('.chips-slot', el).innerHTML = chips();
     $('.bday-slot', el).innerHTML = birthdaysCard();
     $('.cards-slot', el).innerHTML = worth();
@@ -132,7 +193,14 @@ export const HomeView = {
     catchup: () => { fx.tap(); openToday('catchup'); },
     weekly: () => open('weekly'),
     open: k => openPerson(k),
-    write: k => open('message', k),
+    write: k => { fx.tap(); open('message', k); },
+    later(k, t){
+      fx.tap();
+      later = later.filter(x => x !== k).concat(k);
+      HomeView.update(t.closest('.screen'));
+    },
+    notes: () => { fx.tap(); open('notes'); },
+    year: () => open('year'),
     sig: v => { fx.tap(); if (v === 'close') showPeople({rel: ['Close']}); else perform({kind: 'filter', sig: [v]}); },
     card: i => perform((M.home.cards[+i] || {}).act),
     import: () => open('import'),

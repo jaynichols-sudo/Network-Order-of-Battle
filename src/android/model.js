@@ -133,8 +133,9 @@ export async function toggleStar(k){
 }
 const niceDay = iso => { const [y, m, d] = iso.split('-').map(Number); return new Date(y, m - 1, d).toLocaleDateString('en-US', {month: 'short', day: 'numeric'}); };
 const plusDays = n => { const d = new Date(Date.now() + n * 864e5); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
-export async function followUp(k, days){
+export async function followUp(k, days, {quiet = false} = {}){
   await edit(k, () => api.followUp(k, days));
+  if (quiet) return;
   if (days > 0){ fx.star(); show(`We’ll remind you on ${niceDay(plusDays(days))}`); askNotify(); }
   else { fx.tap(); show('Follow-up cleared'); }
 }
@@ -152,6 +153,32 @@ export async function touched(k){
   show(p && p.next ? `Logged. Next check-in ${niceDay(p.next)}` : 'Logged');
 }
 export async function addNote(k, text, source = ''){ await edit(k, () => api.addNote(k, text, source)); }
+/* ---------- memory, the org chart, meeting notes ---------- */
+/** What to remember about someone: {k, line, last, msg, waiting}, or null. */
+export function memory(k){ try { return api.memory(k); } catch { return null; } }
+/** Everyone you and your team know at a company or agency, by level. */
+export function orgChart(q){ try { return api.orgChart(q); } catch { return null; } }
+/** Who someone reports to (a key), or '' to clear it. Only you see this. */
+export async function setReportsTo(k, boss){
+  await edit(k, () => api.setReportsTo(k, boss || ''));
+  fx.success();
+  const b = boss && person(boss), p = person(k);
+  show(b && p ? `${p.f} reports to ${b.full}` : 'Manager cleared');
+}
+/** The people, action items and a short summary in pasted notes. */
+export function readNotes(text){ try { return api.readNotes(text); } catch { return null; } }
+/** Files a meeting note on several people at once, with optional touches and follow-ups. */
+export async function saveMeetingNotes({notes = [], touch = [], follow = []}){
+  try {
+    for (const [k, text, source] of notes) api.addNote(k, text, source);
+    for (const k of touch) api.touch(k);
+    for (const [k, days] of follow) api.followUp(k, days);
+    await saveFile('edits', 'edits.json');
+    refreshAll();
+    if (follow.length) askNotify();
+    return true;
+  } catch (e) { show('Couldn’t save: ' + ((e && e.message) || e)); return false; }
+}
 /** You met someone at an event: a note on their timeline and a logged touch. */
 export async function metAt(k, text, source){ await edit(k, () => { api.addNote(k, text, source); api.touch(k); }); }
 

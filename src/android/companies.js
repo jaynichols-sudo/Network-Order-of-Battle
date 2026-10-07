@@ -3,7 +3,7 @@
 // Ports CompaniesView.swift, IndustriesView.swift and IntroFinder.swift.
 import { M, persons, person, isTarget, toggleTarget, setTargetNote, setCompanyIndustry, setCompanyLink, setCompanyLocation, show } from './model.js';
 import { esc, fmt, icon, ring, animateRings, mixBar, segmented, empty, menu, Day, $, plural } from './ui.js';
-import { registerRoute, openSheet, closeSheet, setPageTitle } from './nav.js';
+import { registerRoute, openSheet, closeSheet, setPageTitle, push } from './nav.js';
 import { openPerson, openUnit, openIndustry, showPeople, register, open } from './actions.js';
 import { personRow } from './people.js';
 import { openURL, fx, prefs, ls } from './platform.js';
@@ -101,6 +101,7 @@ registerRoute('unit', name => {
   const st = {editLink: false, link: '', editPlace: false, place: '', note: null};
   const view = {
     title: name,
+    menu: () => [{label: 'Find a way in', icon: 'waysIn', run: () => openIntro(name)}, {label: 'Org chart', icon: 'org', run: () => push('org', name)}],
     mount(body){ this.render(body); },
     update(body){ this.render(body); },
     render(body){
@@ -115,6 +116,7 @@ registerRoute('unit', name => {
           <button type="button" class="row act ${u.isTarget ? '' : 'accent'}" data-a="target">${icon(u.isTarget ? 'minusCircle' : 'plusCircle')}<span>${u.isTarget ? 'Remove from watchlist' : 'Add to watchlist'}</span></button>
           <button type="button" class="row act" data-a="inPeople">${icon('people')}<span>Show in People</span></button>
           <button type="button" class="row act" data-a="ways">${icon('waysIn')}<span>Find a way in</span></button>
+          <button type="button" class="row act" data-a="org">${icon('org')}<span>Org chart</span>${icon('chevR', 'chev')}</button>
           ${u.isCompany ? `<button type="button" class="row act" data-a="ind">${icon('tag')}<span class="grow">Industry</span><span class="muted">${esc(u.industry.set || `Automatic: ${u.industry.auto}`)}</span></button>` : ''}
         </div>
         <p class="sec-h">On LinkedIn</p><div class="card list actions">
@@ -142,6 +144,7 @@ registerRoute('unit', name => {
       async target(_, t){ await toggleTarget(name); view.render(t.closest('.page-body')); },
       inPeople(){ const u = M.api.unit(name); showPeople(M.info.lens && !u.isCompany ? {agency: name} : {company: name}); },
       ways: () => openIntro(name),
+      org: () => push('org', name),
       ind(_, t){ const u = M.api.unit(name); menu(t, [{label: `Automatic: ${u.industry.auto}`, on: !u.industry.set, run: () => setCompanyIndustry(name, '')}, ...industryOptions().map(i => ({label: i.id, on: i.id === u.industry.set, run: () => setCompanyIndustry(name, i.id)}))]); },
       editLink(_, t){ const u = M.api.unit(name); st.editLink = true; st.link = u.links.companyExact ? u.links.company : ''; view.render(t.closest('.page-body')); },
       cancelLink(_, t){ st.editLink = false; view.render(t.closest('.page-body')); },
