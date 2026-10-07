@@ -53,7 +53,7 @@ final class MotionReel: XCTestCase {
         }
 
         // 4. the compass zooms open into Explore
-        let compass = find(app, "Your network compass")
+        let compass = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Opens Explore")).firstMatch
         if compass.waitForExistence(timeout: 5) {
             compass.tap()
             pause(2.5)

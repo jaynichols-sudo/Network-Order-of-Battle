@@ -23,6 +23,9 @@ struct TodayCompassCard: View {
                 CompassView(data: data, focus: .constant(nil), reveal: bloom, initials: model.myInitials, pings: true, labels: false) { _ in }
                     .allowsHitTesting(false)
                     .frame(width: 128, height: 128)
+                    // the drawing ignores touches, so give the button something to catch them
+                    .background(Circle().fill(Color.white.opacity(0.001)))
+                    .contentShape(Circle())
                     .zoomSourceExplore()
             }
             .buttonStyle(.pressable(0.94))
