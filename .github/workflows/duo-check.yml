@@ -1,7 +1,7 @@
 name: Bearings iPhone Duo check
 
-# Builds with Xcode 27.1 (the iPhone Duo SDK) and screenshots the app on the Duo simulator,
-# open and closed. Screens go to the duo-screens branch.
+# Builds with Xcode 27.1 (the iPhone Duo SDK) and screenshots the app on the Duo simulator's
+# outer (closed) screen; the simulator has no command to unfold it. Screens go to the duo-screens branch.
 on: workflow_dispatch
 
 permissions:
@@ -61,30 +61,7 @@ jobs:
             t 30 xcrun simctl terminate $DEV com.jaynichols.networkoob >/dev/null 2>&1 || true
             t 60 xcrun simctl launch $DEV com.jaynichols.networkoob -onboarded YES "$@" >/dev/null 2>&1 || note "$n: launch failed"
             sleep 8
-            t 60 xcrun simctl io $DEV screenshot "shots/$n.png" >/dev/null 2>&1 && note "$n ok" || note "$n: screenshot failed"; }
-          t 30 xcrun simctl io $DEV enumerate > enum.txt 2>&1 || true
-          note "displays: $(tr '\n' ' ' < enum.txt | cut -c1-900)"
-          t 30 xcrun simctl spawn $DEV launchctl list 2>/dev/null | grep -i networkoob > ps.txt || true
-          t 60 xcrun simctl launch $DEV com.jaynichols.networkoob -onboarded YES >/dev/null 2>&1; sleep 10
-          note "running: $(cat ps.txt; t 30 xcrun simctl spawn $DEV launchctl list 2>/dev/null | grep -i networkoob | head -2)"
-          for d in internal external; do t 60 xcrun simctl io $DEV screenshot --display=$d "shots/probe-$d.png" >/dev/null 2>&1 && note "probe $d ok" || note "probe $d failed"; done
-          # control: does any simulator render on this machine?
-          CTRL=$(xcrun simctl create "Control" com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro "$RT" 2>/dev/null || true)
-          if [ -n "$CTRL" ]; then
-            t 300 xcrun simctl boot $CTRL && t 400 xcrun simctl bootstatus $CTRL -b >/dev/null
-            t 300 xcrun simctl install $CTRL "$APP"; t 60 xcrun simctl launch $CTRL com.jaynichols.networkoob -onboarded YES >/dev/null 2>&1; sleep 10
-            t 60 xcrun simctl io $CTRL screenshot "shots/control-iphone17pro.png" >/dev/null 2>&1 && note "control ok" || note "control failed"
-            t 60 xcrun simctl shutdown $CTRL || true
-          fi
-          python3 - <<'PY' >> shots/info.txt
-          import glob, struct, zlib
-          for f in sorted(glob.glob("shots/*.png")):
-              try:
-                  from PIL import Image
-                  im = Image.open(f).convert("RGB"); ex = im.getextrema()
-                  print(f, "blank" if all(a == b for a, b in ex) else "has content")
-              except Exception as e: print(f, "size", __import__("os").path.getsize(f))
-          PY
+            t 60 xcrun simctl io $DEV screenshot --display=internal "shots/$n.png" >/dev/null 2>&1 && note "$n ok" || note "$n: screenshot failed"; }
           for theme in light dark; do
             t 30 xcrun simctl ui $DEV appearance $theme || true
             shoot $theme-01-today
