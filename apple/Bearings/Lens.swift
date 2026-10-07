@@ -61,15 +61,23 @@ struct CompassLens: View {
                         .frame(width: W, height: H)
                         .position(x: W / 2 + p.x - p.x * magnify, y: H / 2 + p.y - p.y * magnify)
                         .frame(width: g.size.width, height: g.size.height)
-                        .mask(Circle().frame(width: radius * 2 - 7, height: radius * 2 - 7).position(p))
+                        .background(Theme.card)
+                        .mask(Circle().frame(width: radius * 2, height: radius * 2).position(p))
                         .allowsHitTesting(false)
                         .transition(.opacity)
                 }
                 if active {
                     Circle()
-                        .strokeBorder(LinearGradient(colors: [.white.opacity(0.75), .white.opacity(0.05), .white.opacity(0.35)],
-                                                     startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 2)
-                        .frame(width: radius * 2 - 4, height: radius * 2 - 4)
+                        .strokeBorder(LinearGradient(colors: [.white.opacity(0.85), .white.opacity(0.08), Theme.amber.opacity(0.45)],
+                                                     startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 2.5)
+                        .background(
+                            // a specular highlight, like light catching the top of a drop of water
+                            Ellipse().fill(LinearGradient(colors: [.white.opacity(0.35), .clear], startPoint: .top, endPoint: .bottom))
+                                .frame(width: radius * 1.1, height: radius * 0.5)
+                                .offset(y: -radius * 0.55)
+                                .blendMode(.plusLighter)
+                        )
+                        .frame(width: radius * 2, height: radius * 2)
                         .shadow(color: .black.opacity(0.35), radius: 3)
                         .position(p)
                         .allowsHitTesting(false)
@@ -160,20 +168,21 @@ struct CompassLens: View {
 private extension View {
     /// Clear Liquid Glass for the lens on iOS 26; a ring with a highlight before.
     @ViewBuilder func lensGlass(active: Bool) -> some View {
-        if #available(iOS 26.0, *) {
+        if active {
+            // while dragging, the lens draws its own clear rim so the magnified view on top stays sharp
+            self.shadow(color: .black.opacity(0.28), radius: 18, y: 9)
+        } else if #available(iOS 26.0, *) {
             self
-                .glassEffect(active ? Glass.clear.interactive() : Glass.regular.interactive(), in: Circle())
-                .shadow(color: .black.opacity(active ? 0.22 : 0.12), radius: active ? 16 : 6, y: active ? 8 : 3)
+                .glassEffect(Glass.regular.interactive(), in: Circle())
+                .shadow(color: .black.opacity(0.12), radius: 6, y: 3)
         } else {
             self
-                .background {
-                    Circle().fill(active ? Color.clear : Theme.card)
-                }
+                .background(Circle().fill(Theme.card))
                 .overlay {
                     Circle().strokeBorder(LinearGradient(colors: [.white.opacity(0.9), .white.opacity(0.15), Theme.amber.opacity(0.5)],
-                                                         startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: active ? 2.5 : 1.5)
+                                                         startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 1.5)
                 }
-                .shadow(color: .black.opacity(active ? 0.22 : 0.12), radius: active ? 16 : 6, y: active ? 8 : 3)
+                .shadow(color: .black.opacity(0.12), radius: 6, y: 3)
         }
     }
 }

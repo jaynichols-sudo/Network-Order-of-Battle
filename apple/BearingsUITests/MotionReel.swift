@@ -78,9 +78,9 @@ final class MotionReel: XCTestCase {
         }
 
         // 6. the paywall: icons wave, the selection glides between plans, Continue shimmers
-        app.terminate()
-        pause(1.5)
-        let pay = launch(["-demoOpen", "paywall"])
+        let pay = app
+        pay.launchArguments = ["-onboarded", "YES", "-storeMode", "YES", "-demoOpen", "paywall"]
+        pay.launch()
         pause(2.5)
         for plan in ["Monthly", "Lifetime", "Yearly"] {
             let b = find(pay, plan)
@@ -89,9 +89,9 @@ final class MotionReel: XCTestCase {
         pause(2.5)
 
         // 7. the year card tilts toward your finger
-        pay.terminate()
-        pause(1.5)
-        let year = launch(["-demoOpen", "year"])
+        let year = app
+        year.launchArguments = ["-onboarded", "YES", "-storeMode", "YES", "-demoOpen", "year"]
+        year.launch()
         pause(3)
         let yw = year.windows.firstMatch
         yw.coordinate(withNormalizedOffset: CGVector(dx: 0.3, dy: 0.3)).press(forDuration: 0.3, thenDragTo: yw.coordinate(withNormalizedOffset: CGVector(dx: 0.72, dy: 0.5)), withVelocity: .slow, thenHoldForDuration: 0.8)
