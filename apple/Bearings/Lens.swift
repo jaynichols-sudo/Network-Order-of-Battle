@@ -17,7 +17,7 @@ struct CompassLens: View {
     @State private var target: String?        // the person right under the center
     @State private var under: [String] = []   // everyone inside the glass, most interesting first
     @State private var tick = UISelectionFeedbackGenerator()
-    @State private var breathe = false
+    @GestureState private var dragging = false
 
     private let magnify: CGFloat = 2.6
     private let open: CGFloat = 58
@@ -48,7 +48,7 @@ struct CompassLens: View {
                     }
                     .lensGlass(active: active)
                     .contentShape(Circle())
-                    .gesture(drag(center: center, r: r, size: g.size))
+                    .highPriorityGesture(drag(center: center, r: r, size: g.size))
                     .zoomSource(person: target ?? "-")
                     .position(p)
                     .accessibilityHidden(true)
@@ -107,6 +107,10 @@ struct CompassLens: View {
         }
         .aspectRatio(1, contentMode: .fit)
         .onAppear { tick.prepare() }
+        // if a drag is interrupted (a scroll, a call), the lens goes home instead of staying open
+        .onChange(of: dragging) { _, now in
+            if !now && pos != nil { withAnimation(Motion.bouncy) { pos = nil }; target = nil; under = [] }
+        }
     }
 
     private var caption: String {
@@ -117,6 +121,7 @@ struct CompassLens: View {
 
     private func drag(center: CGPoint, r: CGFloat, size: CGSize) -> some Gesture {
         DragGesture(minimumDistance: 0, coordinateSpace: .named("lens"))
+            .updating($dragging) { _, state, _ in state = true }
             .onChanged { v in
                 // keep the lens over the compass
                 var q = v.location
