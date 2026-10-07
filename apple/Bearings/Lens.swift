@@ -36,9 +36,12 @@ struct CompassLens: View {
             ZStack {
                 // what the glass shows: the same compass, magnified around the lens
                 if active {
+                    // redrawn at full size rather than scaled, so the dots stay sharp
+                    let W = g.size.width * magnify, H = g.size.height * magnify
                     CompassView(data: data, focus: .constant(nil), initials: initials, labels: false) { _ in }
+                        .frame(width: W, height: H)
+                        .position(x: W / 2 + p.x - p.x * magnify, y: H / 2 + p.y - p.y * magnify)
                         .frame(width: g.size.width, height: g.size.height)
-                        .scaleEffect(magnify, anchor: UnitPoint(x: p.x / max(1, g.size.width), y: p.y / max(1, g.size.height)))
                         .mask(Circle().frame(width: radius * 2, height: radius * 2).position(p))
                         .allowsHitTesting(false)
                         .transition(.opacity)
@@ -74,9 +77,10 @@ struct CompassLens: View {
                         .liquidGlass(Capsule())
                         .fixedSize()
                         .position(x: min(max(p.x, 90), g.size.width - 90), y: max(16, p.y - radius - 22))
+                        .contentTransition(.opacity)
+                        .animation(.easeOut(duration: 0.15), value: caption)
                         .transition(.opacity.combined(with: .scale(scale: 0.9)))
                         .allowsHitTesting(false)
-                        .id(target ?? under.first)
                 }
             }
             .coordinateSpace(.named("lens"))
