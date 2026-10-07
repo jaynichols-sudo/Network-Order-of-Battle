@@ -3,6 +3,11 @@ name: Bearings native app check
 on:
   # run by hand from the Actions tab: Mac runners use build minutes ten times faster
   workflow_dispatch:
+    inputs:
+      quick:
+        description: "iPhone screenshots only (skip the Mac build, UI tests and iPad)"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -48,6 +53,7 @@ jobs:
             exit 1
           fi
       - name: Compile for Mac (Mac Catalyst, no signing)
+        if: ${{ !inputs.quick }}
         run: |
           xcodebuild -project apple/Bearings.xcodeproj -scheme Bearings -configuration Debug \
             -destination 'generic/platform=macOS,variant=Mac Catalyst' -derivedDataPath build/ddmac CODE_SIGNING_ALLOWED=NO build > mac.log 2>&1 || true
@@ -58,6 +64,7 @@ jobs:
             exit 1
           fi
       - name: UI tests
+        if: ${{ !inputs.quick }}
         continue-on-error: true
         run: |
           UDID=$(xcrun simctl list devices available -j | python3 -c "
@@ -92,6 +99,7 @@ jobs:
           " "$1"; }
           PHONE=$(pick 'iPhone 1[6-9] Pro')
           PAD=$(pick 'iPad Pro 11-inch.*|iPad Air 11-inch.*')
+          [ "${{ inputs.quick }}" = "true" ] && PAD=""
           mkdir -p shots
           shoot() { # device name args...
             dev=$1; name=$2; shift 2
@@ -155,7 +163,7 @@ jobs:
           # Apple Watch: install the watch app on its own and feed it the sample snapshot
           WATCH=$(pick 'Apple Watch Series (1[0-9]) \(46mm\)|Apple Watch Ultra.*')
           WAPP="$APP/Watch/Bearings.app"
-          if [ -n "$WATCH" ] && [ -d "$WAPP" ]; then
+          if [ "${{ inputs.quick }}" != "true" ] && [ -n "$WATCH" ] && [ -d "$WAPP" ]; then
             node scripts/watch-sample.mjs watch-sample.json
             xcrun simctl boot $WATCH || true
             xcrun simctl bootstatus $WATCH -b >/dev/null
