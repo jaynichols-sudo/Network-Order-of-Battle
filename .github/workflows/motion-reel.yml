@@ -1,0 +1,72 @@
+name: Bearings motion reel
+
+# Records the app's animations on the simulator while a UI test drives them
+# (scrolling, zooming, the Lens, the paywall, the year card). Video goes to the motion-reel branch.
+on:
+  workflow_dispatch:
+    inputs:
+      appearance:
+        description: light or dark
+        default: dark
+
+permissions:
+  contents: write
+
+jobs:
+  reel:
+    runs-on: xcode-27
+    timeout-minutes: 50
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_27.1.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - name: Build
+        run: |
+          npm ci && npm run build
+          brew install xcodegen >/dev/null
+          (cd apple && xcodegen generate)
+          xcodebuild -project apple/Bearings.xcodeproj -scheme Bearings -configuration Debug \
+            -destination 'generic/platform=iOS Simulator' -derivedDataPath build/dd CODE_SIGNING_ALLOWED=NO build-for-testing > build.log 2>&1 || {
+              msg=$( (grep -E "error:" build.log || tail -40 build.log) | sed -E 's#/Users/runner/work/[^/]+/[^/]+/##' | awk '!s[$0]++' | head -50 | sed 's/%/%25/g' | awk 'BEGIN{ORS="%0A"}{print}')
+              echo "::error title=Build errors::$msg"; exit 1; }
+      - name: Record
+        run: |
+          t() { secs=$1; shift; perl -e 'alarm shift; exec @ARGV' "$secs" "$@"; }
+          DEV=$(xcrun simctl list devices available -j | python3 -c "
+          import json,sys,re
+          d=json.load(sys.stdin)['devices']
+          for rt in sorted(d, reverse=True):
+              for x in d[rt]:
+                  if re.fullmatch('iPhone 1[6-9] Pro', x['name']): print(x['udid']); sys.exit()
+          ")
+          t 300 xcrun simctl boot $DEV || true
+          t 400 xcrun simctl bootstatus $DEV -b >/dev/null || true
+          xcrun simctl status_bar $DEV override --time 9:41 --batteryState charged --batteryLevel 100 --cellularBars 4 || true
+          xcrun simctl ui $DEV appearance ${{ inputs.appearance || 'dark' }}
+          mkdir -p reel
+          xcrun simctl io $DEV recordVideo --codec=h264 --force reel/reel.mp4 &
+          rec=$!
+          sleep 2
+          REEL=1 TEST_RUNNER_REEL=1 t 1500 xcodebuild -project apple/Bearings.xcodeproj -scheme Bearings -configuration Debug \
+            -destination "id=$DEV" -derivedDataPath build/dd CODE_SIGNING_ALLOWED=NO \
+            -only-testing:BearingsUITests/MotionReel test-without-building > test.log 2>&1 || true
+          sleep 1
+          pkill -INT -f "recordVideo" || true
+          for i in $(seq 1 25); do kill -0 $rec 2>/dev/null || break; sleep 1; done
+          pkill -9 -f "recordVideo" || true
+          ls -la reel
+          r=$(grep -E "Test Case .*(passed|failed|skipped)|error:" test.log | tail -12 | sed 's/%/%25/g' | awk 'BEGIN{ORS="%0A"}{print}')
+          echo "::notice title=Reel test::$r"
+      - name: Publish to the motion-reel branch
+        if: always()
+        run: |
+          cd reel
+          git init -q -b motion-reel
+          git config user.name "ci"; git config user.email "ci@users.noreply.github.com"
+          echo "${{ github.sha }}" > SHA
+          git add -A && git commit -qm "reel ${{ github.sha }}"
+          git push -qf "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" motion-reel
