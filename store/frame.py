@@ -31,7 +31,7 @@ def backdrop():
     return bg
 
 
-for i, (name, _, caption) in enumerate(listing['screens']):
+for i, (name, _, caption, *_rest) in enumerate(listing['screens']):
     src = os.path.join(raw, f'{prefix}-{name}.png')
     if not os.path.exists(src):
         continue

@@ -143,6 +143,8 @@ jobs:
             shoot $dev $p-28-paywall -demoOpen paywall
             shoot $dev $p-29-year -demoOpen year
             shoot $dev $p-30-team -startTab you -demoOpen team
+            shoot $dev $p-31-org -startTab companies -demoOpen org
+            shoot $dev $p-32-notes -demoOpen notes
             xcrun simctl ui $dev content_size accessibility-large
             shoot $dev $p-21-home-xl
             shoot $dev $p-22-profile-xl -startTab people -demoOpen person

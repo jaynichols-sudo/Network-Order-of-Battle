@@ -7,17 +7,18 @@
     "Bearings: Know Your Network"
   ],
   "subtitle": "Your network, mapped",
-  "promotionalText": "Who needs you this week, who changed jobs, and your best way into any company. Private by design: no account, no server.",
-  "keywords": "network,contacts,crm,relationships,networking,sales,follow up,travel,events,enrich,federal,linkedin",
+  "promotionalText": "Five people worth your time each week, what you last talked about before every meeting, and who sits where at every agency. Private by design: no account, no server.",
+  "keywords": "network,contacts,crm,relationships,networking,sales,follow up,org chart,meeting notes,federal",
   "supportUrl": "https://www.jaynichols.net/bearings/support.html",
   "marketingUrl": "https://www.jaynichols.net/bearings/index.html",
   "privacyPolicyUrl": "https://www.jaynichols.net/bearings/privacy.html",
-  "description": "Bearings turns your LinkedIn export into a private, living map of the people you know, so you always know where you stand and who to reach out to.\n\nKNOW WHO NEEDS YOU\n• Today opens on the people worth your time this week, each with one reason and one tap to reply, congratulate or check in\n• See who wrote last and is waiting on your reply\n• Spot good relationships that are going cold\n• Keep-in-touch circles: monthly, quarterly or yearly, with a nudge when someone is overdue\n• Catch up on new connections and job changes with a quick swipe\n\nSEE EVERY COMPANY\n• Who you know at each company, agency or command, at every level from executive to staff\n• Coverage gaps on your watchlist, like no director-level contact yet\n• Ways in: your best paths into any company, with the intro ask drafted\n• Team packs: pool networks with teammates to find warm paths, never sharing notes or messages\n\nTRAVEL AND EVENTS\n• A map of where your people are, worked out on your iPhone\n• Trips from your calendar, with who you know nearby on your Lock Screen\n• Arrival alerts: land in a new city and see who you know there\n• Event mode: see who you know at a conference, scan cards, and work the follow-up list\n\nWALK INTO MEETINGS PREPARED\n• A brief 30 minutes before meetings with people you know, written on-device\n\nEXPLORE YOUR NETWORK\n• The compass: your whole network by sector and closeness\n• Plain-English search like “navy o-5 and up in cyber”\n• An optional federal and military view with branch, rank, agency and segment\n• Your year in review, ready to share\n\nENRICH WITH YOUR OWN DATA PROVIDER\n• Sign in with your Seamless.AI account, or add your ZoomInfo API login, to fill in work email, phone and city for the people you pick\n• Or import an enrichment file from any provider\n\nEVERYWHERE YOU ARE\n• iPhone, iPad and Mac, synced through your own iCloud\n• Apple Watch app, widgets and Siri\n\nBEARINGS PRO\nThe map, Today, search, Catch Up, reminders, widgets and Watch are free. Bearings Pro adds event mode, ways in, team packs, arrival alerts, ZoomInfo and Seamless.AI, account maps and Salesforce. Monthly or yearly subscriptions renew automatically until cancelled in your App Store settings; a one-time lifetime option is also available. Terms: https://www.apple.com/legal/internet-services/itunes/dev/stdeula/\n\nPRIVATE BY DESIGN\nNo account and no Bearings server. Your network lives on your devices and in your own iCloud. Contacts, calendar and location are read on your device and never uploaded. No ads, no tracking.\n\nTo start, request your data from LinkedIn (Settings, Data privacy, Get a copy of your data, then tick Connections, Messages and Invitations) and open the zip in Bearings. It usually takes about ten minutes.",
+  "description": "Bearings turns your LinkedIn export into a private, living map of the people you know, so you always know where you stand and who to reach out to.\n\nKNOW WHO NEEDS YOU\n• Today opens on the people worth your time this week, each with one reason and one tap to reply, congratulate or check in\n• See who wrote last and is waiting on your reply\n• Spot good relationships that are going cold\n• Keep-in-touch circles: monthly, quarterly or yearly, with a nudge when someone is overdue\n• Catch up on new connections and job changes with a quick swipe\n\nREMEMBER EVERY CONVERSATION\n• Before a meeting, your Lock Screen and Apple Watch show the face, the time and what you last talked about\n• Share meeting notes from Plaud, Apple Notes or a reMarkable page: Bearings finds the people and turns action items into follow-ups or Apple Reminders\n• Connect Outlook or Gmail and Bearings reads only who, when and the subject line, so it knows who emailed and is waiting on you\n\nSEE EVERY COMPANY\n• Who you know at each company, agency or command, at every level from executive to staff\n• Coverage gaps on your watchlist, like no director-level contact yet\n• Org charts: everyone you and your team know at a company, by level, with the empty seats called out and filled from ZoomInfo or your own file\n• Ways in: your best paths into any company, with the intro ask drafted\n• Team packs: pool networks with teammates to find warm paths, never sharing notes or messages\n\nTRAVEL AND EVENTS\n• A map of where your people are, worked out on your iPhone\n• Trips from your calendar, with who you know nearby on your Lock Screen\n• Arrival alerts: land in a new city and see who you know there\n• Event mode: see who you know at a conference, scan badges and cards (QR codes too), and work the follow-up list\n\nWALK INTO MEETINGS PREPARED\n• A brief 30 minutes before meetings with people you know, written on-device\n\nEXPLORE YOUR NETWORK\n• The compass: your whole network by sector and closeness\n• Plain-English search like “navy o-5 and up in cyber”\n• An optional federal and military view with branch, rank, agency and segment\n• Your year in review, ready to share\n\nENRICH WITH YOUR OWN DATA PROVIDER\n• Sign in with your Seamless.AI account, or add your ZoomInfo API login, to fill in work email, phone and city for the people you pick\n• Or import an enrichment file from any provider\n\nEVERYWHERE YOU ARE\n• iPhone, iPad and Mac, synced through your own iCloud\n• Apple Watch app, widgets and Siri\n\nBEARINGS PRO\nThe map, Today, search, Catch Up, reminders, widgets and Watch are free. Bearings Pro adds event mode, ways in, team packs, arrival alerts, ZoomInfo and Seamless.AI, account maps and Salesforce. Monthly or yearly subscriptions renew automatically until cancelled in your App Store settings; a one-time lifetime option is also available. Terms: https://www.apple.com/legal/internet-services/itunes/dev/stdeula/\n\nPRIVATE BY DESIGN\nNo account and no Bearings server. Your network lives on your devices and in your own iCloud. Contacts, calendar, email headers and location are read on your device and never uploaded. No ads, no tracking.\n\nTo start, request your data from LinkedIn (Settings, Data privacy, Get a copy of your data, then tick Connections, Messages and Invitations) and open the zip in Bearings. It usually takes about ten minutes.",
   "screens": [
     [
       "01-home",
       [],
-      "Who needs you this week"
+      "Five people a week, one at a time",
+      "light"
     ],
     [
       "03-profile",
@@ -27,17 +28,8 @@
         "-demoOpen",
         "person"
       ],
-      "Every relationship, the whole story"
-    ],
-    [
-      "20-intro",
-      [
-        "-startTab",
-        "companies",
-        "-demoOpen",
-        "intro"
-      ],
-      "Your warmest way into any company"
+      "It remembers what you talked about",
+      "light"
     ],
     [
       "07a-compass",
@@ -47,15 +39,39 @@
         "-exploreMode",
         "compass"
       ],
-      "Your whole network on one compass"
+      "Your whole network on one compass",
+      "dark"
     ],
     [
-      "02-people",
+      "31-org",
       [
         "-startTab",
-        "people"
+        "companies",
+        "-demoOpen",
+        "org"
       ],
-      "Search the way you think"
+      "Who sits where, and the empty seats",
+      "light"
+    ],
+    [
+      "32-notes",
+      [
+        "-demoOpen",
+        "notes"
+      ],
+      "Meeting notes in, follow-ups out",
+      "light"
+    ],
+    [
+      "20-intro",
+      [
+        "-startTab",
+        "companies",
+        "-demoOpen",
+        "intro"
+      ],
+      "Your warmest way into any company",
+      "light"
     ],
     [
       "19-event",
@@ -63,7 +79,17 @@
         "-demoOpen",
         "event"
       ],
-      "Built for the conference floor"
+      "Built for the conference floor",
+      "light"
+    ],
+    [
+      "02-people",
+      [
+        "-startTab",
+        "people"
+      ],
+      "Search the way you think",
+      "light"
     ],
     [
       "07c-map",
@@ -73,25 +99,8 @@
         "-exploreMode",
         "map"
       ],
-      "See who’s near where you’re going"
-    ],
-    [
-      "08-catchup",
-      [
-        "-startTab",
-        "catchup"
-      ],
-      "Catch up in two minutes"
-    ],
-    [
-      "05-unit",
-      [
-        "-startTab",
-        "companies",
-        "-demoOpen",
-        "unit"
-      ],
-      "Who you know at every company"
+      "See who’s near where you’re going",
+      "dark"
     ],
     [
       "29-year",
@@ -99,12 +108,13 @@
         "-demoOpen",
         "year"
       ],
-      "Your year in networking, ready to share"
+      "Your year in networking, ready to share",
+      "dark"
     ]
   ],
   "eyebrows": {
-    "01-home": "THIS WEEK",
-    "03-profile": "DOSSIERS",
+    "01-home": "TODAY",
+    "03-profile": "MEMORY",
     "02-people": "PLAIN-ENGLISH SEARCH",
     "07c-map": "TRIP MODE",
     "08-catchup": "SWIPE TO TRIAGE",
@@ -113,7 +123,9 @@
     "07a-compass": "THE COMPASS",
     "20-intro": "WAYS IN",
     "19-event": "EVENT MODE",
-    "29-year": "YEAR IN REVIEW"
+    "29-year": "YEAR IN REVIEW",
+    "31-org": "ORG CHARTS",
+    "32-notes": "PLAUD, NOTES, REMARKABLE"
   },
   "review": {
     "contactFirstName": "Jay",

@@ -272,6 +272,24 @@ final class AppModel {
             events = [e]
             tab = .home
             paths[.home] = [.event(e.id)]
+        case "org":
+            let sample: [[String: String]] = [["name": "Dana Whitfield", "p": "Director, Acquisition", "c": "DISA"],
+                                              ["name": "Robert Hale", "p": "Chief Information Security Officer", "c": "DISA"]]
+            Task {
+                _ = try? await engine.call("addProspects", [sample, "zoominfo"], as: Int.self)
+                paths[tab, default: []].append(.org("DISA"))
+            }
+        case "notes":
+            let names = people.filter { $0.x == nil }.sorted { $0.score > $1.score }.prefix(2).map(\.fullName)
+            let text = """
+            OT security roadmap review
+            Summary
+            Walked \(names.first ?? "the team") through the one-way gateway pilot. \(names.dropFirst().first ?? "Their lead") wants pricing for two sites before the November budget review.
+            Action items
+            - Send two-site pricing to \(names.dropFirst().first ?? "the team") by Friday
+            - Book a follow-up demo with \(names.first ?? "the team") in November
+            """
+            Task { await ingestNotes(text, source: "Plaud") }
         case "share": showShareCard = true
         case "import": showImport = true
         case "filters": showFiltersOnLaunch = true
