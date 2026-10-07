@@ -181,12 +181,11 @@ struct DailyFiveCard: View {
                     Text(action(w.kind)).frame(maxWidth: .infinity)
                 }
                 .buttonStyle(BigPillStyle(filled: true))
-                .layoutPriority(2)
                 Button {
                     Haptic.tap()
                     withAnimation(Motion.spring) { later.removeAll { $0 == w.k }; later.append(w.k) }
                 } label: {
-                    Text("Later").frame(maxWidth: .infinity)
+                    Text("Later").padding(.horizontal, 26)
                 }
                 .buttonStyle(BigPillStyle(filled: false))
                 .disabled(open.count < 2)

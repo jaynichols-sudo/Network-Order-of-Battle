@@ -16,8 +16,8 @@ struct HomeView: View {
                         .padding(.horizontal, 6).padding(.bottom, 2)
                         .cascade(1, distance: 10)
                 }
-                banner.cascade(2).edgeSettle()
                 DailyFiveCard(picks: picks).cascade(2).edgeSettle()
+                banner.cascade(3).edgeSettle()
                 TodayCompassCard().cascade(3).edgeSettle()
                 TodayChips().cascade(4, distance: 10)
                 ComingUp().cascade(5).edgeSettle()
@@ -111,7 +111,7 @@ struct HomeView: View {
                     .tracking(1.2)
                     .foregroundStyle(Theme.text2)
                 headlineText
-                    .font(Theme.serif(.largeTitle))
+                    .font(Theme.serif(.title))
                     .tracking(-0.5)
                     .fixedSize(horizontal: false, vertical: true)
                     .contentTransition(.numericText(countsDown: true))

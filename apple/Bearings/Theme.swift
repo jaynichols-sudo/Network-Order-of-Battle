@@ -204,6 +204,7 @@ struct PillButtonStyle: ButtonStyle {
             .frame(minHeight: 32)
             .foregroundStyle(fg)
             .background(bg, in: Capsule())
+            .overlay { if kind == .plain { Capsule().strokeBorder(Theme.hairline, lineWidth: 1) } }
             .opacity(configuration.isPressed ? 0.85 : 1)
             .scaleEffect(configuration.isPressed ? 0.94 : 1)
             .animation(Motion.bouncy, value: configuration.isPressed)
