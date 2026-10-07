@@ -79,6 +79,7 @@ jobs:
           xcrun simctl shutdown "$UDID" || true
       - name: Screenshots
         continue-on-error: true
+        timeout-minutes: 15
         run: |
           APP=$(find build/dd/Build/Products -maxdepth 2 -name "Bearings.app" -path "*iphonesimulator*" | head -1)
           echo "app: $APP"
