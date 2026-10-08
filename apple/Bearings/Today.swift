@@ -25,10 +25,11 @@ struct TodayCompassCard: View {
                 Haptic.tap()
                 model.open(.explore)
             } label: {
-                CompassView(data: data, focus: .constant(nil), reveal: bloom, initials: model.myInitials, pings: true, labels: false, glance: true) { _ in }
+                CompassView(data: data, focus: .constant(nil), reveal: bloom, initials: model.myInitials, pings: true, labels: false, glance: true, callouts: callouts) { _ in }
                     .allowsHitTesting(false)
-                    .frame(height: 280)
+                    .frame(maxWidth: 520)
                     .frame(maxWidth: .infinity)
+                    .padding(.vertical, 4)
                     // the drawing ignores touches, so give the button something to catch them
                     .background(Rectangle().fill(Color.white.opacity(0.001)))
                     .contentShape(Rectangle())
@@ -37,7 +38,7 @@ struct TodayCompassCard: View {
             .buttonStyle(.pressable(0.97))
             .accessibilityLabel("Your network compass. Opens Explore")
 
-            Text("You’re in the middle. The closer someone sits, the closer you are. Colors around the edge are sectors.")
+            Text("You’re in the middle. The closer someone sits, the closer you are. The rim is colored by sector.")
                 .font(Theme.geist(.caption)).foregroundStyle(Theme.text2)
                 .fixedSize(horizontal: false, vertical: true)
 
@@ -67,6 +68,12 @@ struct TodayCompassCard: View {
     }
 
     enum Key { case dot(Color), ring }
+
+    /// The three people who wrote most recently and are waiting on you, named on the radar.
+    private var callouts: [String: String] {
+        let waiting = model.people.filter(\.waiting).sorted { ($0.rx?.t ?? "") > ($1.rx?.t ?? "") }.prefix(3)
+        return Dictionary(waiting.map { ($0.k, "\($0.f) \($0.l.prefix(1)).") }, uniquingKeysWith: { a, _ in a })
+    }
 
     private func stat(_ n: Int, _ label: String, key: Key, color: Color = .primary, action: @escaping () -> Void) -> some View {
         Button(action: action) {

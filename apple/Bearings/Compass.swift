@@ -102,6 +102,8 @@ struct CompassView: View, Animatable {
     /// The Today card: a simpler, legible radar. Sectors as a colored rim with names outside it,
     /// everyone else faint, and only the people who need you (amber) or changed jobs (blue) lit up.
     var glance = false
+    /// Glance: short names drawn beside a few highlighted people ("Jason J."), keyed by person.
+    var callouts: [String: String] = [:]
     let onOpen: (String) -> Void
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -113,7 +115,7 @@ struct CompassView: View, Animatable {
     var body: some View {
         GeometryReader { g in
             let side = min(g.size.width, g.size.height)
-            let r = side / 2 - (glance ? 30 : 6)
+            let r = side / 2 - (glance ? 12 : 6)
             let center = CGPoint(x: g.size.width / 2, y: g.size.height / 2)
             let z = zoom(r: r)
             ZStack {
@@ -134,12 +136,12 @@ struct CompassView: View, Animatable {
                     .opacity(focused == nil ? 1 : 0)
             }
             .frame(width: g.size.width, height: g.size.height)
-            .clipShape(glance ? AnyShape(Rectangle()) : AnyShape(Circle().inset(by: -2)))
+            .clipShape(Circle().inset(by: glance ? -12 : -2))
             .contentShape(Circle())
             .onTapGesture { loc in tap(loc, center: center, r: r, z: z) }
         }
         // glance fills the card's width so sector names fit beside the rim; elsewhere it's a square
-        .modifier(SquareUnlessGlance(glance: glance))
+        .aspectRatio(1, contentMode: .fit)
         .animation(.smooth(duration: 0.55), value: focus)
         .task(id: data.total) { await pingLoop() }
         .accessibilityElement()
@@ -209,15 +211,16 @@ struct CompassView: View, Animatable {
     }
 
     private func draw(_ ctx: inout GraphicsContext, center: CGPoint, r: CGFloat, t: Double) {
-        let dotSize: CGFloat = glance ? (data.total > 900 ? 1.6 : 2.2) : data.total > 2500 ? 1.9 : data.total > 900 ? 2.4 : 3.1
+        let dotSize: CGFloat = glance ? (data.total > 1500 ? 1.7 : 2.1) : data.total > 2500 ? 1.9 : data.total > 900 ? 2.4 : 3.1
         cache.build(data, center: center, r: r, dot: dotSize)
         let s = sweep(t)
         drawGrid(&ctx, center: center, r: r)
-        if glance { drawRim(&ctx, center: center, r: r) }
+        if glance { drawBezel(&ctx, center: center, r: r) }
         if !reduceMotion { drawSweep(&ctx, center: center, r: r, sweep: s) }
         drawDots(&ctx, sweep: s)
-        drawFlags(&ctx, t: t, dot: glance ? 2.6 : dotSize)
-        if glance { drawRimLabels(&ctx, center: center, r: r) } else { drawLabels(&ctx, center: center, r: r) }
+        drawFlags(&ctx, t: t, dot: glance ? 2.8 : dotSize)
+        drawLabels(&ctx, center: center, r: r)
+        if glance { drawCallouts(&ctx, center: center, r: r) }
     }
 
     private func drawGrid(_ ctx: inout GraphicsContext, center: CGPoint, r: CGFloat) {
@@ -250,7 +253,7 @@ struct CompassView: View, Animatable {
         wedge.move(to: center)
         wedge.addArc(center: center, radius: r, startAngle: .radians(sweep - 0.9), endAngle: .radians(sweep), clockwise: false)
         wedge.closeSubpath()
-        let strength = scheme == .dark ? 0.20 : 0.16
+        let strength = glance ? 0.28 : scheme == .dark ? 0.20 : 0.16
         ctx.fill(wedge, with: .conicGradient(Gradient(stops: [
             .init(color: Theme.amber.opacity(0), location: 0),
             .init(color: Theme.amber.opacity(strength), location: 0.9 / (2 * Double.pi)),
@@ -260,7 +263,17 @@ struct CompassView: View, Animatable {
         var arm = Path()
         arm.move(to: center)
         arm.addLine(to: point(center, sweep, r))
-        ctx.stroke(arm, with: .linearGradient(Gradient(colors: [Theme.amber.opacity(0.1), Theme.amber.opacity(0.9)]), startPoint: center, endPoint: point(center, sweep, r)), lineWidth: 1.5)
+        if glance {
+            // a sharp, bright leading edge with a soft glow under it
+            ctx.drawLayer { l in
+                l.addFilter(.shadow(color: Theme.amber.opacity(0.9), radius: 5))
+                l.stroke(arm, with: .linearGradient(Gradient(colors: [Theme.amber.opacity(0.25), Theme.amber]), startPoint: center, endPoint: point(center, sweep, r)), lineWidth: 2)
+            }
+            let tip = point(center, sweep, r)
+            ctx.fill(Path(ellipseIn: CGRect(x: tip.x - 2.5, y: tip.y - 2.5, width: 5, height: 5)), with: .color(.white))
+        } else {
+            ctx.stroke(arm, with: .linearGradient(Gradient(colors: [Theme.amber.opacity(0.1), Theme.amber.opacity(0.9)]), startPoint: center, endPoint: point(center, sweep, r)), lineWidth: 1.5)
+        }
     }
 
     /// 1 right behind the arm, fading over most of a turn.
@@ -272,13 +285,48 @@ struct CompassView: View, Animatable {
         return exp(-behind / 2.2)
     }
 
+    /// Glance: an instrument bezel. Each sector is a colored arc on the rim, with fine
+    /// degree ticks inside it, so it reads as a radar at a glance and stays crisp at any size.
+    private func drawBezel(_ ctx: inout GraphicsContext, center: CGPoint, r: CGFloat) {
+        var fine = Path(), bold = Path()
+        for i in 0..<72 {
+            let a = Double(i) / 72 * 2 * Double.pi - Double.pi / 2
+            let long = i % 6 == 0
+            (long ? bold : fine).move(to: point(center, a, r - (long ? 7 : 4)))
+            if long { bold.addLine(to: point(center, a, r - 1)) } else { fine.addLine(to: point(center, a, r - 1)) }
+        }
+        ctx.stroke(fine, with: .color(.white.opacity(0.16)), lineWidth: 0.75)
+        ctx.stroke(bold, with: .color(.white.opacity(0.32)), lineWidth: 1)
+        drawRim(&ctx, center: center, r: r)
+    }
+
+    /// Short names beside the few people the card is pointing at.
+    private func drawCallouts(_ ctx: inout GraphicsContext, center: CGPoint, r: CGFloat) {
+        guard !callouts.isEmpty, focused == nil else { return }
+        var placed: [CGRect] = []
+        for item in cache.flagged where item.dot.r < reveal {
+            guard let name = callouts[item.dot.k] else { continue }
+            let label = ctx.resolve(Text(name).font(.custom("Geist-SemiBold", fixedSize: 10.5)).foregroundStyle(Theme.amber))
+            let size = label.measure(in: CGSize(width: 120, height: 20))
+            let right = item.point.x < center.x + r * 0.45
+            let x = right ? item.point.x + 9 : item.point.x - 9 - size.width - 10
+            let rect = CGRect(x: x, y: item.point.y - size.height / 2 - 3, width: size.width + 10, height: size.height + 6)
+            if placed.contains(where: { $0.insetBy(dx: -2, dy: -2).intersects(rect) }) { continue }
+            placed.append(rect)
+            let pill = Path(roundedRect: rect, cornerRadius: rect.height / 2)
+            ctx.fill(pill, with: .color(Color(hex: "#120E22").opacity(0.88)))
+            ctx.stroke(pill, with: .color(Theme.amber.opacity(0.55)), lineWidth: 0.8)
+            ctx.draw(label, at: CGPoint(x: rect.midX, y: rect.midY), anchor: .center)
+        }
+    }
+
     /// Glance: each sector as a colored arc around the edge, so the shape of the network reads at once.
     private func drawRim(_ ctx: inout GraphicsContext, center: CGPoint, r: CGFloat) {
         let gap = 0.035
         for w in data.wedges where w.span > gap * 2 {
             var arc = Path()
-            arc.addArc(center: center, radius: r + 7, startAngle: .radians(w.a0 + gap / 2), endAngle: .radians(w.a1 - gap / 2), clockwise: false)
-            ctx.stroke(arc, with: .color(Color(hex: w.color).opacity(0.9)), style: StrokeStyle(lineWidth: 5, lineCap: .round))
+            arc.addArc(center: center, radius: r + 5, startAngle: .radians(w.a0 + gap / 2), endAngle: .radians(w.a1 - gap / 2), clockwise: false)
+            ctx.stroke(arc, with: .color(Color(hex: w.color)), style: StrokeStyle(lineWidth: 4.5, lineCap: .round))
         }
     }
 
@@ -303,7 +351,9 @@ struct CompassView: View, Animatable {
         if glance {
             // everyone else is texture: faint, so the lit-up people carry the picture
             for b in cache.buckets where b.band < reveal {
-                ctx.fill(b.path, with: .color(b.color.opacity(0.22 + 0.25 * glow(b.angle, sweep: sweep))))
+                // phosphor: dim until the sweep passes, then bright, fading over the turn
+                let g = glow(b.angle, sweep: sweep)
+                ctx.fill(b.path, with: .color(b.color.opacity(0.2 + 0.72 * g * g)))
             }
             return
         }
@@ -331,6 +381,17 @@ struct CompassView: View, Animatable {
             }
             switch item.dot.f {
             case "w":
+                if glance && !reduceMotion {
+                    // a ping ripples out as the sweep crosses someone waiting on you
+                    let tau = 2 * Double.pi
+                    var behind = (sweep(t) - item.dot.a).truncatingRemainder(dividingBy: tau)
+                    if behind < 0 { behind += tau }
+                    if behind < 1.2 {
+                        let k = behind / 1.2
+                        let pr = dot * (1.8 + CGFloat(k) * 7)
+                        ctx.stroke(Path(ellipseIn: CGRect(x: p.x - pr, y: p.y - pr, width: pr * 2, height: pr * 2)), with: .color(Theme.amber.opacity((1 - k) * 0.9)), lineWidth: 1.4)
+                    }
+                }
                 let halo = dot * 3.4
                 ctx.fill(Path(ellipseIn: CGRect(x: p.x - halo, y: p.y - halo, width: halo * 2, height: halo * 2)),
                          with: .radialGradient(Gradient(colors: [Theme.amber.opacity(0.55 * dim), Theme.amber.opacity(0)]), center: p, startRadius: 0, endRadius: halo))
@@ -362,7 +423,7 @@ struct CompassView: View, Animatable {
     }
 
     private func drawLabels(_ ctx: inout GraphicsContext, center: CGPoint, r: CGFloat) {
-        guard focused == nil, labels else { return }
+        guard focused == nil, labels || glance else { return }
         for ring in data.rings.dropLast() {
             let y = center.y - r * CGFloat(ring.r) + 2
             ctx.draw(Text(ring.label.uppercased()).font(.custom("GeistMono-Medium", fixedSize: 9)).foregroundStyle(Color.secondary.opacity(0.85)),
