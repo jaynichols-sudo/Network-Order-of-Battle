@@ -8,6 +8,7 @@ struct HomeView: View {
     @State private var picksLoaded = false
 
     var body: some View {
+        ScrollViewReader { proxy in
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
                 header.cascade(0, distance: 10)
@@ -18,7 +19,7 @@ struct HomeView: View {
                 }
                 DailyFiveCard(picks: picks).cascade(2).edgeSettle()
                 banner.cascade(3).edgeSettle()
-                TodayCompassCard().cascade(3).edgeSettle()
+                TodayCompassCard().id("compass").cascade(3).edgeSettle()
                 TodayChips().cascade(4, distance: 10)
                 ComingUp().cascade(5).edgeSettle()
                 BirthdaysCard().cascade(6).edgeSettle()
@@ -49,6 +50,13 @@ struct HomeView: View {
                     .offset(y: -150)
                     .allowsHitTesting(false) }
             }
+        }
+        .task {
+            // CI screenshots: -homeScroll compass
+            guard UserDefaults.standard.string(forKey: "homeScroll") == "compass" else { return }
+            try? await Task.sleep(nanoseconds: 2_500_000_000)
+            withAnimation { proxy.scrollTo("compass", anchor: .top) }
+        }
         }
         .background(Theme.bg)
         .navigationTitle("Today")

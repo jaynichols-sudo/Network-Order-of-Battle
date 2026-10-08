@@ -99,6 +99,9 @@ struct CompassView: View, Animatable {
     var pings = false
     /// Sector and ring labels; off for the small compass on Today.
     var labels = true
+    /// The Today card: a simpler, legible radar. Sectors as a colored rim with names outside it,
+    /// everyone else faint, and only the people who need you (amber) or changed jobs (blue) lit up.
+    var glance = false
     let onOpen: (String) -> Void
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -110,7 +113,7 @@ struct CompassView: View, Animatable {
     var body: some View {
         GeometryReader { g in
             let side = min(g.size.width, g.size.height)
-            let r = side / 2 - 6
+            let r = side / 2 - (glance ? 24 : 6)
             let center = CGPoint(x: g.size.width / 2, y: g.size.height / 2)
             let z = zoom(r: r)
             ZStack {
@@ -131,11 +134,11 @@ struct CompassView: View, Animatable {
                     .opacity(focused == nil ? 1 : 0)
             }
             .frame(width: g.size.width, height: g.size.height)
-            .clipShape(Circle().inset(by: -2))
+            .clipShape(glance ? AnyShape(Rectangle()) : AnyShape(Circle().inset(by: -2)))
             .contentShape(Circle())
             .onTapGesture { loc in tap(loc, center: center, r: r, z: z) }
         }
-        .aspectRatio(1, contentMode: .fit)
+        .aspectRatio(glance ? nil : 1, contentMode: .fit)
         .animation(.smooth(duration: 0.55), value: focus)
         .task(id: data.total) { await pingLoop() }
         .accessibilityElement()
@@ -205,14 +208,15 @@ struct CompassView: View, Animatable {
     }
 
     private func draw(_ ctx: inout GraphicsContext, center: CGPoint, r: CGFloat, t: Double) {
-        let dotSize: CGFloat = data.total > 2500 ? 1.9 : data.total > 900 ? 2.4 : 3.1
+        let dotSize: CGFloat = glance ? (data.total > 900 ? 1.6 : 2.2) : data.total > 2500 ? 1.9 : data.total > 900 ? 2.4 : 3.1
         cache.build(data, center: center, r: r, dot: dotSize)
         let s = sweep(t)
         drawGrid(&ctx, center: center, r: r)
+        if glance { drawRim(&ctx, center: center, r: r) }
         if !reduceMotion { drawSweep(&ctx, center: center, r: r, sweep: s) }
         drawDots(&ctx, sweep: s)
-        drawFlags(&ctx, t: t, dot: dotSize)
-        drawLabels(&ctx, center: center, r: r)
+        drawFlags(&ctx, t: t, dot: glance ? 2.6 : dotSize)
+        if glance { drawRimLabels(&ctx, center: center, r: r) } else { drawLabels(&ctx, center: center, r: r) }
     }
 
     private func drawGrid(_ ctx: inout GraphicsContext, center: CGPoint, r: CGFloat) {
@@ -267,7 +271,41 @@ struct CompassView: View, Animatable {
         return exp(-behind / 2.2)
     }
 
+    /// Glance: each sector as a colored arc around the edge, so the shape of the network reads at once.
+    private func drawRim(_ ctx: inout GraphicsContext, center: CGPoint, r: CGFloat) {
+        let gap = 0.035
+        for w in data.wedges where w.span > gap * 2 {
+            var arc = Path()
+            arc.addArc(center: center, radius: r + 7, startAngle: .radians(w.a0 + gap / 2), endAngle: .radians(w.a1 - gap / 2), clockwise: false)
+            ctx.stroke(arc, with: .color(Color(hex: w.color).opacity(0.9)), style: StrokeStyle(lineWidth: 5, lineCap: .round))
+        }
+    }
+
+    /// Glance: the biggest sectors named just outside the rim, in their own color.
+    private func drawRimLabels(_ ctx: inout GraphicsContext, center: CGPoint, r: CGFloat) {
+        var placed: [CGRect] = []
+        for w in data.wedges.sorted(by: { $0.n > $1.n }).prefix(5) where w.span > 0.3 {
+            let label = ctx.resolve(Text(w.short).font(.custom("Geist-SemiBold", fixedSize: 11)).foregroundStyle(Color(hex: w.color)))
+            let size = label.measure(in: CGSize(width: 160, height: 20))
+            let c = cos(w.mid), sn = sin(w.mid)
+            let p = point(center, w.mid, r + 16)
+            // anchor away from the circle so the name never sits on the rim
+            let x = p.x + CGFloat(c) * size.width / 2, y = p.y + CGFloat(sn) * size.height / 2
+            let rect = CGRect(x: x - size.width / 2, y: y - size.height / 2, width: size.width, height: size.height)
+            if placed.contains(where: { $0.insetBy(dx: -4, dy: -2).intersects(rect) }) { continue }
+            placed.append(rect)
+            ctx.draw(label, at: CGPoint(x: rect.midX, y: rect.midY), anchor: .center)
+        }
+    }
+
     private func drawDots(_ ctx: inout GraphicsContext, sweep: Double) {
+        if glance {
+            // everyone else is texture: faint, so the lit-up people carry the picture
+            for b in cache.buckets where b.band < reveal {
+                ctx.fill(b.path, with: .color(b.color.opacity(0.22 + 0.25 * glow(b.angle, sweep: sweep))))
+            }
+            return
+        }
         let base = scheme == .dark ? 0.42 : 0.5
         for b in cache.buckets where b.band < reveal {
             let dim = focused != nil && focused?.color != nil && !inFocus(b.angle) ? 0.25 : 1
@@ -284,6 +322,12 @@ struct CompassView: View, Animatable {
         for item in cache.flagged where item.dot.r < reveal {
             let p = item.point
             let dim = inFocus(item.dot.a) ? 1.0 : 0.3
+            // glance lights up only the two signals the card's legend names
+            if glance && item.dot.f != "w" && item.dot.f != "j" {
+                let s = dot * 0.65
+                ctx.fill(Path(ellipseIn: CGRect(x: p.x - s, y: p.y - s, width: s * 2, height: s * 2)), with: .color(item.color.opacity(0.4)))
+                continue
+            }
             switch item.dot.f {
             case "w":
                 let halo = dot * 3.4

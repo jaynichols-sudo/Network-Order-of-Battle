@@ -15,40 +15,46 @@ struct TodayCompassCard: View {
 
     var body: some View {
         let t = data.tally
-        HStack(spacing: 16) {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("YOUR NETWORK").font(Theme.eyebrow).tracking(1.1).foregroundStyle(Theme.text2)
+                Spacer()
+                Text("\(data.total.formatted()) people").font(Theme.mono(.caption)).foregroundStyle(Theme.text2)
+            }
             Button {
                 Haptic.tap()
                 model.open(.explore)
             } label: {
-                CompassView(data: data, focus: .constant(nil), reveal: bloom, initials: model.myInitials, pings: true, labels: false) { _ in }
+                CompassView(data: data, focus: .constant(nil), reveal: bloom, initials: model.myInitials, pings: true, labels: false, glance: true) { _ in }
                     .allowsHitTesting(false)
-                    .frame(width: 128, height: 128)
+                    .frame(height: 260)
+                    .frame(maxWidth: .infinity)
                     // the drawing ignores touches, so give the button something to catch them
-                    .background(Circle().fill(Color.white.opacity(0.001)))
-                    .contentShape(Circle())
+                    .background(Rectangle().fill(Color.white.opacity(0.001)))
+                    .contentShape(Rectangle())
                     .zoomSourceExplore()
             }
-            .buttonStyle(.pressable(0.94))
+            .buttonStyle(.pressable(0.97))
             .accessibilityLabel("Your network compass. Opens Explore")
 
-            VStack(alignment: .leading, spacing: 10) {
-                Text("YOUR NETWORK · \(data.total.formatted())").font(Theme.eyebrow).tracking(1.1).foregroundStyle(Theme.text2)
-                stat(t.w, "waiting on you", big: true, color: Theme.needs) {
+            Text("You’re in the middle. The closer someone sits, the closer you are. Colors around the edge are sectors.")
+                .font(Theme.geist(.caption)).foregroundStyle(Theme.text2)
+                .fixedSize(horizontal: false, vertical: true)
+
+            HStack(alignment: .top, spacing: 8) {
+                stat(t.w, "waiting on you", key: .dot(Theme.amber), color: Theme.amber) {
                     model.perform(CardAction(kind: "filter", sig: ["waiting"]))
                 }
-                HStack(alignment: .top, spacing: 18) {
-                    stat(t.j, "new jobs") { model.perform(CardAction(kind: "filter", sig: ["jcw"])) }
-                    if data.rel {
-                        stat(t.close, "close") {
-                            var f = Filters(); f.rel = ["Close"]
-                            model.searchText = ""; model.filters = f; model.paths[.people] = []; model.tab = .people
-                        }
-                    } else {
-                        stat(t.n, "new") { model.perform(CardAction(kind: "filter", sig: ["new"])) }
+                stat(t.j, "new jobs", key: .dot(Theme.info)) { model.perform(CardAction(kind: "filter", sig: ["jcw"])) }
+                if data.rel {
+                    stat(t.close, "close", key: .ring) {
+                        var f = Filters(); f.rel = ["Close"]
+                        model.searchText = ""; model.filters = f; model.paths[.people] = []; model.tab = .people
                     }
+                } else {
+                    stat(t.n, "new", key: .ring) { model.perform(CardAction(kind: "filter", sig: ["new"])) }
                 }
             }
-            Spacer(minLength: 0)
         }
         .padding(16)
         .nightCard()
@@ -60,18 +66,28 @@ struct TodayCompassCard: View {
         }
     }
 
-    private func stat(_ n: Int, _ label: String, big: Bool = false, color: Color = .primary, action: @escaping () -> Void) -> some View {
+    enum Key { case dot(Color), ring }
+
+    private func stat(_ n: Int, _ label: String, key: Key, color: Color = .primary, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            VStack(alignment: .leading, spacing: 0) {
-                CountUp(value: n, font: Theme.geist(big ? .title2 : .title3, .bold), color: color, delay: big ? 0.35 : 0.5)
-                Text(label)
-                    .font(Theme.geist(big ? .footnote : .caption))
-                    .foregroundStyle(Theme.text2)
+            VStack(alignment: .leading, spacing: 2) {
+                CountUp(value: n, font: Theme.geist(.title3, .bold), color: color, delay: 0.4)
+                HStack(spacing: 5) {
+                    switch key {
+                    case .dot(let c): Circle().fill(c).frame(width: 7, height: 7)
+                    case .ring: Circle().strokeBorder(Theme.text2, lineWidth: 1.2).frame(width: 8, height: 8)
+                    }
+                    Text(label).font(Theme.geist(.caption)).foregroundStyle(Theme.text2).lineLimit(1).minimumScaleFactor(0.8)
+                }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 10).padding(.vertical, 8)
+            .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         }
         .buttonStyle(.pressable)
         .accessibilityElement(children: .combine)
     }
+
 }
 
 /// This week's five as rows with one action each. The full brief (drafts, swap someone out) is a tap away.

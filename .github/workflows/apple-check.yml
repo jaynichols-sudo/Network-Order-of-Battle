@@ -143,6 +143,7 @@ jobs:
             shoot $dev $p-28-paywall -demoOpen paywall
             shoot $dev $p-29-year -demoOpen year
             shoot $dev $p-30-team -startTab you -demoOpen team
+            shoot $dev $p-01b-compass-card -homeScroll compass
             shoot $dev $p-31-org -startTab companies -demoOpen org
             shoot $dev $p-32-notes -demoOpen notes
             xcrun simctl ui $dev content_size accessibility-large
@@ -153,6 +154,7 @@ jobs:
             xcrun simctl ui $dev content_size large
             xcrun simctl ui $dev appearance dark
             shoot $dev $p-12-home-dark
+            shoot $dev $p-12b-compass-card-dark -homeScroll compass
             shoot $dev $p-13-people-dark -startTab people
             shoot $dev $p-13b-profile-dark -startTab people -demoOpen person
             shoot $dev $p-13c-you-dark -startTab you
