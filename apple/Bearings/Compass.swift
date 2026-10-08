@@ -113,7 +113,7 @@ struct CompassView: View, Animatable {
     var body: some View {
         GeometryReader { g in
             let side = min(g.size.width, g.size.height)
-            let r = side / 2 - (glance ? 24 : 6)
+            let r = side / 2 - (glance ? 30 : 6)
             let center = CGPoint(x: g.size.width / 2, y: g.size.height / 2)
             let z = zoom(r: r)
             ZStack {

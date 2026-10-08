@@ -27,7 +27,7 @@ struct TodayCompassCard: View {
             } label: {
                 CompassView(data: data, focus: .constant(nil), reveal: bloom, initials: model.myInitials, pings: true, labels: false, glance: true) { _ in }
                     .allowsHitTesting(false)
-                    .frame(height: 260)
+                    .frame(height: 280)
                     .frame(maxWidth: .infinity)
                     // the drawing ignores touches, so give the button something to catch them
                     .background(Rectangle().fill(Color.white.opacity(0.001)))
