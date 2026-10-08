@@ -292,8 +292,11 @@ struct CompassView: View, Animatable {
         for i in 0..<72 {
             let a = Double(i) / 72 * 2 * Double.pi - Double.pi / 2
             let long = i % 6 == 0
-            (long ? bold : fine).move(to: point(center, a, r - (long ? 7 : 4)))
-            if long { bold.addLine(to: point(center, a, r - 1)) } else { fine.addLine(to: point(center, a, r - 1)) }
+            if long {
+                bold.move(to: point(center, a, r - 7)); bold.addLine(to: point(center, a, r - 1))
+            } else {
+                fine.move(to: point(center, a, r - 4)); fine.addLine(to: point(center, a, r - 1))
+            }
         }
         ctx.stroke(fine, with: .color(.white.opacity(0.16)), lineWidth: 0.75)
         ctx.stroke(bold, with: .color(.white.opacity(0.32)), lineWidth: 1)
