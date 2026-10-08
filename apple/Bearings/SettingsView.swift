@@ -1,4 +1,5 @@
 import SwiftUI
+import EventKit
 import AuthenticationServices
 import UniformTypeIdentifiers
 
@@ -115,6 +116,13 @@ struct SettingsView: View {
                         await CalendarService.shared.scan(model: model, force: true)
                     }
                 }))
+            if CalendarService.shared.enabled && CalendarService.shared.authorized {
+                NavigationLink {
+                    CalendarPicker()
+                } label: {
+                    LabeledContent("Calendars", value: CalendarPicker.summary)
+                }
+            }
             Toggle("Follow-ups in Apple Reminders", isOn: Binding(
                 get: { remindersOn },
                 set: { on in
@@ -326,6 +334,51 @@ struct SalesforceGuide: View {
                 Text(t).fontWeight(.semibold)
                 Text(d).font(.subheadline).foregroundStyle(.secondary).textSelection(.enabled)
             }
+        }
+    }
+}
+
+
+/// Pick which calendars Bearings reads for meeting prep and trips.
+struct CalendarPicker: View {
+    @Environment(AppModel.self) private var model
+    @State private var off = CalendarService.shared.hiddenCalendars
+    private let groups = CalendarService.shared.calendarGroups()
+
+    static var summary: String {
+        let all = CalendarService.shared.calendarGroups().flatMap(\.calendars)
+        let off = CalendarService.shared.hiddenCalendars
+        let on = all.filter { !off.contains($0.calendarIdentifier) }.count
+        return on == all.count ? "All" : "\(on) of \(all.count)"
+    }
+
+    var body: some View {
+        List {
+            Section {
+                Text("Bearings reads these calendars on your iPhone to brief you before meetings and spot trips. To add a calendar like an iCloud “All Work” calendar, make sure it’s turned on in the Calendar app first.")
+                    .font(.footnote).foregroundStyle(.secondary)
+            }
+            ForEach(groups, id: \.source) { g in
+                Section(g.source) {
+                    ForEach(g.calendars, id: \.calendarIdentifier) { c in
+                        Toggle(isOn: Binding(
+                            get: { !off.contains(c.calendarIdentifier) },
+                            set: { on in if on { off.remove(c.calendarIdentifier) } else { off.insert(c.calendarIdentifier) } }
+                        )) {
+                            HStack(spacing: 10) {
+                                Circle().fill(Color(cgColor: c.cgColor)).frame(width: 10, height: 10)
+                                Text(c.title)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        .navigationTitle("Calendars")
+        .navigationBarTitleDisplayMode(.inline)
+        .onChange(of: off) { _, v in
+            CalendarService.shared.hiddenCalendars = v
+            Task { await CalendarService.shared.scan(model: model, force: true) }
         }
     }
 }

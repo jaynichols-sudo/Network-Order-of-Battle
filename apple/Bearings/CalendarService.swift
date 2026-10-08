@@ -67,6 +67,30 @@ final class CalendarService {
         set { UserDefaults.standard.set(newValue, forKey: "calendarOn") }
     }
 
+    /// Calendars you turned off in Settings. Everything else is read, including calendars added later.
+    var hiddenCalendars: Set<String> {
+        get { Set(UserDefaults.standard.stringArray(forKey: "calendarsOff") ?? []) }
+        set { UserDefaults.standard.set(Array(newValue), forKey: "calendarsOff"); lastScan = .distantPast }
+    }
+
+    /// Every event calendar on the device, grouped by account (iCloud, Exchange, Google…).
+    func calendarGroups() -> [(source: String, calendars: [EKCalendar])] {
+        let all = store.calendars(for: .event)
+        let groups = Dictionary(grouping: all) { $0.source?.title ?? "Other" }
+        return groups.map { ($0.key, $0.value.sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }) }
+            .sorted { a, b in
+                let ra = a.source.lowercased().contains("icloud") ? 0 : 1, rb = b.source.lowercased().contains("icloud") ? 0 : 1
+                return ra != rb ? ra < rb : a.source < b.source
+            }
+    }
+
+    private var readCalendars: [EKCalendar]? {
+        let off = hiddenCalendars
+        guard !off.isEmpty else { return nil }
+        let on = store.calendars(for: .event).filter { !off.contains($0.calendarIdentifier) }
+        return on
+    }
+
     var trips: [Trip] {
         (calendarTrips + myTrips).filter { $0.end >= Calendar.current.startOfDay(for: Date()) }.sorted { $0.start < $1.start }
     }
@@ -130,7 +154,9 @@ final class CalendarService {
         lastScan = Date()
         let now = Date()
         let cal = Calendar.current
-        let predicate = store.predicateForEvents(withStart: cal.startOfDay(for: now), end: cal.date(byAdding: .day, value: 60, to: now) ?? now, calendars: nil)
+        let chosen = readCalendars
+        if let chosen, chosen.isEmpty { meetings = []; calendarTrips = []; scheduleNotifications(model: model); return }
+        let predicate = store.predicateForEvents(withStart: cal.startOfDay(for: now), end: cal.date(byAdding: .day, value: 60, to: now) ?? now, calendars: chosen)
         let events = store.events(matching: predicate)
 
         // meetings in the next week that include someone you know
@@ -138,7 +164,17 @@ final class CalendarService {
         let soon = cal.date(byAdding: .day, value: 7, to: now) ?? now
         for e in events where !e.isAllDay && e.endDate > now && e.startDate < soon {
             let people = (e.attendees ?? []).filter { !$0.isCurrentUser && $0.participantType == .person }
-            guard !people.isEmpty else { continue }
+            guard !people.isEmpty else {
+                // no invitees (a copied or hand-made event, like on an "All Work" calendar):
+                // look for names you know in the title and notes, "Coffee with Jason Jacobs"
+                let text = [e.title ?? "", e.notes ?? "", e.location ?? ""].joined(separator: "\n")
+                if let r = try? await model.engine.call("readNotes", [text], as: NotesReading.self), !r.people.isEmpty {
+                    let attendees = r.people.prefix(6).map { Attendee(name: $0.name, email: "", k: $0.k) }
+                    let id = (e.calendarItemIdentifier) + "-" + String(Int(e.startDate.timeIntervalSince1970))
+                    found.append(Meeting(id: id, title: e.title ?? "Meeting", start: e.startDate, end: e.endDate, location: e.location ?? "", attendees: Array(attendees)))
+                }
+                continue
+            }
             let list = people.map { p -> (email: String, name: String) in
                 let email = p.url.absoluteString.hasPrefix("mailto:") ? String(p.url.absoluteString.dropFirst(7)) : ""
                 return (email, p.name ?? email)
