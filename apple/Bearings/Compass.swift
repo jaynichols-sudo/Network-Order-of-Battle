@@ -311,10 +311,18 @@ struct CompassView: View, Animatable {
             guard let name = callouts[item.dot.k] else { continue }
             let label = ctx.resolve(Text(name).font(.custom("Geist-SemiBold", fixedSize: 10.5)).foregroundStyle(Theme.amber))
             let size = label.measure(in: CGSize(width: 120, height: 20))
-            let right = item.point.x < center.x + r * 0.45
-            let x = right ? item.point.x + 9 : item.point.x - 9 - size.width - 10
-            let rect = CGRect(x: x, y: item.point.y - size.height / 2 - 3, width: size.width + 10, height: size.height + 6)
-            if placed.contains(where: { $0.insetBy(dx: -2, dy: -2).intersects(rect) }) { continue }
+            // try beside the dot on the outward side first, then the other side, above and below;
+            // never over you in the middle or another name
+            let w = size.width + 10, h = size.height + 6, p = item.point
+            let outward = p.x >= center.x
+            let spots = [CGPoint(x: outward ? p.x + 9 : p.x - 9 - w, y: p.y - h / 2), CGPoint(x: outward ? p.x - 9 - w : p.x + 9, y: p.y - h / 2),
+                         CGPoint(x: p.x - w / 2, y: p.y - 9 - h), CGPoint(x: p.x - w / 2, y: p.y + 9)]
+            let me = CGRect(x: center.x - 32, y: center.y - 32, width: 64, height: 64)
+            guard let spot = spots.map({ CGRect(origin: $0, size: CGSize(width: w, height: h)) }).first(where: { c in
+                !c.intersects(me) && !placed.contains(where: { $0.insetBy(dx: -2, dy: -2).intersects(c) })
+                    && hypot(c.midX - center.x, c.midY - center.y) < r - 6
+            }) else { continue }
+            let rect = spot
             placed.append(rect)
             let pill = Path(roundedRect: rect, cornerRadius: rect.height / 2)
             ctx.fill(pill, with: .color(Color(hex: "#120E22").opacity(0.88)))
