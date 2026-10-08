@@ -138,7 +138,8 @@ struct CompassView: View, Animatable {
             .contentShape(Circle())
             .onTapGesture { loc in tap(loc, center: center, r: r, z: z) }
         }
-        .aspectRatio(glance ? nil : 1, contentMode: .fit)
+        // glance fills the card's width so sector names fit beside the rim; elsewhere it's a square
+        .modifier(SquareUnlessGlance(glance: glance))
         .animation(.smooth(duration: 0.55), value: focus)
         .task(id: data.total) { await pingLoop() }
         .accessibilityElement()
@@ -407,6 +408,13 @@ struct CompassView: View, Animatable {
             Haptic.tap()
             focus = (focus == w.id) ? nil : w.id
         }
+    }
+}
+
+private struct SquareUnlessGlance: ViewModifier {
+    let glance: Bool
+    @ViewBuilder func body(content: Content) -> some View {
+        if glance { content } else { content.aspectRatio(1, contentMode: .fit) }
     }
 }
 
