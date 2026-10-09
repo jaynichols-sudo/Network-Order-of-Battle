@@ -8,6 +8,10 @@ on:
         description: "iPhone screenshots only (skip the Mac build, UI tests and iPad)"
         type: boolean
         default: false
+      only:
+        description: "Only screenshots whose name matches this pattern (e.g. 3[3-8])"
+        type: string
+        default: ""
 
 permissions:
   contents: write
@@ -86,7 +90,7 @@ jobs:
           xcrun simctl shutdown "$UDID" || true
       - name: Screenshots
         continue-on-error: true
-        timeout-minutes: 15
+        timeout-minutes: 30
         run: |
           APP=$(find build/dd/Build/Products -maxdepth 2 -name "Bearings.app" -path "*iphonesimulator*" | head -1)
           echo "app: $APP"
@@ -103,6 +107,7 @@ jobs:
           mkdir -p shots
           shoot() { # device name args...
             dev=$1; name=$2; shift 2
+            if [ -n "${{ inputs.only }}" ] && ! echo "$name" | grep -Eq "${{ inputs.only }}"; then return 0; fi
             xcrun simctl terminate $dev com.jaynichols.networkoob >/dev/null 2>&1 || true
             xcrun simctl launch $dev com.jaynichols.networkoob -onboarded YES "$@" >/dev/null
             sleep 7
