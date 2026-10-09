@@ -7,6 +7,7 @@ import {
   classify, roleOf, keyOf, stripRow, rowsFromCSV, relationsFromArchive, mergeImport, sampleNetwork, warmth, parseCSV, slugOf,
 } from './core.js';
 import { parseQuery, matchNL } from './nlq.js';
+import { findAgency, officeOf } from './agencies.js';
 import { INDUSTRIES, indColor, indShort, setIndustryOverrides, companyKey, UNCLASSIFIED, GOV_IND } from './industry.js';
 
 /* ---------- state ---------- */
@@ -1277,12 +1278,15 @@ function orgChart(q){
   const hit = c => { const k = coKey(c); return !!k && (k === want || (want.length >= 4 && (k.startsWith(want + ' ') || k.includes(' ' + want + ' ') || k.endsWith(' ' + want)))); };
   const mine = live().filter(r => hit(r.c) || hit(r.cl.agency));
   const cards = mine.map(r => ({k: r.k, name: `${r.f} ${r.l}`.trim(), p: r.p || '', sen: r.cl.sen, func: r.cl.func, band: r.wm.band, score: r.wm.score, src: 'you', rt: (r.ed && r.ed.rt) || ''}));
+  // company text per card, for placing people in an agency's offices (kept off the card)
+  const coOf = new Map(cards.map((c, i) => [c, [mine[i].c, mine[i].cl.agency].filter(Boolean).join(' / ')]));
   const seen = new Set(cards.map(c => fold_(c.name)));
   for (const t of teamPaths(hit)){
     if (seen.has(fold_(t.name))) continue;
     seen.add(fold_(t.name));
     const role = roleOf(t.p);
-    cards.push({k: '', name: t.name, p: t.p, sen: role.sen, func: role.func, band: t.b, score: 0, src: 'team', owner: t.owner, rt: ''});
+    const card = {k: '', name: t.name, p: t.p, sen: role.sen, func: role.func, band: t.b, score: 0, src: 'team', owner: t.owner, rt: ''};
+    cards.push(card); coOf.set(card, t.c || '');
   }
   for (const x of S.prospects){
     if (!hit(x.c) || seen.has(fold_(x.name))) continue;
@@ -1290,9 +1294,10 @@ function orgChart(q){
     const role = roleOf(x.p);
     const card = {k: '', name: x.name, p: x.p, sen: role.sen, func: role.func, band: 'none', score: 0, src: 'list', owner: x.src, rt: ''};
     if (x.e) card.e = x.e; if (x.li) card.li = x.li;
-    cards.push(card);
+    cards.push(card); coOf.set(card, x.c || '');
   }
-  const levels = SENIORITY.map(id => ({id, people: cards.filter(c => c.sen === id).sort((a, b) => (SRC_ORDER[a.src] - SRC_ORDER[b.src]) || b.score - a.score || a.name.localeCompare(b.name))}));
+  const bySeat = (a, b) => (SRC_ORDER[a.src] - SRC_ORDER[b.src]) || b.score - a.score || a.name.localeCompare(b.name);
+  const levels = SENIORITY.map(id => ({id, people: cards.filter(c => c.sen === id).sort(bySeat)}));
   const fc = {}; for (const c of cards) fc[c.func] = (fc[c.func] || 0) + 1;
   const funcs = Object.entries(fc).sort((a, b) => b[1] - a[1]).map(([id, n]) => ({id, n}));
   // a function where you know someone, but no one at director level or above
@@ -1301,7 +1306,25 @@ function orgChart(q){
   const links = cards.filter(c => c.k && c.rt && cards.some(o => o.k === c.rt)).map(c => ({from: c.k, to: c.rt}));
   const name = (mine[0] && (hit(mine[0].c) ? mine[0].c : mine[0].cl.agency)) || (S.prospects.find(x => hit(x.c)) || {}).c || q;
   const count = src => cards.filter(c => c.src === src).length;
-  return {company: name, total: cards.length, known: count('you'), team: count('team'), listed: count('list'), levels: levels.filter(l => l.people.length), allLevels: SENIORITY, funcs, gaps, links};
+  const out = {company: name, total: cards.length, known: count('you'), team: count('team'), listed: count('list'), levels: levels.filter(l => l.people.length), allLevels: SENIORITY, funcs, gaps, links};
+  const ag = findAgency(name) || findAgency(q);
+  if (ag) out.structure = officeStructure(ag, cards, coOf, bySeat);
+  return out;
+}
+// An agency's top-level offices with the people placed in them (by title, then company).
+function officeStructure(ag, cards, coOf, order){
+  const a = ag.a;
+  const offices = a.offices.map(o => ({code: o.code, name: o.name, people: [], filled: false}));
+  for (const c of cards){ const i = officeOf(ag, c.p, coOf.get(c)); if (i >= 0) offices[i].people.push(c); }
+  for (const o of offices){ o.people.sort(order); o.filled = o.people.length > 0; }
+  return {agency: a.agency, short: a.short, leader: a.leader, asOf: a.asOf, source: a.source, offices};
+}
+// The structure for an agency even when you know no one there yet; null if it isn't one we map.
+function structureFor(q){
+  const o = orgChart(q);
+  if (o.structure) return o.structure;
+  const ag = findAgency(q);
+  return ag ? officeStructure(ag, [], new Map(), () => 0) : null;
 }
 const fold_ = s => String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z ]/g, '').trim();
 const setReportsTo = (k, boss) => setEdit(k, {rt: boss && boss !== k ? boss : ''});
@@ -1576,7 +1599,7 @@ function constants(){
 
 const api = {load, loadSample, loadFiles, clearNotes, clusters, placeClues, setCompanyLocation, companyPlaces, messages, matchAttendees, alsoAt, setLens, info, people, person, search, facets, home, payoff, targets, unit, addTargetCandidates, toggleTarget, setTargetNote, orgs,
   industries, industry, setCompanyIndustry, setCompanyLink, ranks, deck, deckCount, reviewed, radar, compass, startFromContacts, introPaths, weekly, touch, setCircle, setEdit, followUp, markReplied, addNote,
-  importTexts, importSnapshot, yearInReview, teamPack, addTeamPack, removeTeamPack, teamList, matchEnrichment, readNotes, memory, applyMail, clearMail, addProspects, clearProspects, addPursuit, updatePursuit, removePursuit, assignRole, pursuits, pursuit, moves, setRoleSince, quickLog, addIntro, setIntro, intros, trend, snapshot, targetChanges, ask, importSocial, clearSocial, socials, orgChart, setReportsTo, backup, restore, exportCSV, reminders, watch, constants};
+  importTexts, importSnapshot, yearInReview, teamPack, addTeamPack, removeTeamPack, teamList, matchEnrichment, readNotes, memory, applyMail, clearMail, addProspects, clearProspects, addPursuit, updatePursuit, removePursuit, assignRole, pursuits, pursuit, moves, setRoleSince, quickLog, addIntro, setIntro, intros, trend, snapshot, targetChanges, ask, importSocial, clearSocial, socials, orgChart, structureFor, setReportsTo, backup, restore, exportCSV, reminders, watch, constants};
 // Every call goes through here: JSON string in, JSON string out, errors as {error}.
 globalThis.Bearings = {
   call(name, argsJSON){

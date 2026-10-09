@@ -299,6 +299,67 @@ test('org chart lays out who you and your team know at a company by level, with 
   assert.ok(!o.levels.flatMap(l => l.people).some(p => p.name === 'Alan Turing'));
 });
 
+test('org chart for a mapped agency lays people into its real offices', () => {
+  const o = call('orgChart', 'DISA');
+  assert.ok(o.levels.length > 0, 'levels are still there');
+  const s = o.structure;
+  assert.ok(s, 'DISA has a structure');
+  assert.equal(s.agency, 'Defense Information Systems Agency');
+  assert.equal(s.leader, 'Director');
+  assert.ok(s.asOf && /^https:\/\//.test(s.source));
+  assert.ok(s.offices.length >= 8);
+  const office = code => s.offices.find(x => x.code === code);
+  const psd = office('PSD');
+  assert.ok(psd.filled && psd.people.length > 0, 'contracting officers sit in Procurement Services');
+  assert.ok(psd.people.every(p => /contract/i.test(p.p)));
+  assert.equal(office('WHCA').filled, false);
+  assert.deepEqual(office('WHCA').people, []);
+  // every placed person is someone from the levels, and nobody is placed twice
+  const inLevels = new Set(o.levels.flatMap(l => l.people.map(p => p.name)));
+  const placed = s.offices.flatMap(x => x.people.map(p => p.name));
+  assert.ok(placed.every(n => inLevels.has(n)));
+  assert.equal(new Set(placed).size, placed.length);
+  // a title that names no office leaves the person out of the offices
+  assert.ok(!placed.some(n => o.levels.flatMap(l => l.people).find(p => p.name === n && /Zero Trust/.test(p.p))));
+});
+
+test('org chart offices follow titles and company names for other agencies', () => {
+  const office = (s, code) => s.offices.find(x => x.code === code);
+  const cisa = call('orgChart', 'CISA').structure;
+  assert.equal(cisa.agency, 'Cybersecurity and Infrastructure Security Agency');
+  assert.ok(office(cisa, 'IOD').people.some(p => /Protective Security Advisor/.test(p.p)));
+  assert.ok(office(cisa, 'CSD').people.some(p => /ICS Assessments/.test(p.p)));
+  const usace = call('orgChart', 'Army Corps').structure;
+  assert.ok(office(usace, 'SAD').people.some(p => /Wilmington District/.test(p.p)), 'a district lands in its division');
+  const cyber = call('orgChart', 'Cyber Command').structure;
+  assert.equal(cyber.agency, 'U.S. Cyber Command');
+  assert.ok(office(cyber, 'ARCYBER').people.length > 0);
+  const net = ['First Name,Last Name,URL,Email Address,Company,Position,Connected On',
+    'Ada,Lovelace,,,NAVFAC Southeast,Environmental Program Manager,05 Oct 2020',
+    'Grace,Hopper,,,NAVFAC Southeast,Contract Specialist,01 Jan 2020'].join('\n');
+  call('importTexts', { connections: net }, 'test');
+  call('loadFiles', { network: globalThis.Bearings.fileJSON('network') }, null);
+  const nav = call('orgChart', 'NAVFAC').structure;
+  assert.deepEqual(office(nav, 'EV').people.map(p => p.name), ['Ada Lovelace'], 'the title wins');
+  assert.deepEqual(office(nav, 'LANT').people.map(p => p.name), ['Grace Hopper'], 'then the company');
+});
+
+test('unknown companies have no structure, and structureFor works with no one known', () => {
+  const net = ['First Name,Last Name,URL,Email Address,Company,Position,Connected On',
+    'Ada,Lovelace,,,Acme Corp,Chief Technology Officer,05 Oct 2020'].join('\n');
+  call('importTexts', { connections: net }, 'test');
+  call('loadFiles', { network: globalThis.Bearings.fileJSON('network') }, null);
+  assert.equal(call('orgChart', 'Acme').structure, undefined);
+  assert.equal(call('structureFor', 'Acme'), null);
+  assert.equal(call('structureFor', 'Not An Agency At All'), null);
+  const ferc = call('structureFor', 'Federal Energy Regulatory Commission');
+  assert.equal(ferc.agency, 'Federal Energy Regulatory Commission');
+  assert.ok(ferc.offices.length > 0);
+  assert.ok(ferc.offices.every(x => !x.filled && x.people.length === 0));
+  assert.ok(ferc.offices.some(x => x.code === 'OEIS'));
+  assert.equal(call('structureFor', 'FERC').agency, 'Federal Energy Regulatory Commission');
+});
+
 test('email dates and subjects feed memory, waiting and the weekly five', () => {
   const net = ['First Name,Last Name,URL,Email Address,Company,Position,Connected On',
     'Ada,Lovelace,,ada@acme.com,Acme Corp,Chief Technology Officer,05 Oct 2020',

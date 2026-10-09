@@ -25,6 +25,24 @@ struct OrgChart: Decodable {
     struct Level: Decodable, Hashable { var id: String; var people: [Card] }
     struct Func: Decodable, Hashable { var id: String; var n: Int }
     struct Link: Decodable, Hashable { var from: String; var to: String }
+    /// A mapped agency's top-level offices (directorates, PEOs, divisions), with the people
+    /// you know placed in them. Absent for companies we don't map, and in older engines.
+    struct Office: Decodable, Hashable, Identifiable {
+        var code: String
+        var name: String
+        var people: [Card]?
+        var filled: Bool?
+        var id: String { code }
+        var members: [Card] { people ?? [] }
+    }
+    struct Structure: Decodable, Hashable {
+        var agency: String
+        var short: String?
+        var leader: String?
+        var asOf: String?
+        var source: String?
+        var offices: [Office]?
+    }
     var company: String
     var total: Int?
     var known: Int?
@@ -35,6 +53,7 @@ struct OrgChart: Decodable {
     var funcs: [Func]
     var gaps: [String]
     var links: [Link]
+    var structure: Structure?
 }
 
 extension AppModel {
@@ -54,6 +73,7 @@ struct OrgChartView: View {
     @State private var outside: OrgChart.Card?
     @State private var filling = false
     @State private var importing = false
+    @State private var allOffices = false
 
     private static let short: [String: String] = [
         "C-suite / Owner": "Executives", "VP": "Vice presidents", "Director / Head": "Directors and heads",
@@ -65,9 +85,12 @@ struct OrgChartView: View {
             VStack(alignment: .leading, spacing: 18) {
                 if let c = chart {
                     header(c).cascade(0)
+                    if let s = c.structure, let offices = s.offices, !offices.isEmpty {
+                        structure(s, offices: offices, chart: c).cascade(1)
+                    }
                     ForEach(Array((c.allLevels ?? c.levels.map(\.id)).enumerated()), id: \.element) { i, lv in
                         level(lv, people: c.levels.first { $0.id == lv }?.people ?? [], chart: c)
-                            .cascade(i + 1)
+                            .cascade(i + 2)
                     }
                     Text("LinkedIn doesn’t share who reports to whom. Drag someone onto their manager, or press and hold a card to set it. Only you see this.")
                         .font(Theme.geist(.footnote)).foregroundStyle(Theme.text2)
@@ -154,6 +177,112 @@ struct OrgChartView: View {
             }
         }
         .padding(.horizontal, 4)
+    }
+
+    // MARK: offices
+
+    /// The agency's real top-level offices: who you know in each, and the empty ones as
+    /// places to find a way in. Offices with people come first; the rest fold away.
+    @ViewBuilder private func structure(_ s: OrgChart.Structure, offices: [OrgChart.Office], chart c: OrgChart) -> some View {
+        let filled = offices.filter { !$0.members.isEmpty }
+        let empty = offices.filter { $0.members.isEmpty }
+        let keep = max(0, 6 - filled.count)
+        let shown = filled + (allOffices ? empty : Array(empty.prefix(keep)))
+        let hidden = offices.count - shown.count
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                Label(s.leader ?? "Leadership", systemImage: "building.columns")
+                    .font(Theme.geist(.caption, .semibold))
+                    .foregroundStyle(Theme.onPrimary)
+                    .padding(.horizontal, 10).padding(.vertical, 5)
+                    .background(Theme.primary, in: Capsule())
+                Text("Offices").font(Theme.geist(.footnote, .semibold)).foregroundStyle(Theme.text2)
+                Spacer()
+                Text("\(filled.count) of \(offices.count) covered").font(Theme.mono(.footnote)).foregroundStyle(Theme.text3)
+            }
+            .padding(.horizontal, 4)
+            .accessibilityElement(children: .combine)
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 156), spacing: 10)], alignment: .leading, spacing: 10) {
+                ForEach(shown) { o in office(o, chart: c) }
+            }
+            if hidden > 0 || (allOffices && empty.count > keep) {
+                Button {
+                    withAnimation(Motion.bouncy) { allOffices.toggle() }
+                } label: {
+                    Text(allOffices ? "Show fewer offices" : "Show all \(offices.count) offices")
+                        .font(Theme.geist(.footnote, .semibold))
+                }
+                .buttonStyle(PillButtonStyle(kind: .soft))
+                .frame(maxWidth: .infinity)
+            }
+            Text("Structure as of \(s.asOf ?? "recently"). Offices change: tell us if this is out of date.")
+                .font(Theme.geist(.caption)).foregroundStyle(Theme.text3)
+                .padding(.horizontal, 4)
+        }
+    }
+
+    @ViewBuilder private func office(_ o: OrgChart.Office, chart c: OrgChart) -> some View {
+        let people = o.members
+        VStack(alignment: .leading, spacing: 6) {
+            Text(o.code).font(Theme.mono(.caption, .semibold)).foregroundStyle(people.isEmpty ? Theme.text3 : Theme.primary)
+            Text(o.name).font(Theme.geist(.subheadline, .semibold)).lineLimit(2).multilineTextAlignment(.leading)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+            if people.isEmpty {
+                Text("No one here yet").font(Theme.geist(.caption)).foregroundStyle(Theme.text2)
+                Button("Ways in") { model.introQuery = c.company }
+                    .font(Theme.geist(.caption, .semibold))
+                    .buttonStyle(PillButtonStyle(kind: .soft))
+            } else {
+                HStack(spacing: -8) {
+                    ForEach(people.prefix(5)) { p in officeFace(p) }
+                    if people.count > 5 {
+                        Text("+\(people.count - 5)")
+                            .font(.custom("Geist-SemiBold", fixedSize: 11)).foregroundStyle(Theme.text2)
+                            .frame(width: 30, height: 30)
+                            .background(Circle().fill(Theme.soft))
+                            .background(Circle().fill(Theme.card).padding(-2))
+                    }
+                }
+                Text(people.count == 1 ? people[0].name : "\(people[0].name) and \(people.count - 1) more")
+                    .font(Theme.geist(.caption)).foregroundStyle(Theme.text2).lineLimit(1)
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, minHeight: 138, alignment: .topLeading)
+        .background(people.isEmpty ? Theme.bg : Theme.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay {
+            if people.isEmpty {
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .strokeBorder(Theme.text3.opacity(0.5), style: StrokeStyle(lineWidth: 1.2, dash: [5, 4]))
+            }
+        }
+    }
+
+    /// A small face in an office card. Tapping opens the profile (or, for someone you
+    /// don't know yet, the same choices as their card below).
+    @ViewBuilder private func officeFace(_ c: OrgChart.Card) -> some View {
+        let person = c.k.isEmpty ? nil : model.person(c.k)
+        let face = Group {
+            if let person {
+                Avatar(person: person, size: 30)
+            } else {
+                Text(String(c.name.split(separator: " ").compactMap(\.first).prefix(2)))
+                    .font(.custom("Geist-Bold", fixedSize: 11)).foregroundStyle(Theme.primary)
+                    .frame(width: 30, height: 30)
+                    .background(Circle().fill(Theme.card))
+                    .background(Circle().strokeBorder(Theme.primary.opacity(0.5), style: StrokeStyle(lineWidth: 1.2, dash: [3, 3])))
+            }
+        }
+        .background(Circle().fill(Theme.card).padding(-2))
+        .accessibilityLabel(c.name)
+        if c.src == "list" {
+            Button { outside = c } label: { face }.buttonStyle(.pressable)
+        } else if c.k.isEmpty {
+            face
+        } else {
+            Button { model.open(.person(c.k)) } label: { face }.buttonStyle(.pressable)
+        }
     }
 
     @ViewBuilder private func level(_ id: String, people: [OrgChart.Card], chart c: OrgChart) -> some View {
