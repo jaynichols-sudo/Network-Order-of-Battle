@@ -347,3 +347,88 @@ test('people from an enrichment file you are not connected to fill empty org cha
   assert.equal(call('addProspects', [{name: 'Ada Lovelace', p: 'CTO', c: 'Acme Corp'}], 'zoominfo'), 0);
   assert.equal(call('clearProspects', 'Acme').removed, 1);
 });
+
+test('pursuits map the people who decide an opportunity, with gaps and suggestions', () => {
+  call('loadSample');
+  const p = call('addPursuit', {name: 'DISA OT gateway', agency: 'DISA', due: '2026-12-01'});
+  let d = call('pursuit', p.id);
+  assert.equal(d.roleList.length, 6);
+  assert.ok(d.known > 0);
+  const withSuggest = d.roleList.find(r => r.suggest.length);
+  assert.ok(withSuggest, 'some role has suggestions');
+  call('assignRole', p.id, withSuggest.role, withSuggest.suggest[0].k, true);
+  d = call('pursuit', p.id);
+  assert.equal(d.filled, 1);
+  assert.equal(d.roleList.find(r => r.role === withSuggest.role).people[0].k, withSuggest.suggest[0].k);
+  call('updatePursuit', p.id, {stage: 'Proposal'});
+  assert.equal(call('pursuits')[0].stage, 'Proposal');
+  const saved = JSON.parse(globalThis.Bearings.fileJSON('pursuits'));
+  assert.equal(saved.pursuits.length, 1);
+  call('removePursuit', p.id);
+  assert.equal(call('pursuits').length, 0);
+});
+
+test('moves flag people leaving service and long tours', () => {
+  const net = ['First Name,Last Name,URL,Email Address,Company,Position,Connected On',
+    'Pat,Lee,,,US Navy,Commander (O-5) transitioning via SkillBridge,05 Oct 2020',
+    'Sam,Ray,,,US Army,Lieutenant Colonel (O-5),01 Jan 2020',
+    'Ann,Cole,,,Acme Corp,Engineer,01 Jan 2020'].join('\n');
+  call('importTexts', { connections: net }, 'test');
+  call('loadFiles', { network: globalThis.Bearings.fileJSON('network') }, null);
+  const by = new Map(people().map(p => [p.f, p.k]));
+  call('setRoleSince', by.get('Sam'), '2023-06');
+  const ms = call('moves');
+  assert.equal(ms[0].k, by.get('Pat'));
+  assert.equal(ms[0].kind, 'transition');
+  const sam = ms.find(m => m.k === by.get('Sam'));
+  assert.equal(sam.kind, 'pcs');
+  assert.ok(!ms.some(m => m.k === by.get('Ann')));
+  assert.match(call('memory', by.get('Sam')).line, /Likely to rotate/);
+});
+
+test('quick log files a spoken note, a touch and a follow-up', () => {
+  call('loadSample');
+  const p = people().find(x => x.f && x.l);
+  const r = call('quickLog', `Just met ${p.f} ${p.l}, wants pricing by Friday`);
+  assert.equal(r.people[0].k, p.k);
+  assert.ok(r.days >= 1 && r.days <= 7);
+  const m = call('memory', p.k);
+  assert.equal(m.last.source, 'Voice');
+  assert.ok(call('person', p.k).ed.due);
+  assert.equal(call('quickLog', 'nobody here', false).people.length, 0);
+});
+
+test('intros are tracked on the person you asked, with nudges', () => {
+  call('loadSample');
+  const p = people()[0];
+  call('addIntro', p.k, 'Robert Hale', 'DISA');
+  let list = call('intros');
+  assert.equal(list.length, 1);
+  assert.equal(list[0].st, 'asked');
+  call('setIntro', p.k, list[0].id, 'made');
+  list = call('intros');
+  assert.equal(list[0].st, 'made');
+  assert.equal(list[0].nudge, false);
+});
+
+test('ask answers plain questions from the network', () => {
+  call('loadSample');
+  assert.equal(call('ask', 'Who is waiting on me?').kind, 'waiting');
+  const at = call('ask', 'Who do I know at DISA?');
+  assert.equal(at.kind, 'at');
+  assert.ok(at.people.length > 0);
+  assert.equal(call('ask', 'Who should I see in San Diego next week?').kind, 'city');
+  assert.equal(call('ask', 'Who can get me into NAVFAC').kind, 'ways');
+  assert.ok(['search', 'at'].includes(call('ask', 'navy o-5 and up in cyber').kind));
+});
+
+test('account trends count reach by month and snapshot coverage weekly', () => {
+  call('loadSample');
+  const t = call('trend', 'DISA');
+  assert.equal(t.months.length, 12);
+  assert.ok(t.months[11].known >= t.months[0].known);
+  assert.equal(call('snapshot'), true);
+  assert.equal(call('snapshot'), false);
+  assert.equal(call('trend', 'DISA').snaps.length, 1);
+  assert.ok(Array.isArray(call('targetChanges')));
+});

@@ -40,6 +40,8 @@ struct RootView: View {
             Group { if Pro.shared.unlocked { IntroFinderView(query: w.id) } else { PaywallView(feature: .waysIn) } }.environment(AppModel.shared)
         }
         .sheet(item: $model.notesDraft) { d in MeetingNotesSheet(draft: d).environment(AppModel.shared) }
+        .sheet(isPresented: $model.showAsk) { AskView().environment(AppModel.shared) }
+        .sheet(isPresented: $model.showQuickLog) { QuickLogSheet().environment(AppModel.shared) }
         .sheet(item: $model.feedback) { f in FeedbackSheet(screenshot: f.screenshot).environment(AppModel.shared) }
         .shakeForFeedback($model.feedback)
         .sheet(item: $model.shareFile) { f in ActivityView(items: [f.url]).ignoresSafeArea().environment(AppModel.shared) }
@@ -84,6 +86,10 @@ struct RootView: View {
                     case .about(let k): PersonAboutView(k: k)
                     case .team: TeamView()
                     case .org(let name): OrgChartView(name: name)
+                    case .pursuits: PursuitsView()
+                    case .pursuit(let id): PursuitView(id: id)
+                    case .moves: MovesView()
+                    case .intros: IntrosView()
                     }
                 }
         }

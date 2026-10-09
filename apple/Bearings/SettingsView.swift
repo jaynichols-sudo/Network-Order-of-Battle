@@ -72,6 +72,8 @@ struct SettingsView: View {
 
     private var networkSection: some View {
         Section {
+            Toggle("Watchlist news on Today", isOn: Binding(get: { UserDefaults.standard.object(forKey: "watchNews") as? Bool ?? true },
+                                                          set: { UserDefaults.standard.set($0, forKey: "watchNews") }))
             Picker("Federal and military view", selection: lensChoice) {
                 Text(model.info.lensAuto ? "Automatic (on)" : "Automatic (off)").tag("auto")
                 Text("On").tag("on")

@@ -10,7 +10,7 @@ import { parseQuery, matchNL } from './nlq.js';
 import { INDUSTRIES, indColor, indShort, setIndustryOverrides, companyKey, UNCLASSIFIED, GOV_IND } from './industry.js';
 
 /* ---------- state ---------- */
-const S = {all: [], byK: new Map(), edits: {}, review: {}, targets: [], meta: null, mode: 'sample', coInd: Object.create(null), coLink: Object.create(null), coLoc: Object.create(null), lensPref: null, lens: false, hasRel: false, team: [], prospects: []};
+const S = {all: [], byK: new Map(), edits: {}, review: {}, targets: [], meta: null, mode: 'sample', coInd: Object.create(null), coLink: Object.create(null), coLoc: Object.create(null), lensPref: null, lens: false, hasRel: false, team: [], prospects: [], pursuits: [], snaps: {}};
 const SEG_COLORS = ['#7A9A1E', '#3E7BE0', '#1E9E8F', '#7556E8', '#C79100', '#D9467F', '#E0683A', '#A07C50', '#6B7F99', '#5B6B83'];
 const segColor = seg => SEG_COLORS[SEGI[seg] ?? 9];
 const GOV_SEGS3 = ['DoD & Military', 'Federal Civilian', 'State & Local'];
@@ -732,11 +732,240 @@ function weekly(skip){
   take(A.filter(isDue).sort((a, b) => a.ed.due.localeCompare(b.ed.due)), 'due', r => `You planned to follow up ${r.ed.due < TODAY ? 'on ' + niceDate(r.ed.due) : 'today'}.`, 2);
   take(A.filter(r => r.movedNow).sort(bySenior), 'congrats', r => `New role${r.p ? ' as ' + r.p : ''}${r.c ? ' at ' + r.c : ''}. A good moment to say congratulations.`, 2);
   take(A.filter(isCooling).sort((a, b) => b.wm.score - a.wm.score), 'cold', r => `You used to talk often; last message ${ago(r.rx.t)}.`, 2);
+  { const nudge = new Map(introNudges().map(x => [x.via, x])); take(A.filter(r => nudge.has(r.k)), 'intro', r => { const x = nudge.get(r.k); return `You asked for an intro to ${x.to}${x.co ? ' at ' + x.co : ''} ${ago(x.at)}. A friendly nudge?`; }, 1); }
+  { const mv = new Map(moves().map(m => [m.k, m])); take(A.filter(r => mv.has(r.k) && r.wm.score >= 20).sort((a, b) => b.wm.score - a.wm.score), 'move', r => mv.get(r.k).why, 1); }
   take(A.filter(r => isAnniversary(r.d)).sort(bySenior), 'anniv', r => `${new Date().getFullYear() - +r.d.slice(0, 4)} years connected this week.`, 1);
   take(A.filter(r => r.isNew && !(r.rx && r.rx.m)).sort(bySenior), 'new', r => `New connection${r.cl.sen ? ', ' + r.cl.sen.toLowerCase() : ''}. Say thanks while it’s fresh.`, 2);
   // still short: warm people you haven't talked to in a while
   take(A.filter(r => r.wm.score >= 35 && daysSince(lastTouch(r)) > 120).sort((a, b) => b.wm.score - a.wm.score), 'checkin', r => `A good relationship you haven’t touched in ${ago(lastTouch(r)).replace(' ago', '')}.`, 5);
   return out;
+}
+
+
+/* ---------- pursuits ---------- */
+// An opportunity (a bid, a deal) at an agency or company, and the people who decide it:
+// who you know in each seat, who could fill an empty one, and your warmest ways in.
+const PURSUIT_ROLES = [
+  ['Executive sponsor', /\bSES\b|senior executive|\bchief\b|\bgeneral\b|admiral|\bdirector\b|\bdeputy\b|commander|\bCIO\b|\bCTO\b|\bCISO\b|vice president|\bVP\b|president/i],
+  ['Program manager', /program (manager|director|executive|lead|analyst)|\bPM\b|\bPEO\b|project manager|portfolio/i],
+  ['Contracting officer', /contract(ing|s)?\b.*(officer|specialist|manager|lead)|\bKO\b|\bPCO\b|\bACO\b|procurement|acquisition|purchasing|buyer/i],
+  ['Mission owner', /operations|\bops\b|mission|division chief|branch chief|commander|site lead|plant|facilit/i],
+  ['Security lead', /\bISSM\b|\bISSO\b|\bCISO\b|cyber|security|information assurance|\bRMF\b|authoriz|\bAO\b/i],
+  ['Technical lead', /engineer|architect|technical|\bCTO\b|\bIT\b|systems|network|infrastructure|\bOT\b|\bICS\b|SCADA/i],
+];
+const STAGES = ['Tracking', 'Pursuing', 'Proposal', 'Submitted', 'Won', 'Lost'];
+const coHit = q => {
+  const want = coKey(q);
+  return c => { const k = coKey(c); return want.length >= 2 && !!k && (k === want || (want.length >= 4 && (k.startsWith(want + ' ') || k.includes(' ' + want + ' ') || k.endsWith(' ' + want)))); };
+};
+const atOrg = q => { const hit = coHit(q); return live().filter(r => hit(r.c) || hit(r.cl.agency)); };
+const brief = r => ({k: r.k, name: fullName(r), p: r.p || '', band: r.wm.band, score: r.wm.score});
+function addPursuit(o){
+  const p = {id: 'p' + Date.now().toString(36) + Math.floor(Math.random() * 1e4).toString(36), name: String((o && o.name) || 'New pursuit').trim(),
+    agency: String((o && o.agency) || '').trim(), due: (o && o.due) || '', value: (o && o.value) || '', stage: (o && o.stage) || 'Tracking', roles: {}, note: '', created: TODAY};
+  S.pursuits.push(p);
+  return p;
+}
+function updatePursuit(id, patch){
+  const p = S.pursuits.find(x => x.id === id); if (!p) return null;
+  for (const f of ['name', 'agency', 'due', 'value', 'stage', 'note']) if (patch && f in patch) p[f] = patch[f];
+  return p;
+}
+function removePursuit(id){ S.pursuits = S.pursuits.filter(x => x.id !== id); return true; }
+function assignRole(id, role, k, on){
+  const p = S.pursuits.find(x => x.id === id); if (!p) return null;
+  const cur = new Set(p.roles[role] || []);
+  if (on === false) cur.delete(k); else cur.add(k);
+  p.roles[role] = [...cur];
+  if (!p.roles[role].length) delete p.roles[role];
+  return p;
+}
+function pursuitSummary(p){
+  const filled = PURSUIT_ROLES.filter(([role]) => (p.roles[role] || []).some(k => S.byK.has(k))).length;
+  const people = [...new Set(Object.values(p.roles).flat())].map(k => S.byK.get(k)).filter(Boolean);
+  const warm = people.filter(r => ['strong', 'warm'].includes(r.wm.band)).length;
+  const days = p.due ? -daysSince(p.due) : null;
+  return {id: p.id, name: p.name, agency: p.agency, due: p.due, days, value: p.value, stage: p.stage, filled, roles: PURSUIT_ROLES.length, warm, people: people.length};
+}
+function pursuits(){
+  return S.pursuits.map(pursuitSummary).sort((a, b) => (STAGES.indexOf(a.stage) > 3) - (STAGES.indexOf(b.stage) > 3) || ((a.due || '9') < (b.due || '9') ? -1 : 1));
+}
+function pursuit(id){
+  const p = S.pursuits.find(x => x.id === id); if (!p) return null;
+  const pool = p.agency ? atOrg(p.agency) : [];
+  const used = new Set(Object.values(p.roles).flat());
+  const roles = PURSUIT_ROLES.map(([role, rx]) => {
+    const people = (p.roles[role] || []).map(k => S.byK.get(k)).filter(Boolean).map(brief);
+    const suggest = people.length ? [] : pool.filter(r => !used.has(r.k) && rx.test(`${r.p} ${r.cl.grade || ''}`))
+      .sort((a, b) => b.wm.score - a.wm.score || bySenior(a, b)).slice(0, 3).map(brief);
+    return {role, people, suggest};
+  });
+  const ways = p.agency ? introPaths(p.agency) : null;
+  return Object.assign(pursuitSummary(p), {note: p.note, stages: STAGES, roleList: roles,
+    known: pool.length, best: ways ? ways.best : [], team: ways ? ways.team : []});
+}
+
+/* ---------- moves: rotations and transitions ---------- */
+// Service members rotate every two to three years; people leaving service say so in their title.
+const TRANSITION_RX = /\b(transition(ing)?|skillbridge|skill bridge|terminal leave|retiring|separating|seeking (new )?(opportunit|role|position)|open to (work|new)|available for)\b/i;
+const roleSince = r => (r.ed && r.ed.rs) || r.jc || '';
+const serving = r => r.cl.status === 'Serving' || (!!r.cl.branch && !!r.cl.grade && r.cl.status !== 'Veteran / Retired' && /^[EOW]-/.test(r.cl.grade));
+function moveOf(r){
+  if (r.x) return null;
+  if (TRANSITION_RX.test(`${r.p || ''} ${r.c || ''}`) && (r.cl.branch || r.cl.seg === 'DoD & Military' || r.cl.seg === 'Federal Civilian'))
+    return {kind: 'transition', why: `Says they’re ${/retir/i.test(r.p + r.c) ? 'retiring' : 'transitioning'}. A good moment to help, and to stay close as they land somewhere new.`};
+  if (!serving(r)) return null;
+  const since = roleSince(r);
+  if (!since) return null;
+  const months = Math.floor(daysSince(since) / 30.4);
+  if (months < 20) return null;
+  const est = isoDay(Date.parse(since.length === 7 ? since + '-01' : since) + 36 * 30.4 * 864e5);
+  return {kind: 'pcs', months, since, est, why: `In this assignment ${months >= 24 ? Math.round(months / 12 * 10) / 10 + ' years' : months + ' months'}. Most tours run two to three years, so a move is likely ${est <= TODAY ? 'soon' : 'by ' + niceDate(est)}.`};
+}
+function moves(){
+  const out = [];
+  for (const r of live()){ const m = moveOf(r); if (m) out.push(Object.assign({k: r.k, name: fullName(r), score: r.wm.score}, m)); }
+  return out.sort((a, b) => (a.kind === 'transition' ? 0 : 1) - (b.kind === 'transition' ? 0 : 1) || b.score - a.score || (b.months || 0) - (a.months || 0)).slice(0, 200);
+}
+const setRoleSince = (k, ym) => setEdit(k, {rs: ym || ''});
+
+/* ---------- quick log (voice) ---------- */
+// "Just met Dan Sitkins, he wants pricing by Friday" → a note on Dan, a touch, a follow-up.
+const WEEKDAYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+function dueIn(text){
+  const t = String(text || '').toLowerCase();
+  let m;
+  if (/\btomorrow\b/.test(t)) return 1;
+  if (/\bnext week\b/.test(t)) return 7;
+  if (/\bnext month\b/.test(t)) return 30;
+  if (/\b(end of|by) (the )?month\b/.test(t)) { const d = new Date(TODAY + 'T12:00:00Z'); const last = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)); return Math.max(1, Math.round((last - d) / 864e5)); }
+  if ((m = t.match(/\bin (\d{1,2}|a|one|two|three) (day|week|month)s?\b/))) { const n = {a: 1, one: 1, two: 2, three: 3}[m[1]] || +m[1]; return n * ({day: 1, week: 7, month: 30})[m[2]]; }
+  for (let i = 0; i < 7; i++){
+    if (new RegExp(`\\b(by |on |this |next )?${WEEKDAYS[i]}\\b`).test(t)){
+      const today = new Date(TODAY + 'T12:00:00Z').getUTCDay();
+      let d = (i - today + 7) % 7; if (d === 0) d = 7;
+      if (new RegExp(`\\bnext ${WEEKDAYS[i]}\\b`).test(t) && d < 7) d += 7;
+      return d;
+    }
+  }
+  if (/\b(follow up|follow-up|send|get back|circle back|call|email)\b/.test(t)) return 3;
+  return 0;
+}
+function quickLog(text, apply){
+  const t = String(text || '').trim();
+  if (!t) return {people: [], days: 0};
+  const r = readNotes(t);
+  const people = r.people.slice(0, 3);
+  const days = dueIn(t);
+  if (apply !== false){
+    people.forEach((x, i) => { addNote(x.k, t.slice(0, 480), 'Voice'); touch(x.k); if (i === 0 && days) followUp(x.k, days); });
+  }
+  return {people: people.map(x => ({k: x.k, name: x.name})), days, due: days ? isoDay(Date.now() + days * 864e5) : ''};
+}
+
+/* ---------- intros ---------- */
+// "Can you introduce me to…" asks, tracked on the person you asked: asked, made, met.
+function addIntro(via, to, co){
+  const r = S.byK.get(via); if (!r) return {edits: S.edits};
+  const list = ((r.ed && r.ed.intros) || []).slice();
+  list.push({id: 'i' + Date.now().toString(36), to: String(to || '').trim(), co: String(co || '').trim(), at: TODAY, st: 'asked'});
+  return setEdit(via, {intros: list});
+}
+function setIntro(via, id, st){
+  const r = S.byK.get(via); if (!r) return {edits: S.edits};
+  const list = ((r.ed && r.ed.intros) || []).map(x => x.id === id ? Object.assign({}, x, {st, upd: TODAY}) : x).filter(x => st !== 'remove' || x.id !== id);
+  return setEdit(via, {intros: list});
+}
+function intros(){
+  const out = [];
+  for (const r of live()) for (const x of ((r.ed && r.ed.intros) || [])){
+    const days = daysSince(x.upd || x.at);
+    out.push(Object.assign({via: r.k, viaName: fullName(r), days, nudge: x.st === 'asked' && days >= 7}, x));
+  }
+  const order = {asked: 0, made: 1, met: 2, declined: 3};
+  return out.sort((a, b) => order[a.st] - order[b.st] || b.days - a.days);
+}
+const introNudges = () => intros().filter(x => x.nudge);
+
+/* ---------- account trends ---------- */
+// Your reach into a company over the last year (from when you connected with each person),
+// plus weekly snapshots of the coverage score from the day you start watching it.
+function trend(name){
+  const ps = unitPeople(name);
+  const months = [];
+  const now = new Date(TODAY + 'T12:00:00Z');
+  for (let i = 11; i >= 0; i--){
+    const end = isoDay(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i + 1, 0));
+    const by = ps.filter(r => !r.d || r.d <= end);
+    months.push({m: end.slice(0, 7), known: by.length, senior: by.filter(r => r.cl.lv <= 2).length});
+  }
+  const cov = coverage(ps);
+  return {name, months, snaps: S.snaps[name] || [], now: {score: cov.score, known: ps.length, close: ps.filter(r => r.wm.band === 'strong').length}};
+}
+function snapshot(){
+  let changed = false;
+  for (const t of S.targets){
+    const list = S.snaps[t.name] || (S.snaps[t.name] = []);
+    const last = list[list.length - 1];
+    if (last && daysSince(last.d) < 6) continue;
+    const ps = unitPeople(t.name), cov = coverage(ps);
+    list.push({d: TODAY, score: cov.score, known: ps.length, close: ps.filter(r => r.wm.band === 'strong').length});
+    if (list.length > 104) list.splice(0, list.length - 104);
+    changed = true;
+  }
+  return changed;
+}
+// New and moved people at the companies you watch, senior first.
+function targetChanges(){
+  const out = [];
+  for (const t of S.targets){
+    for (const r of unitPeople(t.name).filter(r => r.isNew || r.movedNow).sort(bySenior).slice(0, 5))
+      out.push({target: t.name, k: r.k, name: fullName(r), p: r.p || '', kind: r.movedNow ? 'moved' : 'new', senior: r.cl.lv <= 2});
+  }
+  return out.sort((a, b) => b.senior - a.senior);
+}
+
+/* ---------- ask ---------- */
+// Plain questions, answered from your own network on the device.
+function ask(q){
+  const t = String(q || '').trim(), l = t.toLowerCase().replace(/[?.!]+$/, '');
+  const list = (rs, why, n) => rs.slice(0, n || 12).map(r => ({k: r.k, why: why(r)}));
+  if (!t) return {kind: 'none', answer: '', people: []};
+  if (/\b(waiting|owe|reply|respond)\b/.test(l)){
+    const rs = live().filter(r => isWaiting(r) || isMailWaiting(r)).sort((a, b) => lastTouch(b).localeCompare(lastTouch(a)));
+    return {kind: 'waiting', answer: rs.length ? `${fmt(rs.length)} ${rs.length === 1 ? 'person is' : 'people are'} waiting on you.` : 'No one is waiting on you right now.', people: list(rs, r => isMailWaiting(r) ? `Emailed you ${ago(r.ed.mail.t)}` : `Wrote you ${ago(r.rx.t)}`)};
+  }
+  if (/\b(new job|changed jobs?|job change|moved|promot|new role)\b/.test(l)){
+    const rs = live().filter(r => r.movedNow || (r.jc && daysSince(r.jc) < 120)).sort(bySenior);
+    return {kind: 'jobs', answer: `${fmt(rs.length)} ${rs.length === 1 ? 'person has' : 'people have'} a new role lately.`, people: list(rs, r => `${r.p || 'New role'}${r.c ? ' at ' + r.c : ''}`)};
+  }
+  if (/\b(rotat|pcs|moving|retir|transition|leaving)\b/.test(l)){
+    const ms = moves();
+    return {kind: 'moves', answer: ms.length ? `${fmt(ms.length)} people are likely to move or are leaving service.` : 'No one looks likely to move soon.', people: ms.slice(0, 12).map(m => ({k: m.k, why: m.why}))};
+  }
+  if (/\b(cold|lost touch|haven'?t talked|been a while)\b/.test(l)){
+    const rs = live().filter(isCooling).sort((a, b) => b.wm.score - a.wm.score);
+    return {kind: 'cold', answer: `${fmt(rs.length)} good relationships are going cold.`, people: list(rs, r => `Last in touch ${ago(lastTouch(r))}`)};
+  }
+  let m = l.match(/\b(?:near|in|around)\s+([a-z .'-]+?)(?:\s+(?:next|this)\s+(?:week|month|trip))?$/);
+  if (m && /\b(see|visit|meet|near|around|while i'?m|trip|travel)\b/.test(l)) return {kind: 'city', place: m[1].trim(), answer: '', people: []};
+  m = l.match(/\b(?:into|introduce me to|intro to|get me into|way into)\s+(.+)$/);
+  if (m){
+    const ways = introPaths(m[1]);
+    return {kind: 'ways', answer: ways.best.length ? `Your best ways into ${ways.company}:` : `No clear way into ${m[1]} yet.`, people: ways.best.map(b => ({k: b.k, why: b.why}))};
+  }
+  m = l.match(/\b(?:at|in|from)\s+(.+?)(?:\s+who\s+(?:used to|previously|once)\s+(?:be|been|work(?:ed)?)\s+(?:at|in|with)\s+(.+))?$/);
+  if (m && /\bwho\b|\bknow\b|\bpeople\b|\bcontacts?\b/.test(l)){
+    let rs = atOrg(m[1]);
+    if (m[2]){ const was = coHit(m[2]); rs = rs.filter(r => (r.pv || []).some(v => was(v.c)) || was(r.c)); }
+    if (rs.length){
+      rs.sort((a, b) => b.wm.score - a.wm.score || bySenior(a, b));
+      const name = rs[0].cl.agency && coHit(m[1])(rs[0].cl.agency) ? rs[0].cl.agency : rs[0].c;
+      return {kind: 'at', answer: `You know ${fmt(rs.length)} ${rs.length === 1 ? 'person' : 'people'} at ${name}${m[2] ? ' who used to be at ' + m[2] : ''}.`, people: list(rs, r => `${r.p || ''}${r.wm.band !== 'none' ? ' · ' + BAND_LABEL[r.wm.band] : ''}`)};
+    }
+  }
+  const res = search({text: t});
+  return {kind: 'search', answer: res.count ? `${fmt(res.count)} ${res.count === 1 ? 'match' : 'matches'}.` : 'Nothing matched that.', people: res.keys.slice(0, 12).map(k => { const r = S.byK.get(k); return {k, why: [r.p, r.c].filter(Boolean).join(' · ')}; })};
 }
 
 /* ---------- intro finder ---------- */
@@ -906,6 +1135,7 @@ function memory(k){
   else if (msg) parts.push(`Last message ${niceDate(msg.date)}.`);
   if (isWaiting(r)) parts.push(`${he} is waiting on your reply.`);
   else if (isMailWaiting(r)) parts.push(`${he} is waiting on your email reply.`);
+  { const mv = moveOf(r); if (mv) parts.push(mv.kind === 'pcs' ? `Likely to rotate ${mv.est <= TODAY ? 'soon' : 'by ' + niceDate(mv.est)}.` : `${he} is ${/retir/i.test((r.p || '') + (r.c || '')) ? 'retiring' : 'transitioning out'}.`); }
   if (r.jc && daysAgo(r.jc) <= 120) parts.push(`New role${r.p ? ' as ' + r.p : ''}${r.c ? ' at ' + r.c : ''} since ${niceDate(r.jc)}.`);
   if (!parts.length) parts.push(r.d ? `Connected ${niceDate(r.d)}. No notes yet.` : 'No notes yet.');
   return {k, line: parts.join(' '), last, msg, mail, waiting: isWaiting(r) || isMailWaiting(r)};
@@ -1165,6 +1395,8 @@ function load(st){
   S.coLoc = Object.assign(Object.create(null), st.locations || {});
   S.team = Array.isArray(st.team) ? st.team : [];
   S.prospects = Array.isArray(st.prospects) ? st.prospects : [];
+  S.pursuits = Array.isArray(st.pursuits) ? st.pursuits : [];
+  S.snaps = (st.snaps && typeof st.snaps === 'object') ? st.snaps : {};
   if ('lens' in st) S.lensPref = st.lens;
   hydrate(st.rows || []);
   return info();
@@ -1176,10 +1408,10 @@ function loadSample(){
 // Native apps hand over the raw saved files; parsing them here keeps one source of truth.
 function loadFiles(f, lens){
   const p = t => { if (!t) return null; try { return JSON.parse(t); } catch { return null; } };
-  const n = p(f.network), e = p(f.edits), rv = p(f.review), tg = p(f.targets), ci = p(f.industries), tm = p(f.team), pr = p(f.prospects);
+  const n = p(f.network), e = p(f.edits), rv = p(f.review), tg = p(f.targets), ci = p(f.industries), tm = p(f.team), pr = p(f.prospects), pu = p(f.pursuits), hi = p(f.history);
   if (!n || !n.rows) return Object.assign(loadSample(), {empty: true});
   return load({mode: 'live', rows: n.rows, meta: n.meta || {}, edits: (e && e.edits) || {}, review: (rv && rv.review) || {}, targets: (tg && tg.targets) || [],
-    companies: (ci && ci.companies) || {}, links: (ci && ci.links) || {}, locations: (ci && ci.locations) || {}, team: (tm && tm.packs) || [], prospects: (pr && pr.prospects) || [], lens});
+    companies: (ci && ci.companies) || {}, links: (ci && ci.links) || {}, locations: (ci && ci.locations) || {}, team: (tm && tm.packs) || [], prospects: (pr && pr.prospects) || [], pursuits: (pu && pu.pursuits) || [], snaps: (hi && hi.snaps) || {}, lens});
 }
 function fileData(name){
   if (name === 'network'){ if (!S.pending) throw new Error('Nothing to save'); const p = S.pending; S.pending = null; return p; }
@@ -1189,6 +1421,8 @@ function fileData(name){
   if (name === 'industries') return {companies: S.coInd, links: S.coLink, locations: S.coLoc};
   if (name === 'team') return {packs: S.team};
   if (name === 'prospects') return {prospects: S.prospects};
+  if (name === 'pursuits') return {pursuits: S.pursuits};
+  if (name === 'history') return {snaps: S.snaps};
   throw new Error('Unknown file ' + name);
 }
 function clearNotes(){ S.edits = {}; S.review = {}; S.targets = []; S.coInd = Object.create(null); S.coLink = Object.create(null); S.coLoc = Object.create(null); return true; }
@@ -1213,7 +1447,7 @@ function constants(){
 
 const api = {load, loadSample, loadFiles, clearNotes, clusters, placeClues, setCompanyLocation, companyPlaces, messages, matchAttendees, alsoAt, setLens, info, people, person, search, facets, home, payoff, targets, unit, addTargetCandidates, toggleTarget, setTargetNote, orgs,
   industries, industry, setCompanyIndustry, setCompanyLink, ranks, deck, deckCount, reviewed, radar, compass, startFromContacts, introPaths, weekly, touch, setCircle, setEdit, followUp, markReplied, addNote,
-  importTexts, importSnapshot, yearInReview, teamPack, addTeamPack, removeTeamPack, teamList, matchEnrichment, readNotes, memory, applyMail, clearMail, addProspects, clearProspects, orgChart, setReportsTo, backup, restore, exportCSV, reminders, watch, constants};
+  importTexts, importSnapshot, yearInReview, teamPack, addTeamPack, removeTeamPack, teamList, matchEnrichment, readNotes, memory, applyMail, clearMail, addProspects, clearProspects, addPursuit, updatePursuit, removePursuit, assignRole, pursuits, pursuit, moves, setRoleSince, quickLog, addIntro, setIntro, intros, trend, snapshot, targetChanges, ask, orgChart, setReportsTo, backup, restore, exportCSV, reminders, watch, constants};
 // Every call goes through here: JSON string in, JSON string out, errors as {error}.
 globalThis.Bearings = {
   call(name, argsJSON){

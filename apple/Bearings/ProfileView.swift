@@ -6,6 +6,7 @@ struct ProfileView: View {
     let k: String
     @State private var writing = false
     @State private var addingNotes = false
+    @State private var settingRoleStart = false
     @State private var photoItem: PhotosPickerItem?
 
     var body: some View {
@@ -52,6 +53,7 @@ struct ProfileView: View {
                     Menu {
                         Button { addingNotes = true } label: { Label("Add meeting notes", systemImage: "text.badge.plus") }
                         Button { model.sharePaperBrief(p.k) } label: { Label("Paper brief for reMarkable or print", systemImage: "doc.richtext") }
+                        Button { settingRoleStart = true } label: { Label("In this role since…", systemImage: "calendar.badge.clock") }
                         ShareLink(item: model.personText(p.k)) { Label("Share as text, for Notes or Mail", systemImage: "square.and.arrow.up") }
                     } label: {
                         Image(systemName: "ellipsis.circle")
@@ -60,6 +62,7 @@ struct ProfileView: View {
                 }
             }
             .modifier(AddNotesPrompt(isPresented: $addingNotes, forPerson: p.k))
+            .sheet(isPresented: $settingRoleStart) { RoleSinceSheet(k: p.k).environment(AppModel.shared) }
             .task(id: k) { await model.loadFull(k) }
         } else {
             ContentUnavailableView("Not found", systemImage: "person.crop.circle.badge.xmark", description: Text("This person isn’t in your network anymore."))

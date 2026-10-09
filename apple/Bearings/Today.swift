@@ -219,6 +219,8 @@ struct TodayChips: View {
             if model.yearReviewSeason && !model.info.isSample {
                 chip("Your \(String(model.reviewYear))", icon: "sparkles") { model.showYear = true }
             }
+            chip("Ask", icon: "sparkle.magnifyingglass") { model.showAsk = true }
+            chip("Quick note", icon: "mic") { model.showQuickLog = true }
             chip("Explore", icon: "scope") { model.open(.explore) }
         }
         .padding(.horizontal, 2)
@@ -301,6 +303,11 @@ struct YouView: View {
 
                 group("Your stuff") {
                     row("This week’s five", icon: "checklist") { model.showWeekly = true }
+                    row("Ask Bearings", icon: "sparkle.magnifyingglass") { model.showAsk = true }
+                    row("Quick note", icon: "mic") { model.showQuickLog = true }
+                    row("Pursuits", icon: "scope") { model.open(.pursuits) }
+                    row("Intros", icon: "person.line.dotted.person") { model.open(.intros) }
+                    row("Moves and rotations", icon: "arrow.triangle.swap") { model.open(.moves) }
                     row("Catch up", icon: "rectangle.stack", detail: model.info.deckCount > 0 ? model.info.deckCount.formatted() : nil) { model.open(.catchup) }
                     row("Explore your network", icon: "scope") { model.open(.explore) }
                     row("Events", icon: "ticket", detail: model.events.isEmpty ? nil : model.events.count.formatted()) { model.open(.events) }

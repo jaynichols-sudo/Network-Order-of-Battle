@@ -190,6 +190,7 @@ struct UnitView: View {
     @State private var editingPlace = false
     @State private var placeText = ""
     @State private var enrichAsking = false
+    @State private var startingPursuit = false
     /// Everyone at this company or unit, capped so one tap can't burn a whole credit balance.
     private var unitKeys: [String] { Array((u?.rungs.flatMap(\.keys) ?? []).prefix(100)) }
 
@@ -201,18 +202,21 @@ struct UnitView: View {
                 linkSection(u)
                 locationSection(u)
                 gapSection(u)
+                TrendSection(name: name)
                 ForEach(u.rungs) { r in rungSection(r) }
                 alumniSection(u)
                 if u.isTarget { noteSection }
             }
         }
         .listStyle(.insetGrouped)
+        .sheet(isPresented: $startingPursuit) { NewPursuitSheet(agency: name).environment(AppModel.shared) }
         .navigationTitle(name)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
                     Button { model.introQuery = name } label: { Label("Find a way in", systemImage: "point.3.connected.trianglepath.dotted") }
+                    Button { startingPursuit = true } label: { Label("Start a pursuit here", systemImage: "scope") }
                     NavigationLink(value: Route.org(name)) { Label("Org chart", systemImage: "rectangle.3.group") }
                     if let u {
                         Button {

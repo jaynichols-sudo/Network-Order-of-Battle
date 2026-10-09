@@ -138,6 +138,10 @@ struct BearingsShortcuts: AppShortcutsProvider {
                     shortTitle: "Who’s nearby", systemImageName: "location")
         AppShortcut(intent: AddMeetingNotesIntent(), phrases: ["Add meeting notes to \(.applicationName)", "File meeting notes in \(.applicationName)"],
                     shortTitle: "Add meeting notes", systemImageName: "text.badge.plus")
+        AppShortcut(intent: QuickLogIntent(), phrases: ["Log a conversation in \(.applicationName)", "Add a note in \(.applicationName)", "Tell \(.applicationName) about a meeting"],
+                    shortTitle: "Log a conversation", systemImageName: "mic")
+        AppShortcut(intent: AskBearingsIntent(), phrases: ["Ask \(.applicationName)", "Ask \(.applicationName) about my network"],
+                    shortTitle: "Ask Bearings", systemImageName: "sparkle.magnifyingglass")
         AppShortcut(intent: OpenPersonIntent(), phrases: ["Open \(\.$person) in \(.applicationName)", "Show \(\.$person) in \(.applicationName)"],
                     shortTitle: "Open a person", systemImageName: "person.crop.circle")
     }

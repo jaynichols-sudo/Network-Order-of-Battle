@@ -40,6 +40,10 @@ enum Route: Hashable {
     case about(String)
     case team
     case org(String)
+    case pursuits
+    case pursuit(String)
+    case moves
+    case intros
 }
 
 enum CompaniesMode: String, CaseIterable, Identifiable {
@@ -142,6 +146,10 @@ final class AppModel {
     var feedback: FeedbackRequest?
     /// Open the scanner as soon as the event page appears (the Today "Scan a badge" chip).
     var scanBadge = false
+    /// Bumped when pursuits change, so open screens reload.
+    var pursuitsRev = 0
+    var showAsk = false
+    var showQuickLog = false
     var pendingImportURL: URL?
     /// A LinkedIn export spotted in Downloads (Mac), waiting for a yes.
     var foundExport: URL?
@@ -324,7 +332,7 @@ final class AppModel {
         syncNote = ""
         var texts: [String: Any] = [:]
         if case .data(let t) = net, let t { texts["network"] = t }
-        for (key, file) in [("edits", "edits.json"), ("review", "review.json"), ("targets", "targets.json"), ("industries", "industries.json"), ("team", "team.json"), ("prospects", "prospects.json")] {
+        for (key, file) in [("edits", "edits.json"), ("review", "review.json"), ("targets", "targets.json"), ("industries", "industries.json"), ("team", "team.json"), ("prospects", "prospects.json"), ("pursuits", "pursuits.json"), ("history", "history.json")] {
             if case .data(let t) = await store.read(file), let t { texts[key] = t }
         }
         do {
@@ -371,6 +379,7 @@ final class AppModel {
             errorNote = error.localizedDescription
         }
         await refreshSummary()
+        await snapshotTargets()
         await runSearch()
         await refreshCompanyPlaces()
         mergePlaces()

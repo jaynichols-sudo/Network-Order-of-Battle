@@ -21,6 +21,7 @@ struct HomeView: View {
                 banner.cascade(3).edgeSettle()
                 TodayCompassCard().id("compass").cascade(3).edgeSettle()
                 TodayChips().cascade(4, distance: 10)
+                WatchlistCard().cascade(5).edgeSettle()
                 ComingUp().cascade(5).edgeSettle()
                 BirthdaysCard().cascade(6).edgeSettle()
                 if !model.home.cards.isEmpty {

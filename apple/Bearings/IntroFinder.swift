@@ -21,6 +21,7 @@ struct IntroFinderView: View {
     @State private var paths: IntroPaths?
     @State private var suggestions: [NameCount] = []
     @State private var writingTo: String?
+    @State private var tracking: String?
 
     var body: some View {
         NavigationStack {
@@ -59,6 +60,7 @@ struct IntroFinderView: View {
                 paths = query.count >= 2 ? await model.introPaths(query) : nil
             }
             .sheet(item: Binding(get: { writingTo.map { Wrapped(id: $0) } }, set: { writingTo = $0?.id })) { w in MessageSheet(k: w.id, intro: paths?.company ?? query).environment(AppModel.shared) }
+            .sheet(item: Binding(get: { tracking.map { Wrapped(id: $0) } }, set: { tracking = $0?.id })) { w in TrackIntroSheet(via: w.id, company: paths?.company ?? query).environment(AppModel.shared) }
         }
     }
 
@@ -85,9 +87,14 @@ struct IntroFinderView: View {
                             VStack(alignment: .leading, spacing: 8) {
                                 NavigationLink(value: Route.person(b.k)) { PersonRow(person: person, lens: model.info.lens) }
                                 Text(b.why).font(Theme.geist(.subheadline)).foregroundStyle(.secondary)
-                                Button { writingTo = b.k } label: { Label("Ask for an intro", systemImage: "square.and.pencil") }
-                                    .font(Theme.geist(.subheadline, .semibold))
-                                    .glassButton()
+                                HStack {
+                                    Button { writingTo = b.k } label: { Label("Ask for an intro", systemImage: "square.and.pencil") }
+                                        .font(Theme.geist(.subheadline, .semibold))
+                                        .glassButton()
+                                    Button { tracking = b.k } label: { Label("Track it", systemImage: "checklist") }
+                                        .font(Theme.geist(.subheadline, .semibold))
+                                        .glassButton()
+                                }
                             }
                             .padding(.vertical, 4)
                         }
