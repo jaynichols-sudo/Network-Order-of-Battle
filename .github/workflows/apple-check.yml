@@ -151,6 +151,7 @@ jobs:
             shoot $dev $p-35-ask -demoOpen ask
             shoot $dev $p-36-intros -startTab you -demoOpen intros
             shoot $dev $p-37-unit-trend -startTab companies -demoOpen unit
+            shoot $dev $p-38-socials -startTab you -demoOpen socials
             xcrun simctl ui $dev content_size accessibility-large
             shoot $dev $p-21-home-xl
             shoot $dev $p-22-profile-xl -startTab people -demoOpen person

@@ -306,6 +306,7 @@ struct YouView: View {
                     row("Ask Bearings", icon: "sparkle.magnifyingglass") { model.showAsk = true }
                     row("Quick note", icon: "mic") { model.showQuickLog = true }
                     row("Pursuits", icon: "scope") { model.open(.pursuits) }
+                    row("Across your socials", icon: "person.3.sequence") { model.open(.socials) }
                     row("Intros", icon: "person.line.dotted.person") { model.open(.intros) }
                     row("Moves and rotations", icon: "arrow.triangle.swap") { model.open(.moves) }
                     row("Catch up", icon: "rectangle.stack", detail: model.info.deckCount > 0 ? model.info.deckCount.formatted() : nil) { model.open(.catchup) }

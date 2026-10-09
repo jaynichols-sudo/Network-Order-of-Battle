@@ -432,3 +432,41 @@ test('account trends count reach by month and snapshot coverage weekly', () => {
   assert.equal(call('trend', 'DISA').snaps.length, 1);
   assert.ok(Array.isArray(call('targetChanges')));
 });
+
+test('social downloads merge into one picture across platforms', () => {
+  const net = ['First Name,Last Name,URL,Email Address,Company,Position,Connected On',
+    'Jane,Doe,,,Acme Corp,Engineer,05 Oct 2020',
+    'Bob,Stone,,,Navy,Commander,01 Jan 2020'].join('\n');
+  call('importTexts', { connections: net }, 'test');
+  call('loadFiles', { network: globalThis.Bearings.fileJSON('network') }, null);
+  const by = new Map(people().map(p => [p.f, p.k]));
+  const fb = call('importSocial', 'facebook', {'connections/friends/your_friends.json': JSON.stringify({friends_v2: [{name: 'Jane Doe', timestamp: 1400000000}, {name: 'Aunt May', timestamp: 1300000000}]}),
+    'connections/friends/sent_friend_requests.json': JSON.stringify({sent_requests_v2: [{name: 'Bob Stone', timestamp: 1}]})});
+  assert.equal(fb.matched, 1);
+  assert.equal(fb.added, 2);
+  const sc = call('importSocial', 'snapchat', {'json/friends.json': JSON.stringify({Friends: [{Username: 'janedoe22', 'Display Name': 'Jane Doe', 'Creation Timestamp': '2019-01-01 00:00:00 UTC'}]})});
+  assert.equal(sc.matched, 1);
+  const ig = call('importSocial', 'instagram', {
+    'connections/followers_and_following/followers_1.json': JSON.stringify([{string_list_data: [{value: 'janedoe22', href: 'https://www.instagram.com/janedoe22', timestamp: 1600000000}]}, {string_list_data: [{value: 'bobstone', timestamp: 1600000000}]}]),
+    'connections/followers_and_following/following.json': JSON.stringify({relationships_following: [{title: 'janedoe22', string_list_data: [{href: 'https://www.instagram.com/_u/janedoe22', timestamp: 1600000000}]}, {string_list_data: [{value: 'randomperson', timestamp: 1}]}]})});
+  assert.equal(ig.matched, 2);
+  const tt = call('importSocial', 'tiktok', {'user_data_tiktok.json': JSON.stringify({Profile: {}, Activity: {'Following List': {Following: [{Date: '2023-02-01 10:00:00', UserName: 'bobstone'}]}, 'Follower List': {FansList: [{Date: '2023-02-01', UserName: 'bobstone'}]}}})});
+  assert.equal(tt.matched, 1);
+  const all = call('socials');
+  const jane = all.people.find(p => p.k === by.get('Jane'));
+  assert.deepEqual(jane.on.sort(), ['facebook', 'instagram', 'snapchat']);
+  assert.equal(jane.ties, 4);
+  assert.equal(all.strongest[0].k, by.get('Jane'));
+  const bob = all.people.find(p => p.k === by.get('Bob'));
+  assert.ok(bob.on.includes('tiktok') && bob.on.includes('instagram'));
+  assert.equal(all.people.find(p => p.k === by.get('Bob')).on.includes('facebook'), false, 'sent requests are not friends');
+  assert.ok(all.people.some(p => p.name === 'Aunt May' && !p.linkedin));
+  assert.equal(all.unique, 2 + all.people.filter(p => !p.linkedin).length);
+  assert.match(call('memory', by.get('Jane')).line, /Also connected on Facebook, Snapchat and Instagram|Also connected on/);
+  assert.ok(call('person', by.get('Jane')).social.on.facebook);
+  const re = call('importSocial', 'facebook', {'your_friends.json': JSON.stringify({friends_v2: [{name: 'Jane Doe', timestamp: 1400000000}]})});
+  assert.equal(re.matched, 1);
+  assert.ok(!call('socials').people.some(p => p.name === 'Aunt May'), 'a fresh download replaces the old list');
+  const saved = JSON.parse(globalThis.Bearings.fileJSON('social'));
+  assert.ok(saved.social.length >= 2);
+});

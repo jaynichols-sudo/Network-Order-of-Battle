@@ -153,6 +153,8 @@ struct Person: Decodable, Identifiable, Hashable {
     var rx: Relationship?
     var ed: Edit?
     var links: PersonLinks?
+    /// Where else you're connected (from your social downloads); filled on the full profile.
+    var social: PersonSocial?
 
     var id: String { k }
     var starred: Bool { ed?.star ?? false }
@@ -167,7 +169,7 @@ struct Person: Decodable, Identifiable, Hashable {
     var shade: Double { Double(k.unicodeScalars.reduce(UInt32(7)) { ($0 &* 31) &+ $1.value } % 100) / 100 }
     var subtitle: String { [p, c].filter { !$0.isEmpty }.joined(separator: " · ") }
 
-    enum K: String, CodingKey { case k, f, l, name, u, e, c, p, d, cl, group, color, indColor, indShort, band, score, isNew, moved, waiting, cooling, due, anniv, over, touch, next, x, jc, fs, pv, rx, ed, links }
+    enum K: String, CodingKey { case k, f, l, name, u, e, c, p, d, cl, group, color, indColor, indShort, band, score, isNew, moved, waiting, cooling, due, anniv, over, touch, next, x, jc, fs, pv, rx, ed, links, social }
     init(from dec: Decoder) throws {
         let c = try dec.container(keyedBy: K.self)
         k = try c.decode(String.self, forKey: .k)
@@ -187,6 +189,7 @@ struct Person: Decodable, Identifiable, Hashable {
         rx = c.lenient(Relationship.self, .rx)
         ed = c.lenient(Edit.self, .ed)
         links = c.lenient(PersonLinks.self, .links)
+        social = c.lenient(PersonSocial.self, .social)
     }
 }
 

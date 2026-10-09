@@ -90,6 +90,7 @@ struct RootView: View {
                     case .pursuit(let id): PursuitView(id: id)
                     case .moves: MovesView()
                     case .intros: IntrosView()
+                    case .socials: SocialsView()
                     }
                 }
         }

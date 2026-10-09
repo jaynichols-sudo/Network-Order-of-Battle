@@ -44,6 +44,7 @@ enum Route: Hashable {
     case pursuit(String)
     case moves
     case intros
+    case socials
 }
 
 enum CompaniesMode: String, CaseIterable, Identifiable {
@@ -148,6 +149,7 @@ final class AppModel {
     var scanBadge = false
     /// Bumped when pursuits change, so open screens reload.
     var pursuitsRev = 0
+    var socialRev = 0
     var showAsk = false
     var showQuickLog = false
     var pendingImportURL: URL?
@@ -296,6 +298,24 @@ final class AppModel {
                 paths[tab, default: []].append(.pursuit(id))
             }
         case "moves": paths[tab, default: []].append(.moves)
+        case "socials":
+            // a believable sample: some of your LinkedIn people on each app, plus friends who aren't
+            let ps = people.filter { $0.x == nil }.sorted { $0.score > $1.score }
+            let extra = ["Megan Holt", "Chris Avery", "Dana Ruiz", "Tyler Brooks", "Lena Ortiz", "Marcus Webb", "Priya Shah", "Owen Carter"]
+            let fb = (ps.prefix(60).map(\.fullName) + extra).map { ["name": $0, "timestamp": 1_400_000_000] as [String: Any] }
+            let sc = (ps.prefix(18).map { ["Username": ($0.f + $0.l).lowercased(), "Display Name": $0.fullName] } + extra.prefix(5).map { ["Username": $0.replacingOccurrences(of: " ", with: "").lowercased(), "Display Name": $0] })
+            let ig = (ps.dropFirst(5).prefix(45).map { ($0.f + $0.l).lowercased() } + extra.map { $0.replacingOccurrences(of: " ", with: "").lowercased() })
+                .map { ["string_list_data": [["value": $0, "timestamp": 1_600_000_000]]] as [String: Any] }
+            let tt = ps.prefix(12).map { ["UserName": ($0.f + $0.l).lowercased(), "Date": "2023-02-01"] }
+            func json(_ o: Any) -> String { String(decoding: (try? JSONSerialization.data(withJSONObject: o)) ?? Data(), as: UTF8.self) }
+            Task {
+                try? await engine.run("importSocial", ["facebook", ["your_friends.json": json(["friends_v2": fb])]])
+                try? await engine.run("importSocial", ["snapchat", ["friends.json": json(["Friends": sc])]])
+                try? await engine.run("importSocial", ["instagram", ["followers_1.json": json(ig), "following.json": json(["relationships_following": ig])]])
+                try? await engine.run("importSocial", ["tiktok", ["user_data.json": json(["Activity": ["Following List": ["Following": tt]]])]])
+                socialRev += 1
+                paths[tab, default: []].append(.socials)
+            }
         case "ask":
             showAsk = true
         case "quicklog": showQuickLog = true
@@ -352,7 +372,7 @@ final class AppModel {
         syncNote = ""
         var texts: [String: Any] = [:]
         if case .data(let t) = net, let t { texts["network"] = t }
-        for (key, file) in [("edits", "edits.json"), ("review", "review.json"), ("targets", "targets.json"), ("industries", "industries.json"), ("team", "team.json"), ("prospects", "prospects.json"), ("pursuits", "pursuits.json"), ("history", "history.json")] {
+        for (key, file) in [("edits", "edits.json"), ("review", "review.json"), ("targets", "targets.json"), ("industries", "industries.json"), ("team", "team.json"), ("prospects", "prospects.json"), ("pursuits", "pursuits.json"), ("history", "history.json"), ("social", "social.json")] {
             if case .data(let t) = await store.read(file), let t { texts[key] = t }
         }
         do {

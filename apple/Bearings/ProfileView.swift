@@ -127,6 +127,7 @@ struct ProfileView: View {
                 }
             }
             tags(p)
+            if let s = p.social { SocialBadgesRow(social: s) }
             actions(p).padding(.top, 4)
         }
         .frame(maxWidth: .infinity)

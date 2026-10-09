@@ -10,7 +10,7 @@ import { parseQuery, matchNL } from './nlq.js';
 import { INDUSTRIES, indColor, indShort, setIndustryOverrides, companyKey, UNCLASSIFIED, GOV_IND } from './industry.js';
 
 /* ---------- state ---------- */
-const S = {all: [], byK: new Map(), edits: {}, review: {}, targets: [], meta: null, mode: 'sample', coInd: Object.create(null), coLink: Object.create(null), coLoc: Object.create(null), lensPref: null, lens: false, hasRel: false, team: [], prospects: [], pursuits: [], snaps: {}};
+const S = {all: [], byK: new Map(), edits: {}, review: {}, targets: [], meta: null, mode: 'sample', coInd: Object.create(null), coLink: Object.create(null), coLoc: Object.create(null), lensPref: null, lens: false, hasRel: false, team: [], prospects: [], pursuits: [], snaps: {}, social: []};
 const SEG_COLORS = ['#7A9A1E', '#3E7BE0', '#1E9E8F', '#7556E8', '#C79100', '#D9467F', '#E0683A', '#A07C50', '#6B7F99', '#5B6B83'];
 const segColor = seg => SEG_COLORS[SEGI[seg] ?? 9];
 const GOV_SEGS3 = ['DoD & Military', 'Federal Civilian', 'State & Local'];
@@ -968,6 +968,131 @@ function ask(q){
   return {kind: 'search', answer: res.count ? `${fmt(res.count)} ${res.count === 1 ? 'match' : 'matches'}.` : 'Nothing matched that.', people: res.keys.slice(0, 12).map(k => { const r = S.byK.get(k); return {k, why: [r.p, r.c].filter(Boolean).join(' · ')}; })};
 }
 
+
+/* ---------- socials ---------- */
+// Your own data downloads from Facebook, Instagram, Snapchat and TikTok, read on the device.
+// Facebook and Snapchat carry names; Instagram and TikTok only usernames, matched by handle.
+const PLATFORMS = {facebook: 'Facebook', instagram: 'Instagram', snapchat: 'Snapchat', tiktok: 'TikTok'};
+const normH = h => String(h || '').toLowerCase().replace(/^@/, '').replace(/[^a-z0-9]/g, '');
+const tsDay = v => { const n = +v; if (n > 1e11) return isoDay(n); if (n > 1e9) return isoDay(n * 1000); const d = Date.parse(v); return isNaN(d) ? '' : isoDay(d); };
+// Walks any JSON and pulls out people: {name?, handle?, date?, rel} where rel says follower/following/friend.
+function socialEntries(platform, files){
+  const out = [];
+  const relOf = path => /fans|follower/i.test(path) && !/following/i.test(path) ? 'follower' : /following/i.test(path) ? 'following' : 'friend';
+  const walk = (v, path) => {
+    if (Array.isArray(v)){ v.forEach(x => walk(x, path)); return; }
+    if (!v || typeof v !== 'object') return;
+    const keys = Object.keys(v);
+    const pick = (...names) => { for (const n of names){ const k = keys.find(x => x.toLowerCase() === n); if (k && typeof v[k] === 'string' && v[k].trim()) return v[k].trim(); } return ''; };
+    // Instagram: {string_list_data: [{value, href, timestamp}], title}
+    if (Array.isArray(v.string_list_data)){
+      for (const d of v.string_list_data){ const h = d.value || v.title || (d.href || '').split('/').filter(Boolean).pop(); if (h) out.push({handle: h, date: tsDay(d.timestamp), rel: relOf(path)}); }
+      return;
+    }
+    const name = pick('name', 'display name', 'displayname', 'display_name');
+    const handle = pick('username', 'user name', 'user_name', 'uniqueid', 'unique_id');
+    const date = pick('timestamp', 'creation timestamp', 'date', 'added', 'created');
+    if ((name || handle) && keys.length <= 8 && !keys.some(k => typeof v[k] === 'object' && v[k] && !Array.isArray(v[k]))){
+      if (!/^(you|me)$/i.test(name)) out.push({name, handle, date: tsDay(date || v.timestamp), rel: platform === 'facebook' || platform === 'snapchat' ? 'friend' : relOf(path)});
+      return;
+    }
+    for (const k of keys) walk(v[k], path + '/' + k);
+  };
+  for (const [fname, text] of Object.entries(files || {})){
+    if (platform === 'facebook' && !/friend/i.test(fname)) continue;
+    if (platform === 'instagram' && !/follow/i.test(fname)) continue;
+    if (platform === 'snapchat' && !/friend/i.test(fname)) continue;
+    let j; try { j = JSON.parse(text); } catch { continue; }
+    // skip lists that aren't relationships (requests sent, removed, blocked)
+    if (/request|removed|reject|block|pending|suggest|recent/i.test(fname)) continue;
+    walk(j, fname);
+  }
+  return out;
+}
+function handleMatch(h){
+  const n = normH(h);
+  if (n.length < 5) return null;
+  if (!S._byHandle){
+    const m = new Map();
+    const add = (key, k) => { if (key.length < 5) return; m.set(key, m.has(key) && m.get(key) !== k ? null : k); };
+    for (const r of live()){
+      const f = normH(r.f), l = normH(r.l);
+      if (!f || !l) continue;
+      for (const c of [f + l, l + f, f[0] + l, f + l[0]]) add(c, r.k);
+    }
+    S._byHandle = m;
+  }
+  const base = n.replace(/\d+$/, '').replace(/^(the|its|real|official)/, '').replace(/(official|real)$/, '');
+  return S._byHandle.get(n) || S._byHandle.get(base) || null;
+}
+function importSocial(platform, files){
+  if (!PLATFORMS[platform]) throw new Error('Unknown platform ' + platform);
+  const entries = socialEntries(platform, files);
+  if (!entries.length) throw new Error(`No ${PLATFORMS[platform]} friends or followers in that file. Request the download in JSON format and include your connections.`);
+  S._byHandle = null;
+  const nameIdx = new Map(); for (const r of live()){ const n = fold_(`${r.f} ${r.l}`); if (n) nameIdx.set(n, nameIdx.has(n) ? null : r.k); }
+  const byHandle = new Map(), byName = new Map();
+  S.social.forEach((e, i) => { for (const h of Object.values(e.h || {})) if (h) byHandle.set(normH(h), i); if (e.name) byName.set(fold_(e.name), i); if (e.k) byName.set('k:' + e.k, i); });
+  // keep this platform's old list out, so a fresh download replaces it
+  for (const e of S.social){ if (e.on) delete e.on[platform]; }
+  const merged = new Map();
+  for (const x of entries){
+    const key = x.handle ? 'h:' + normH(x.handle) : 'n:' + fold_(x.name);
+    const m = merged.get(key) || {name: '', handle: '', date: '', rels: new Set()};
+    m.name = m.name || x.name; m.handle = m.handle || x.handle; m.date = m.date || x.date; m.rels.add(x.rel);
+    merged.set(key, m);
+  }
+  let matched = 0, added = 0;
+  for (const m of merged.values()){
+    const k = (m.name && nameIdx.get(fold_(m.name))) || (m.handle && handleMatch(m.handle)) || null;
+    let i = m.handle ? byHandle.get(normH(m.handle)) : undefined;
+    if (i == null && k) i = byName.get('k:' + k);
+    if (i == null && m.name) i = byName.get(fold_(m.name));
+    if (i == null){ S.social.push({name: m.name, h: {}, on: {}}); i = S.social.length - 1; added++; }
+    const e = S.social[i];
+    if (!e.name && m.name) e.name = m.name;
+    if (k){ e.k = k; matched++; }
+    e.h = e.h || {}; if (m.handle) e.h[platform] = m.handle;
+    e.on = e.on || {};
+    e.on[platform] = {since: m.date, mutual: m.rels.has('friend') || (m.rels.has('follower') && m.rels.has('following')), rel: [...m.rels].join(',')};
+    if (m.handle) byHandle.set(normH(m.handle), i);
+    if (m.name) byName.set(fold_(m.name), i);
+    if (k) byName.set('k:' + k, i);
+  }
+  S.social = S.social.filter(e => e.on && Object.keys(e.on).length);
+  S.meta = S.meta || {};
+  return {platform, entries: merged.size, matched, added, total: S.social.length};
+}
+function clearSocial(platform){
+  for (const e of S.social) if (e.on) delete e.on[platform];
+  S.social = S.social.filter(e => e.on && Object.keys(e.on).length);
+  return true;
+}
+const socialOf = k => S.social.find(e => e.k === k) || null;
+// The whole picture: everyone across LinkedIn and your socials, with the overlaps.
+function socials(){
+  const per = {}; for (const p of Object.keys(PLATFORMS)) per[p] = 0;
+  const people = S.social.map((e, i) => {
+    const on = Object.keys(e.on || {});
+    on.forEach(p => per[p]++);
+    const r = e.k ? S.byK.get(e.k) : null;
+    const mutual = on.filter(p => e.on[p].mutual).length;
+    return {id: 's' + i, k: e.k || '', name: r ? `${r.f} ${r.l}`.trim() : (e.name || '@' + (Object.values(e.h || {})[0] || '')), on, h: e.h || {}, linkedin: !!r, mutual,
+      ties: on.length + (r ? 1 : 0), score: r ? r.wm.score : 0, since: on.map(p => e.on[p].since).filter(Boolean).sort()[0] || ''};
+  });
+  const li = live().length;
+  return {
+    platforms: Object.entries(PLATFORMS).map(([id, name]) => ({id, name, n: per[id]})),
+    linkedin: li,
+    unique: li + people.filter(p => !p.linkedin).length,
+    both: people.filter(p => p.linkedin).length,
+    socialOnly: people.filter(p => !p.linkedin && p.name && !p.name.startsWith('@')).length,
+    handlesOnly: people.filter(p => !p.linkedin && (!p.name || p.name.startsWith('@'))).length,
+    strongest: people.filter(p => p.ties >= 3).sort((a, b) => b.ties - a.ties || b.score - a.score).slice(0, 60),
+    people: people.sort((a, b) => b.ties - a.ties || b.score - a.score || a.name.localeCompare(b.name)),
+  };
+}
+
 /* ---------- intro finder ---------- */
 // "Who can get me into X?": people there now, people who used to be, and people
 // you're close to in the same sector, with the best few paths first.
@@ -1135,6 +1260,7 @@ function memory(k){
   else if (msg) parts.push(`Last message ${niceDate(msg.date)}.`);
   if (isWaiting(r)) parts.push(`${he} is waiting on your reply.`);
   else if (isMailWaiting(r)) parts.push(`${he} is waiting on your email reply.`);
+  { const so = socialOf(k); if (so){ const on = Object.keys(so.on || {}).map(p => PLATFORMS[p]); if (on.length) parts.push(`Also connected on ${on.length > 1 ? on.slice(0, -1).join(', ') + ' and ' + on[on.length - 1] : on[0]}.`); } }
   { const mv = moveOf(r); if (mv) parts.push(mv.kind === 'pcs' ? `Likely to rotate ${mv.est <= TODAY ? 'soon' : 'by ' + niceDate(mv.est)}.` : `${he} is ${/retir/i.test((r.p || '') + (r.c || '')) ? 'retiring' : 'transitioning out'}.`); }
   if (r.jc && daysAgo(r.jc) <= 120) parts.push(`New role${r.p ? ' as ' + r.p : ''}${r.c ? ' at ' + r.c : ''} since ${niceDate(r.jc)}.`);
   if (!parts.length) parts.push(r.d ? `Connected ${niceDate(r.d)}. No notes yet.` : 'No notes yet.');
@@ -1397,6 +1523,8 @@ function load(st){
   S.prospects = Array.isArray(st.prospects) ? st.prospects : [];
   S.pursuits = Array.isArray(st.pursuits) ? st.pursuits : [];
   S.snaps = (st.snaps && typeof st.snaps === 'object') ? st.snaps : {};
+  S.social = Array.isArray(st.social) ? st.social : [];
+  S._byHandle = null;
   if ('lens' in st) S.lensPref = st.lens;
   hydrate(st.rows || []);
   return info();
@@ -1408,10 +1536,10 @@ function loadSample(){
 // Native apps hand over the raw saved files; parsing them here keeps one source of truth.
 function loadFiles(f, lens){
   const p = t => { if (!t) return null; try { return JSON.parse(t); } catch { return null; } };
-  const n = p(f.network), e = p(f.edits), rv = p(f.review), tg = p(f.targets), ci = p(f.industries), tm = p(f.team), pr = p(f.prospects), pu = p(f.pursuits), hi = p(f.history);
+  const n = p(f.network), e = p(f.edits), rv = p(f.review), tg = p(f.targets), ci = p(f.industries), tm = p(f.team), pr = p(f.prospects), pu = p(f.pursuits), hi = p(f.history), so = p(f.social);
   if (!n || !n.rows) return Object.assign(loadSample(), {empty: true});
   return load({mode: 'live', rows: n.rows, meta: n.meta || {}, edits: (e && e.edits) || {}, review: (rv && rv.review) || {}, targets: (tg && tg.targets) || [],
-    companies: (ci && ci.companies) || {}, links: (ci && ci.links) || {}, locations: (ci && ci.locations) || {}, team: (tm && tm.packs) || [], prospects: (pr && pr.prospects) || [], pursuits: (pu && pu.pursuits) || [], snaps: (hi && hi.snaps) || {}, lens});
+    companies: (ci && ci.companies) || {}, links: (ci && ci.links) || {}, locations: (ci && ci.locations) || {}, team: (tm && tm.packs) || [], prospects: (pr && pr.prospects) || [], pursuits: (pu && pu.pursuits) || [], snaps: (hi && hi.snaps) || {}, social: (so && so.social) || [], lens});
 }
 function fileData(name){
   if (name === 'network'){ if (!S.pending) throw new Error('Nothing to save'); const p = S.pending; S.pending = null; return p; }
@@ -1423,6 +1551,7 @@ function fileData(name){
   if (name === 'prospects') return {prospects: S.prospects};
   if (name === 'pursuits') return {pursuits: S.pursuits};
   if (name === 'history') return {snaps: S.snaps};
+  if (name === 'social') return {social: S.social};
   throw new Error('Unknown file ' + name);
 }
 function clearNotes(){ S.edits = {}; S.review = {}; S.targets = []; S.coInd = Object.create(null); S.coLink = Object.create(null); S.coLoc = Object.create(null); return true; }
@@ -1439,7 +1568,7 @@ const lean = o => {
   return out;
 };
 function people(){ return S.all.map(r => lean(vm(r))); }
-function person(k){ const r = S.byK.get(k); if (!r) return null; return Object.assign(vm(r, true), {links: {profile: links.person(r), salesNav: links.snPerson(r)}}); }
+function person(k){ const r = S.byK.get(k); if (!r) return null; const so = socialOf(k); return Object.assign(vm(r, true), {links: {profile: links.person(r), salesNav: links.snPerson(r)}}, so ? {social: {on: so.on, h: so.h}} : {}); }
 function constants(){
   return {industries: INDUSTRIES.map(i => ({id: i.id, short: i.short, color: i.color})), seniority: SENIORITY, funcs: FUNCS, segs: SEGS.map(s => ({id: s.id, short: s.short, color: segColor(s.id)})),
     branches: BRANCHES, statuses: STATUSES, tiers: TIERS, certs: CERTS.map(c => c[0]), since: SINCE, signals: SIGNALS_UI, grades: GRADE_OPTS, bands: BAND_LABEL, unclassified: UNCLASSIFIED, gov: GOV_IND};
@@ -1447,7 +1576,7 @@ function constants(){
 
 const api = {load, loadSample, loadFiles, clearNotes, clusters, placeClues, setCompanyLocation, companyPlaces, messages, matchAttendees, alsoAt, setLens, info, people, person, search, facets, home, payoff, targets, unit, addTargetCandidates, toggleTarget, setTargetNote, orgs,
   industries, industry, setCompanyIndustry, setCompanyLink, ranks, deck, deckCount, reviewed, radar, compass, startFromContacts, introPaths, weekly, touch, setCircle, setEdit, followUp, markReplied, addNote,
-  importTexts, importSnapshot, yearInReview, teamPack, addTeamPack, removeTeamPack, teamList, matchEnrichment, readNotes, memory, applyMail, clearMail, addProspects, clearProspects, addPursuit, updatePursuit, removePursuit, assignRole, pursuits, pursuit, moves, setRoleSince, quickLog, addIntro, setIntro, intros, trend, snapshot, targetChanges, ask, orgChart, setReportsTo, backup, restore, exportCSV, reminders, watch, constants};
+  importTexts, importSnapshot, yearInReview, teamPack, addTeamPack, removeTeamPack, teamList, matchEnrichment, readNotes, memory, applyMail, clearMail, addProspects, clearProspects, addPursuit, updatePursuit, removePursuit, assignRole, pursuits, pursuit, moves, setRoleSince, quickLog, addIntro, setIntro, intros, trend, snapshot, targetChanges, ask, importSocial, clearSocial, socials, orgChart, setReportsTo, backup, restore, exportCSV, reminders, watch, constants};
 // Every call goes through here: JSON string in, JSON string out, errors as {error}.
 globalThis.Bearings = {
   call(name, argsJSON){
