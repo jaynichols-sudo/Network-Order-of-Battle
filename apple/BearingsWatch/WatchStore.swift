@@ -11,6 +11,8 @@ final class WatchStore: NSObject, ObservableObject {
 
     @Published private(set) var snap: WatchSnapshot?
     @Published private(set) var reachableOnce = false
+    /// What happened to the last "Quick note": sending, the iPhone's answer, or queued.
+    @Published var quickNoteStatus: String?
 
     private var fileURL: URL {
         FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("snapshot.json")
@@ -72,6 +74,37 @@ final class WatchStore: NSObject, ObservableObject {
             q.no = (q.no.map { $0 + "\n" } ?? "") + line
         }
         send(["kind": "note", "k": p.k, "text": String(t.prefix(500))])
+    }
+
+    /// "Quick note": a dictated note the iPhone reads for names and a follow-up date. Sent
+    /// live when the phone is reachable so its answer shows here; otherwise queued with
+    /// transferUserInfo and filed when the phone next gets it.
+    func quickNote(_ text: String) {
+        let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !t.isEmpty, WCSession.isSupported() else { return }
+        let payload: [String: Any] = ["kind": "quicklog", "text": String(t.prefix(500)), "at": Date().timeIntervalSince1970]
+        let s = WCSession.default
+        guard s.activationState == .activated, s.isReachable else {
+            s.transferUserInfo(payload)
+            quickNoteStatus = "Queued. Your iPhone files it when it’s nearby."
+            return
+        }
+        quickNoteStatus = "Sending to your iPhone…"
+        s.sendMessage(payload, replyHandler: { reply in
+            let line = reply["line"] as? String ?? "Saved on your iPhone."
+            Task { @MainActor in WatchStore.shared.quickNoteStatus = line }
+        }, errorHandler: { error in
+            let timedOut = (error as? WCError)?.code == .messageReplyTimedOut
+            Task { @MainActor in
+                if timedOut {
+                    // the phone may have it already; sending again could file it twice
+                    WatchStore.shared.quickNoteStatus = "Sent. Check Bearings on your iPhone."
+                } else {
+                    WCSession.default.transferUserInfo(["kind": "quicklog", "text": String(t.prefix(500)), "at": Date().timeIntervalSince1970])
+                    WatchStore.shared.quickNoteStatus = "Queued. Your iPhone files it when it’s nearby."
+                }
+            }
+        })
     }
 
     private func mutate(_ k: String, _ change: (inout WatchPerson) -> Void) {

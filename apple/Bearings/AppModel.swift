@@ -239,6 +239,13 @@ final class AppModel {
         store.startWatching()
         WatchLink.shared.start()
         WatchLink.shared.onAction = { [weak self] in Task { @MainActor in await self?.drainWatch() } }
+        // "Quick note" from the watch while the phone is reachable: file it and answer right away
+        WatchLink.shared.onQuickNote = { text, reply in
+            Task { @MainActor in
+                let m = AppModel.shared
+                reply(m.logLine(await m.quickLog(text, save: true)))
+            }
+        }
         await drainWatch()
         Notifications.shared.onAction = { [weak self] k, action in Task { @MainActor in await self?.handleNotification(k: k, action: action) } }
         Notifications.shared.deliverPending()
@@ -954,6 +961,9 @@ final class AppModel {
             go("explore")
         case "event":
             if let id = parts.first?.removingPercentEncoding { tab = .home; paths[.home] = [.event(id)] }
+        case "pursuit":
+            tab = .you
+            paths[.you] = [.pursuits] + (parts.first?.removingPercentEncoding.map { [.pursuit($0)] } ?? [])
         default:
             tab = .home
         }
@@ -1121,6 +1131,7 @@ final class AppModel {
                 WatchLink.shared.send(json: snap.json)
                 // the same summary drives the iPhone and iPad widgets
                 GlanceStore.save(Glance.from(snap.snapshot))
+                await writePursuitGlance()
                 WidgetCenter.shared.reloadAllTimelines()
             }
         }
@@ -1144,7 +1155,13 @@ final class AppModel {
         guard !actions.isEmpty else { return }
         if info.isSample { show("Watch changes aren’t saved in the sample network"); return }
         var n = 0
+        var logged: [String] = []
         for a in actions {
+            // a "Quick note" dictated on the watch while the phone was out of reach
+            if a["kind"] as? String == "quicklog" {
+                if let t = a["text"] as? String, !t.isEmpty { logged.append(logLine(await quickLog(t, save: true))) }
+                continue
+            }
             guard let k = a["k"] as? String, let kind = a["kind"] as? String else { continue }
             switch kind {
             case "replied": try? await engine.run("markReplied", [k]); n += 1
@@ -1159,6 +1176,8 @@ final class AppModel {
             await saveFile("edits", "edits.json")
             await refreshAll()
             show("Updated \(n) \(n == 1 ? "person" : "people") from your watch")
+        } else if let last = logged.last {
+            show(logged.count == 1 ? "From your watch: \(last)" : "Filed \(logged.count) quick notes from your watch")
         }
     }
 

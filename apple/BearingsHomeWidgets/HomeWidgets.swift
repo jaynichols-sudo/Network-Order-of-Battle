@@ -318,6 +318,7 @@ struct HomeWidgetView: View {
 struct BearingsWidgetBundle: WidgetBundle {
     var body: some Widget {
         BearingsHomeWidgets()
+        PursuitsWidget()
         #if os(iOS) && !targetEnvironment(macCatalyst)
         TripLiveActivity()
         MeetingLiveActivity()

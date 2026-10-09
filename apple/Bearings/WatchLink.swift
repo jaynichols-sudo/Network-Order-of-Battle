@@ -15,6 +15,8 @@ final class WatchLink: NSObject, WCSessionDelegate {
     private let queueKey = "bearings.watch.actions"
     private let lastKey = "bearings.watch.lastPayload"
     var onAction: (() -> Void)?
+    /// A "Quick note" from the watch while the phone is reachable: (text, reply with the result line).
+    var onQuickNote: ((String, @escaping (String) -> Void) -> Void)?
 
     func start() {
         guard WCSession.isSupported() else { return }
@@ -104,6 +106,21 @@ final class WatchLink: NSObject, WCSessionDelegate {
         self.session(session, didReceiveUserInfo: message)
     }
 
+    func session(_ session: WCSession, didReceiveMessage message: [String: Any], replyHandler: @escaping ([String: Any]) -> Void) {
+        if message["kind"] as? String == "quicklog", let text = message["text"] as? String {
+            if let handle = onQuickNote {
+                DispatchQueue.main.async { handle(text) { line in replyHandler(["line": line]) } }
+            } else {
+                // the app hasn't finished starting: keep it for drainWatch
+                enqueue(message)
+                replyHandler(["line": "Saved. Bearings files it when it opens on your iPhone."])
+            }
+            return
+        }
+        self.session(session, didReceiveUserInfo: message)
+        replyHandler([:])
+    }
+
     func session(_ session: WCSession, didFinish fileTransfer: WCSessionFileTransfer, error: Error?) {
         try? FileManager.default.removeItem(at: fileTransfer.file.fileURL)
         if error != nil { UserDefaults.standard.set(true, forKey: lastKey) }
@@ -114,6 +131,7 @@ final class WatchLink: NSObject, WCSessionDelegate {
 final class WatchLink {
     static let shared = WatchLink()
     var onAction: (() -> Void)?
+    var onQuickNote: ((String, @escaping (String) -> Void) -> Void)?
     func start() {}
     func send(json: String) {}
     func drain() -> [[String: Any]] { [] }
