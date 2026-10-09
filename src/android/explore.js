@@ -395,3 +395,5 @@ register('mapAt', (lat, lon, name) => {
   MAP.center = {lat, lon}; MAP.centerName = name || ''; mode = 'map'; ls.set('bearings.explore', 'map');
   openToday('explore'); if (root) ExploreView.update(root);
 });
+/** The map, wherever it was last. Used by Ask when a place isn't in the offline list. */
+register('map', () => { mode = 'map'; ls.set('bearings.explore', 'map'); openToday('explore'); if (root) ExploreView.update(root); });

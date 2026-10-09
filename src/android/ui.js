@@ -149,6 +149,12 @@ const ICONS = {
   memory: '<path d="M12 4.5a5 5 0 0 0-5 5c0 1.4.5 2.5 1.3 3.4.5.6.7 1.2.7 2V17h6v-2.1c0-.8.3-1.4.7-2A5 5 0 0 0 12 4.5z"/><path d="M10 20h4M12 8v2.5M10.8 9.3h2.4"/>',
   seal: '<path d="M12 2.8l2.1 1.6 2.6-.3.9 2.5 2.4 1.1-.3 2.6 1.6 2.1-1.6 2.1.3 2.6-2.4 1.1-.9 2.5-2.6-.3L12 21.2l-2.1-1.6-2.6.3-.9-2.5L4 16.3l.3-2.6L2.7 11.6l1.6-2.1L4 6.9l2.4-1.1.9-2.5 2.6.3z"/><path d="m8.4 12.2 2.4 2.4 4.8-4.8"/>',
   upRight: '<path d="M7 17 17 7M9 7h8v8"/>',
+  mic: '<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21M9 21h6"/>',
+  askSearch: '<circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 5 5M10.5 7.3l.9 2.3 2.3.9-2.3.9-.9 2.3-.9-2.3-2.3-.9 2.3-.9z"/>',
+  swap: '<path d="M4 8h14.5M15 4.5 18.5 8 15 11.5M20 16H5.5M9 12.5 5.5 16 9 19.5"/>',
+  wave: '<path d="M8.5 12.5V6a1.5 1.5 0 0 1 3 0v5.5M11.5 11V4.5a1.5 1.5 0 0 1 3 0V11M14.5 11V6a1.5 1.5 0 0 1 3 0v7.5a7 7 0 0 1-12.6 4.2L3.3 15a1.5 1.5 0 0 1 2.3-1.9l2.9 2.4"/>',
+  calClock: '<path d="M20.5 10V6.5a1.5 1.5 0 0 0-1.5-1.5H5a1.5 1.5 0 0 0-1.5 1.5V19A1.5 1.5 0 0 0 5 20.5h5M3.5 10h17M8 3v4M16 3v4"/><circle cx="17" cy="17" r="4.5"/><path d="M17 15v2.2l1.4 1"/>',
+  target: '<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1" fill="currentColor"/>',
 };
 export const icon = (name, cls = '') => `<svg class="i ${cls}" viewBox="0 0 24 24" aria-hidden="true">${ICONS[name] || ICONS.alert}</svg>`;
 
@@ -164,6 +170,12 @@ export const flag = (text, color) => `<span class="flag" style="--fc:${color}">$
 export function ring(score, size = 52, {label = true} = {}){
   const r = 15.5, C = 2 * Math.PI * r, off = C * (1 - Math.max(0, Math.min(100, score)) / 100);
   return `<span class="ring" style="--s:${size}px"><svg viewBox="0 0 36 36" aria-hidden="true"><circle cx="18" cy="18" r="${r}" class="ring-bg"/><circle cx="18" cy="18" r="${r}" class="ring-arc" stroke="${coverageVar(score)}" stroke-dasharray="${C.toFixed(2)}" stroke-dashoffset="${C.toFixed(2)}" data-off="${off.toFixed(2)}"/></svg>${label ? `<b>${score}</b>` : ''}</span>`;
+}
+/** "3 of 6": a small ring that fills as seats or steps are done, green when complete. */
+export function progressRing(done, total, size = 36, line = 4){
+  const r = (size - line) / 2, C = 2 * Math.PI * r, p = total ? Math.min(1, done / total) : 0;
+  const col = total && done >= total ? 'var(--good)' : 'var(--accent)';
+  return `<span class="pring" style="--s:${size}px" role="img" aria-label="${done} of ${total}"><svg viewBox="0 0 ${size} ${size}" aria-hidden="true"><circle cx="${size / 2}" cy="${size / 2}" r="${r}" fill="none" stroke="var(--fill)" stroke-width="${line}"/><circle cx="${size / 2}" cy="${size / 2}" r="${r}" fill="none" stroke="${col}" stroke-width="${line}" stroke-linecap="round" stroke-dasharray="${(C * p).toFixed(2)} ${C.toFixed(2)}" transform="rotate(-90 ${size / 2} ${size / 2})"/></svg><b class="mono">${done}</b></span>`;
 }
 /** Starts any coverage rings in el, once they're on screen. */
 export function animateRings(el){

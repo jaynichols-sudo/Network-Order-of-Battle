@@ -18,7 +18,9 @@ export function wedgeAt(data, angle){
   }
   return null;
 }
-const dotSize = total => total > 2500 ? 1.9 : total > 900 ? 2.4 : 3.1;
+const dotSize = (total, glance) => glance ? (total > 1500 ? 1.7 : 2.1) : total > 2500 ? 1.9 : total > 900 ? 2.4 : 3.1;
+/** Glance leaves room outside the circle for the colored rim. */
+export const radiusFor = (size, glance) => size / 2 - (glance ? 12 : 6);
 
 /** Dots grouped into a few hundred paths so a frame stays cheap with thousands of people. */
 function buildCache(data, cx, cy, r, dot){
@@ -40,9 +42,9 @@ function buildCache(data, cx, cy, r, dot){
  * Draws one frame. `view` is {scale, ox, oy} (the zoom), `focus` a wedge or null.
  * Coordinates are CSS pixels; the caller has already scaled the context for the screen.
  */
-export function drawCompass(ctx, data, size, {t = 0, still = false, reduced = false, focus = null, view = {scale: 1, ox: 0, oy: 0}, pal = palette(), cache = null, reveal = 1, labels = true}){
-  const cx = size / 2, cy = size / 2, r = size / 2 - 6;
-  const dot = dotSize(data.total);
+export function drawCompass(ctx, data, size, {t = 0, still = false, reduced = false, focus = null, view = {scale: 1, ox: 0, oy: 0}, pal = palette(), cache = null, reveal = 1, labels = true, glance = false, callouts = null}){
+  const cx = size / 2, cy = size / 2, r = radiusFor(size, glance);
+  const dot = dotSize(data.total, glance);
   cache = cache || buildCache(data, cx, cy, r, dot);
   const sweep = reduced && !still ? -Math.PI / 2 : ((t % PERIOD) / PERIOD) * TAU - Math.PI / 2;
   const glow = a => { if (reduced && !still) return 1; let behind = (sweep - a) % TAU; if (behind < 0) behind += TAU; return Math.exp(-behind / 2.2); };
@@ -50,7 +52,7 @@ export function drawCompass(ctx, data, size, {t = 0, still = false, reduced = fa
   const prim = pal.dark ? '255,255,255' : '0,0,0';
 
   ctx.save();
-  ctx.beginPath(); ctx.arc(cx, cy, r + 8, 0, TAU); ctx.clip();
+  ctx.beginPath(); ctx.arc(cx, cy, r + (glance ? 12 : 8), 0, TAU); ctx.clip();
   ctx.translate(cx + view.ox, cy + view.oy); ctx.scale(view.scale, view.scale); ctx.translate(-cx, -cy);
 
   // grid
@@ -73,10 +75,27 @@ export function drawCompass(ctx, data, size, {t = 0, still = false, reduced = fa
     ctx.fillStyle = rgba(focus.color, 0.10); ctx.fill();
   }
 
+  // glance: an instrument bezel. Fine degree ticks inside the rim, and each sector as a colored arc on it
+  if (glance){
+    ctx.beginPath();
+    for (let i = 0; i < 72; i++){ if (i % 6 === 0) continue; const a = i / 72 * TAU - Math.PI / 2; ctx.moveTo(cx + Math.cos(a) * (r - 4), cy + Math.sin(a) * (r - 4)); ctx.lineTo(cx + Math.cos(a) * (r - 1), cy + Math.sin(a) * (r - 1)); }
+    ctx.strokeStyle = 'rgba(255,255,255,0.16)'; ctx.lineWidth = 0.75; ctx.stroke();
+    ctx.beginPath();
+    for (let i = 0; i < 72; i += 6){ const a = i / 72 * TAU - Math.PI / 2; ctx.moveTo(cx + Math.cos(a) * (r - 7), cy + Math.sin(a) * (r - 7)); ctx.lineTo(cx + Math.cos(a) * (r - 1), cy + Math.sin(a) * (r - 1)); }
+    ctx.strokeStyle = 'rgba(255,255,255,0.32)'; ctx.lineWidth = 1; ctx.stroke();
+    const gap = 0.035;
+    ctx.lineCap = 'round'; ctx.lineWidth = 4.5;
+    for (const w of data.wedges){
+      if (w.a1 - w.a0 <= gap * 2) continue;
+      ctx.beginPath(); ctx.arc(cx, cy, r + 5, w.a0 + gap / 2, w.a1 - gap / 2); ctx.strokeStyle = w.color; ctx.stroke();
+    }
+    ctx.lineCap = 'butt';
+  }
+
   // sweep
   if (!(reduced && !still)){
     ctx.beginPath(); ctx.moveTo(cx, cy); ctx.arc(cx, cy, r, sweep - 0.9, sweep); ctx.closePath();
-    const strength = pal.dark ? 0.20 : 0.16;
+    const strength = glance ? 0.28 : pal.dark ? 0.20 : 0.16;
     if (ctx.createConicGradient){
       const g = ctx.createConicGradient(sweep - 0.9, cx, cy);
       g.addColorStop(0, rgba(pal.amber, 0)); g.addColorStop(0.9 / TAU, rgba(pal.amber, strength)); g.addColorStop(0.9 / TAU + 0.0001, rgba(pal.amber, 0)); g.addColorStop(1, rgba(pal.amber, 0));
@@ -85,8 +104,17 @@ export function drawCompass(ctx, data, size, {t = 0, still = false, reduced = fa
     ctx.fill();
     const tip = [cx + Math.cos(sweep) * r, cy + Math.sin(sweep) * r];
     const lg = ctx.createLinearGradient(cx, cy, tip[0], tip[1]);
-    lg.addColorStop(0, rgba(pal.amber, 0.1)); lg.addColorStop(1, rgba(pal.amber, 0.9));
-    ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(tip[0], tip[1]); ctx.strokeStyle = lg; ctx.lineWidth = 1.5; ctx.stroke();
+    if (glance){
+      // a sharp, bright leading edge with a soft glow under it, and a white tip
+      lg.addColorStop(0, rgba(pal.amber, 0.25)); lg.addColorStop(1, rgba(pal.amber, 1));
+      ctx.save(); ctx.shadowColor = rgba(pal.amber, 0.9); ctx.shadowBlur = 10;
+      ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(tip[0], tip[1]); ctx.strokeStyle = lg; ctx.lineWidth = 2; ctx.stroke();
+      ctx.restore();
+      ctx.beginPath(); ctx.arc(tip[0], tip[1], 2.5, 0, TAU); ctx.fillStyle = '#fff'; ctx.fill();
+    } else {
+      lg.addColorStop(0, rgba(pal.amber, 0.1)); lg.addColorStop(1, rgba(pal.amber, 0.9));
+      ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(tip[0], tip[1]); ctx.strokeStyle = lg; ctx.lineWidth = 1.5; ctx.stroke();
+    }
   }
 
   // dots, a bucket at a time
@@ -94,18 +122,29 @@ export function drawCompass(ctx, data, size, {t = 0, still = false, reduced = fa
   for (const b of cache.buckets){
     if (b.band >= reveal) continue;
     const dim = focus && !inFocus(b.angle) ? 0.25 : 1;
-    ctx.globalAlpha = (base + (1 - base) * glow(b.angle)) * dim;
+    // glance: everyone else is phosphor texture, dim until the sweep passes, then bright, fading over the turn
+    const g = glow(b.angle);
+    ctx.globalAlpha = glance ? 0.2 + 0.72 * g * g : (base + (1 - base) * g) * dim;
     ctx.fillStyle = b.color; ctx.fill(b.path);
   }
   ctx.globalAlpha = 1;
 
   // flagged people
+  const fdot = glance ? 2.8 : dot;
   for (const it of cache.flagged){
     if (it.d.r >= reveal) continue;
     const {x, y} = it, dim = inFocus(it.d.a) ? 1 : 0.3;
     const circle = (rad) => { ctx.beginPath(); ctx.arc(x, y, rad, 0, TAU); };
+    // glance lights up only the two signals the card's legend names
+    if (glance && it.d.f !== 'w' && it.d.f !== 'j'){ ctx.fillStyle = rgba(it.color, 0.4); circle(fdot * 0.65); ctx.fill(); continue; }
+    const dot = fdot;
     switch (it.d.f){
       case 'w': {
+        if (glance && !(reduced && !still)){
+          // a ping ripples out as the sweep crosses someone waiting on you
+          let behind = (sweep - it.d.a) % TAU; if (behind < 0) behind += TAU;
+          if (behind < 1.2){ const k = behind / 1.2; ctx.lineWidth = 1.4; ctx.strokeStyle = rgba(pal.amber, (1 - k) * 0.9); circle(dot * (1.8 + k * 7)); ctx.stroke(); }
+        }
         const halo = dot * 3.4, g = ctx.createRadialGradient(x, y, 0, x, y, halo);
         g.addColorStop(0, rgba(pal.amber, 0.55 * dim)); g.addColorStop(1, rgba(pal.amber, 0));
         ctx.fillStyle = g; circle(halo); ctx.fill();
@@ -139,7 +178,7 @@ export function drawCompass(ctx, data, size, {t = 0, still = false, reduced = fa
   }
 
   // labels: ring names, and pills for the biggest sectors
-  if (!focus && labels){
+  if (!focus && (labels || glance)){
     ctx.font = '500 9px "Geist Mono", ui-monospace, monospace'; ctx.textBaseline = 'top'; ctx.textAlign = 'left';
     ctx.fillStyle = rgba(pal.text2, 0.85);
     for (const ring of data.rings.slice(0, -1)) ctx.fillText(ring.label.toUpperCase(), cx + 4, cy - r * ring.r + 2);
@@ -158,12 +197,34 @@ export function drawCompass(ctx, data, size, {t = 0, still = false, reduced = fa
       ctx.fillStyle = w.color; ctx.fillText(w.short, px, py + 0.5);
     }
   }
+  if (glance && !focus && callouts) drawCallouts(ctx, cache, callouts, cx, cy, r, reveal, pal);
   ctx.restore();
   return cache;
 }
 
+/** Glance: short names beside the few people the card points at, never over you or each other. */
+function drawCallouts(ctx, cache, callouts, cx, cy, r, reveal, pal){
+  const placed = [], me = {x: cx - 32, y: cy - 32, w: 64, h: 64};
+  const hit = (a, b, pad = 0) => a.x - pad < b.x + b.w && b.x - pad < a.x + a.w && a.y - pad < b.y + b.h && b.y - pad < a.y + a.h;
+  ctx.font = '600 10.5px Geist, system-ui, sans-serif'; ctx.textBaseline = 'middle'; ctx.textAlign = 'center';
+  for (const it of cache.flagged){
+    if (it.d.r >= reveal) continue;
+    const name = callouts[it.d.k]; if (!name) continue;
+    const w = ctx.measureText(name).width + 10, h = 13 + 6, px = it.x, py = it.y;
+    const out = px >= cx;
+    const spots = [[out ? px + 9 : px - 9 - w, py - h / 2], [out ? px - 9 - w : px + 9, py - h / 2], [px - w / 2, py - 9 - h], [px - w / 2, py + 9]].map(([x, y]) => ({x, y, w, h}));
+    const spot = spots.find(c => !hit(c, me) && !placed.some(p => hit(p, c, 2)) && Math.hypot(c.x + c.w / 2 - cx, c.y + c.h / 2 - cy) < r - 6);
+    if (!spot) continue;
+    placed.push(spot);
+    ctx.beginPath(); if (ctx.roundRect) ctx.roundRect(spot.x, spot.y, spot.w, spot.h, spot.h / 2); else ctx.rect(spot.x, spot.y, spot.w, spot.h);
+    ctx.fillStyle = 'rgba(18,14,34,0.88)'; ctx.fill();
+    ctx.lineWidth = 0.8; ctx.strokeStyle = rgba(pal.amber, 0.55); ctx.stroke();
+    ctx.fillStyle = pal.amber; ctx.fillText(name, spot.x + spot.w / 2, spot.y + spot.h / 2 + 0.5);
+  }
+}
+
 /** The interactive compass element: canvas, the "you" avatar, zoom and taps. */
-export function createCompass({initials = '', interactive = true, labels = true, onOpen = () => {}, onFocus = () => {}, onTapSector = null} = {}){
+export function createCompass({initials = '', interactive = true, labels = true, glance = false, onOpen = () => {}, onFocus = () => {}, onTapSector = null} = {}){
   const el = document.createElement('div');
   el.className = 'compass';
   el.innerHTML = `<canvas></canvas><div class="compass-me">${meAvatar(initials, 46, 2)}</div>`;
@@ -171,7 +232,9 @@ export function createCompass({initials = '', interactive = true, labels = true,
   const ctx = cv.getContext('2d');
   let data = {wedges: [], dots: [], rings: [], total: 0, tally: {}}, cache = null, cacheKey = '';
   let size = 0, dpr = 1, focusId = null, raf = 0, visible = false, alive = true;
-  let view = {scale: 1, ox: 0, oy: 0}, anim = null, pal = null;
+  let view = {scale: 1, ox: 0, oy: 0}, anim = null, pal = null, callouts = null;
+  // the dots bloom outward from you the first time the compass has people in it
+  let reveal = glance ? 0 : 1, bloom = null;
 
   const focused = () => focusId ? data.wedges.find(w => w.id === focusId) || null : null;
   function target(){
@@ -197,11 +260,12 @@ export function createCompass({initials = '', interactive = true, labels = true,
     const key = `${data.total}|${data.dots.length && data.dots[0].k}|${size}`;
     if (key !== cacheKey) { cache = null; cacheKey = key; }
     if (!pal) pal = palette(el); // read once it's on the page, so a night-sky card gets night colors
+    if (bloom != null){ const p = Math.min(1, (now - bloom) / 1700); reveal = 1 - Math.pow(1 - p, 3); if (p >= 1) bloom = null; }
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, size, size);
-    cache = drawCompass(ctx, data, size, {t: now / 1000, reduced: REDUCED(), focus: focused(), view, pal, cache, labels});
+    cache = drawCompass(ctx, data, size, {t: now / 1000, reduced: REDUCED(), focus: focused(), view, pal, cache, labels, glance, callouts, reveal});
   }
   function loop(now){ raf = 0; if (!alive) return; frame(now); if (running()) raf = requestAnimationFrame(loop); }
-  const running = () => visible && !document.hidden && (!REDUCED() || anim);
+  const running = () => visible && !document.hidden && (!REDUCED() || anim || bloom != null);
   function kick(){ if (!raf && alive){ if (running()) raf = requestAnimationFrame(loop); else frame(performance.now()); } }
 
   const ro = new ResizeObserver(resize); ro.observe(el);
@@ -223,7 +287,7 @@ export function createCompass({initials = '', interactive = true, labels = true,
     el.addEventListener('click', e => {
       const rect = cv.getBoundingClientRect();
       const x = e.clientX - rect.left, y = e.clientY - rect.top;
-      const cx = size / 2, cy = size / 2, r = size / 2 - 6;
+      const cx = size / 2, cy = size / 2, r = radiusFor(size, glance);
       // undo the zoom to find where the tap lands on the unscaled compass
       const lx = (x - cx - view.ox) / view.scale + cx, ly = (y - cy - view.oy) / view.scale + cy;
       const f = focused();
@@ -245,7 +309,14 @@ export function createCompass({initials = '', interactive = true, labels = true,
 
   return {
     el,
-    setData(d){ data = d; cache = null; cacheKey = ''; if (focusId && !data.wedges.some(w => w.id === focusId)) setFocus(null); kick(); },
+    setData(d){
+      data = d; cache = null; cacheKey = '';
+      if (reveal < 1 && bloom == null && data.total > 0){ if (REDUCED()) reveal = 1; else bloom = performance.now(); }
+      if (focusId && !data.wedges.some(w => w.id === focusId)) setFocus(null);
+      kick();
+    },
+    /** Glance: short names drawn beside a few people, keyed by person. */
+    setCallouts(c){ callouts = c && Object.keys(c).length ? c : null; kick(); },
     setFocus, focus: () => focusId,
     setInitials(s){ me.innerHTML = meAvatar(s, 46, 2); },
     retheme(){ pal = palette(el); kick(); },
