@@ -963,7 +963,9 @@ final class AppModel {
             if let id = parts.first?.removingPercentEncoding { tab = .home; paths[.home] = [.event(id)] }
         case "pursuit":
             tab = .you
-            paths[.you] = [.pursuits] + (parts.first?.removingPercentEncoding.map { [.pursuit($0)] } ?? [])
+            var route: [Route] = [.pursuits]
+            if let id = parts.first?.removingPercentEncoding { route.append(.pursuit(id)) }
+            paths[.you] = route
         default:
             tab = .home
         }
