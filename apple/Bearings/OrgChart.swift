@@ -225,7 +225,7 @@ struct OrgChartView: View {
         let people = o.members
         VStack(alignment: .leading, spacing: 6) {
             Text(o.code).font(Theme.mono(.caption, .semibold)).foregroundStyle(people.isEmpty ? Theme.text3 : Theme.primary)
-            Text(o.name).font(Theme.geist(.subheadline, .semibold)).lineLimit(2).multilineTextAlignment(.leading)
+            Text(o.name).font(Theme.geist(.subheadline, .semibold)).lineLimit(3).multilineTextAlignment(.leading)
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 0)
             if people.isEmpty {
@@ -252,10 +252,8 @@ struct OrgChartView: View {
         .frame(maxWidth: .infinity, minHeight: 138, alignment: .topLeading)
         .background(people.isEmpty ? Theme.bg : Theme.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
         .overlay {
-            if people.isEmpty {
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .strokeBorder(Theme.text3.opacity(0.5), style: StrokeStyle(lineWidth: 1.2, dash: [5, 4]))
-            }
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .strokeBorder(Theme.text3.opacity(people.isEmpty ? 0.5 : 0.3), style: StrokeStyle(lineWidth: 1.2, dash: people.isEmpty ? [5, 4] : []))
         }
     }
 
