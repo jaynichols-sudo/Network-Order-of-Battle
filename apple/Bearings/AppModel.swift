@@ -287,6 +287,26 @@ final class AppModel {
                 _ = try? await engine.call("addProspects", [sample, "zoominfo"], as: Int.self)
                 paths[tab, default: []].append(.org("DISA"))
             }
+        case "pursuit":
+            Task {
+                guard let id = await addPursuit(name: "DISA OT gateway pilot", agency: "DISA", due: Date().addingTimeInterval(45 * 86400), value: "$2.4M") else { return }
+                if let d = await pursuit(id) {
+                    for r in d.roleList.prefix(3) { if let s = r.suggest.first { await assignRole(id, role: r.role, k: s.k, on: true) } }
+                }
+                paths[tab, default: []].append(.pursuit(id))
+            }
+        case "moves": paths[tab, default: []].append(.moves)
+        case "ask":
+            showAsk = true
+        case "quicklog": showQuickLog = true
+        case "intros":
+            if let p = people.filter({ $0.x == nil }).max(by: { $0.score < $1.score }) {
+                Task {
+                    try? await engine.run("addIntro", [p.k, "Robert Hale", "DISA"])
+                    await refreshAll()
+                    paths[tab, default: []].append(.intros)
+                }
+            }
         case "notes":
             let names = people.filter { $0.x == nil }.sorted { $0.score > $1.score }.prefix(2).map(\.fullName)
             let text = """

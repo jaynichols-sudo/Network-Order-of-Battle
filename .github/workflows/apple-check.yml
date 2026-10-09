@@ -146,6 +146,11 @@ jobs:
             shoot $dev $p-01b-compass-card -homeScroll compass
             shoot $dev $p-31-org -startTab companies -demoOpen org
             shoot $dev $p-32-notes -demoOpen notes
+            shoot $dev $p-33-pursuit -startTab you -demoOpen pursuit
+            shoot $dev $p-34-moves -startTab you -demoOpen moves
+            shoot $dev $p-35-ask -demoOpen ask
+            shoot $dev $p-36-intros -startTab you -demoOpen intros
+            shoot $dev $p-37-unit-trend -startTab companies -demoOpen unit
             xcrun simctl ui $dev content_size accessibility-large
             shoot $dev $p-21-home-xl
             shoot $dev $p-22-profile-xl -startTab people -demoOpen person
