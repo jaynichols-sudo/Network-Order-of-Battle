@@ -1,6 +1,6 @@
 // You: who you are in Bearings, the share card, your stuff (the week's five, lists,
 // Catch Up, Explore), your data (import or refresh, backup) and settings and help.
-import { M, isSample, isStarter, myInitials, runList, lastBackup } from './model.js';
+import { M, isSample, isStarter, myInitials, runList, lastBackup, pursuits, intros } from './model.js';
 import { esc, fmt, icon, meAvatar, Day, empty, $, plural } from './ui.js';
 import { openSheet, closeSheet } from './nav.js';
 import { open, openToday } from './actions.js';
@@ -51,6 +51,12 @@ export const YouView = {
       <button type="button" class="card share-card" data-a="share"><span class="sc-ic">${icon('share')}</span><span class="you-text"><b>Share card</b><span>A picture of your network. Dots and sector totals only.</span></span>${icon('chevR', 'chev')}</button>
       <section class="card list"><div class="card-head static"><h2>Your stuff</h2></div>
         ${row('weekly', 'checkCircle', 'This week’s five')}
+        ${row('ask', 'askSearch', 'Ask Bearings')}
+        ${row('quickNote', 'mic', 'Quick note')}
+        ${row('pursuits', 'target', 'Pursuits', pursuits().length ? fmt(pursuits().length) : '')}
+        ${row('socials', 'people', 'Across your socials')}
+        ${row('intros', 'waysIn', 'Intros', intros().filter(x => x.st === 'asked').length ? `${fmt(intros().filter(x => x.st === 'asked').length)} open` : '')}
+        ${row('moves', 'swap', 'Moves and rotations')}
         ${row('lists', 'pin', 'Lists', M.lists.length ? fmt(M.lists.length) : '')}
         ${row('catchup', 'stack', 'Catch Up', M.info.deckCount ? `${fmt(M.info.deckCount)} new` : '')}
         ${row('events', 'ticket', 'Events', M.events.length ? fmt(M.events.length) : '')}
@@ -77,6 +83,12 @@ export const YouView = {
     settings: () => open('settings'),
     share: () => { fx.tap(); open('share'); },
     weekly: () => open('weekly'),
+    ask: () => { fx.tap(); open('ask'); },
+    quickNote: () => { fx.tap(); open('quickNote'); },
+    pursuits: () => open('pursuits'),
+    socials: () => open('socials'),
+    intros: () => open('intros'),
+    moves: () => open('moves'),
     lists: () => openLists(),
     catchup: () => openToday('catchup'),
     explore: () => openToday('explore'),

@@ -9,6 +9,9 @@ import { personRow } from './people.js';
 import { openURL, fx, prefs, ls } from './platform.js';
 import { openMessage } from './sheets.js';
 import { allow } from './pro.js';
+import { trendSection } from './watchlist.js';
+import { openNewPursuit } from './pursuits.js';
+import { openTrackIntro } from './relationships.js';
 
 let mode = ls.get('bearings.companies') || 'watchlist';
 let gov = false, shownUnc = 25;
@@ -101,7 +104,7 @@ registerRoute('unit', name => {
   const st = {editLink: false, link: '', editPlace: false, place: '', note: null};
   const view = {
     title: name,
-    menu: () => [{label: 'Find a way in', icon: 'waysIn', run: () => openIntro(name)}, {label: 'Org chart', icon: 'org', run: () => push('org', name)}],
+    menu: () => [{label: 'Find a way in', icon: 'waysIn', run: () => openIntro(name)}, {label: 'Start a pursuit here', icon: 'target', run: () => openNewPursuit(name)}, {label: 'Org chart', icon: 'org', run: () => push('org', name)}],
     mount(body){ this.render(body); },
     update(body){ this.render(body); },
     render(body){
@@ -116,6 +119,7 @@ registerRoute('unit', name => {
           <button type="button" class="row act ${u.isTarget ? '' : 'accent'}" data-a="target">${icon(u.isTarget ? 'minusCircle' : 'plusCircle')}<span>${u.isTarget ? 'Remove from watchlist' : 'Add to watchlist'}</span></button>
           <button type="button" class="row act" data-a="inPeople">${icon('people')}<span>Show in People</span></button>
           <button type="button" class="row act" data-a="ways">${icon('waysIn')}<span>Find a way in</span></button>
+          <button type="button" class="row act" data-a="pursue">${icon('target')}<span>Start a pursuit here</span></button>
           <button type="button" class="row act" data-a="org">${icon('org')}<span>Org chart</span>${icon('chevR', 'chev')}</button>
           ${u.isCompany ? `<button type="button" class="row act" data-a="ind">${icon('tag')}<span class="grow">Industry</span><span class="muted">${esc(u.industry.set || `Automatic: ${u.industry.auto}`)}</span></button>` : ''}
         </div>
@@ -131,6 +135,7 @@ registerRoute('unit', name => {
           : `<button type="button" class="link" data-a="editPlace">${icon('mappin')}Set a location for everyone here</button>`}</div>
         <p class="foot">Handy for a command, base or office where everyone works in one place. It shows them on the Map. A location you set on a person still wins.</p>
         <div class="card pad gaps">${u.gaps.length ? u.gaps.map(g => `<p class="bad">${icon('alert')}${esc(g)}</p>`).join('') : `<p class="good">${icon('checkCircle')}Covered at every level</p>`}</div>
+        ${trendSection(name)}
         ${u.rungs.map(rung).join('')}
         ${alumni ? `<p class="sec-h">Used to work here</p><div class="card list">${alumni}</div><p class="foot">People who were here at an earlier refresh and have since moved on. Often the best way in.</p>` : ''}
         ${u.isTarget ? `<p class="sec-h">Notes</p><div class="card"><textarea class="field" rows="4" data-in="note" placeholder="What you’re working on here, who to meet next">${esc(st.note)}</textarea></div>` : ''}
@@ -144,6 +149,7 @@ registerRoute('unit', name => {
       async target(_, t){ await toggleTarget(name); view.render(t.closest('.page-body')); },
       inPeople(){ const u = M.api.unit(name); showPeople(M.info.lens && !u.isCompany ? {agency: name} : {company: name}); },
       ways: () => openIntro(name),
+      pursue: () => { fx.tap(); openNewPursuit(name); },
       org: () => push('org', name),
       ind(_, t){ const u = M.api.unit(name); menu(t, [{label: `Automatic: ${u.industry.auto}`, on: !u.industry.set, run: () => setCompanyIndustry(name, '')}, ...industryOptions().map(i => ({label: i.id, on: i.id === u.industry.set, run: () => setCompanyIndustry(name, i.id)}))]); },
       editLink(_, t){ const u = M.api.unit(name); st.editLink = true; st.link = u.links.companyExact ? u.links.company : ''; view.render(t.closest('.page-body')); },
@@ -201,7 +207,7 @@ export function openIntro(initial = ''){
     const parts = []; if (p.now.length) parts.push(`${p.now.length} there now`); if (p.alumni.length) parts.push(`${p.alumni.length} used to be`); if (p.sector.length) parts.push(`${p.sector.length} close in the same field`);
     const section = (title, keys) => { const ps = persons(keys); return ps.length ? `<p class="sec-h">${esc(title)} (${ps.length})</p><div class="card list">${ps.map(x => personRow(x)).join('')}</div>` : ''; };
     out.innerHTML = `<div class="intro-head"><h2>${esc(p.company)}</h2><p class="muted">${esc(parts.join(', '))}</p></div>
-      ${p.best.length ? `<p class="sec-h">Best ways in</p><div class="card list">${p.best.map(b => { const x = person(b.k); return x ? `<div class="best">${personRow(x)}<p class="muted why">${esc(b.why)}</p><button type="button" class="btn small" data-a="ask" data-v="${esc(b.k)}">${icon('pencil')}Ask for an intro</button></div>` : ''; }).join('')}</div>` : ''}
+      ${p.best.length ? `<p class="sec-h">Best ways in</p><div class="card list">${p.best.map(b => { const x = person(b.k); return x ? `<div class="best">${personRow(x)}<p class="muted why">${esc(b.why)}</p><div class="best-btns"><button type="button" class="btn small" data-a="ask" data-v="${esc(b.k)}">${icon('pencil')}Ask for an intro</button><button type="button" class="btn small" data-a="track" data-v="${esc(b.k)}">${icon('checklist')}Track it</button></div></div>` : ''; }).join('')}</div>` : ''}
       ${section('Work there now', p.now)}
       ${p.alumni.length ? `<p class="sec-h">Used to work there (${p.alumni.length})</p><div class="card list">${p.alumni.map(a => { const x = person(a.k); return x ? personRow(x, {sub: a.was || a.until ? `Was ${a.was || 'there'}${a.until ? `, until ${Day.nice(a.until)}` : ''}` : ''}) : ''; }).join('')}</div>` : ''}
       ${section(p.ind ? `Close to you in ${p.ind}` : 'Close to you nearby', p.sector)}
@@ -222,6 +228,7 @@ export function openIntro(initial = ''){
       sugg(v, t){ q = v; const b = t.closest('.sheet-body'); $('input', b).value = v; results(b); },
       open(k){ closeSheet(); openPerson(k); },
       ask(k, t){ const out = t.closest('.intro-out'); openMessage(k, {intro: (out && out.__company) || q}); },
+      track(k, t){ const out = t.closest('.intro-out'); fx.tap(); openTrackIntro(k, (out && out.__company) || q); },
     },
   });
 }

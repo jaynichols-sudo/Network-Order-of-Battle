@@ -230,15 +230,15 @@ export async function addMet(eventId, m, editing = false){
 }
 
 /* ---------- pick someone from your network ---------- */
-export function openPicker(onPick){
+export function openPicker(onPick, {title = 'Who did you meet?', none = 'No one matches. Use “Add someone new” instead.'} = {}){
   const render = (body, q) => {
     const t = q.toLowerCase().trim();
     const list = t.length < 2 ? [] : M.people.filter(p => !p.x && (p.full.toLowerCase().includes(t) || p.c.toLowerCase().includes(t))).slice(0, 50);
     $('.pick-list', body).innerHTML = t.length < 2 ? '<p class="foot">Type at least two letters of a name or company.</p>'
-      : list.length ? `<div class="card list">${list.map(p => personRow(p, {act: 'pick'})).join('')}</div>` : '<p class="foot">No one matches. Use “Add someone new” instead.</p>';
+      : list.length ? `<div class="card list">${list.map(p => personRow(p, {act: 'pick'})).join('')}</div>` : `<p class="foot">${esc(none)}</p>`;
   };
   openSheet({
-    title: 'Who did you meet?', left: ['Cancel'], full: true,
+    title, left: ['Cancel'], full: true,
     mount(body){
       body.innerHTML = `<label class="searchbox">${icon('search')}<input type="search" data-in="q" placeholder="Name or company" autocomplete="off" autocorrect="off" spellcheck="false" aria-label="Name or company"></label><div class="pick-list"></div>`;
       render(body, '');

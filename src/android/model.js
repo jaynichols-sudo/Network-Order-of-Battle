@@ -59,7 +59,7 @@ export function norm(p){
 /* ---------- loading ---------- */
 export async function reload(){
   const texts = {};
-  for (const [key, file] of [['network', 'network.json'], ['edits', 'edits.json'], ['review', 'review.json'], ['targets', 'targets.json'], ['industries', 'industries.json'], ['team', 'team.json']]){
+  for (const [key, file] of [['network', 'network.json'], ['edits', 'edits.json'], ['review', 'review.json'], ['targets', 'targets.json'], ['industries', 'industries.json'], ['team', 'team.json'], ['prospects', 'prospects.json'], ['pursuits', 'pursuits.json'], ['history', 'history.json'], ['social', 'social.json']]){
     const t = await Store.read(file); if (t) texts[key] = t;
   }
   try { M.info = api.loadFiles(texts, prefs.lens); M.error = ''; }
@@ -68,6 +68,7 @@ export async function reload(){
   try { const en = JSON.parse((await Store.read('enrichment.json')) || 'null'); M.enriched = (en && en.people) || {}; } catch { M.enriched = {}; }
   try { const ev = JSON.parse((await Store.read('events.json')) || '[]'); M.events = Array.isArray(ev) ? ev.filter(e => e && e.id && e.start) : []; } catch { M.events = []; }
   if (!M.constants) M.constants = api.constants();
+  await snapshotTargets();
   refreshAll();
   M.loaded = true;
 }
@@ -220,6 +221,7 @@ export async function toggleTarget(name){
   r.on ? fx.star() : fx.tap();
   show(r.on ? `Added ${name} to your watchlist` : `Removed ${name} from your watchlist`);
   await saveFile('targets', 'targets.json');
+  if (r.on) await snapshotTargets();
   refreshSummary(); M.version++; emit('targets');
 }
 export async function setTargetNote(name, note){ api.setTargetNote(name, note); await saveFile('targets', 'targets.json'); }
@@ -414,3 +416,95 @@ export async function exportCSV(keys){
   catch (e) { if (!/cancel/i.test((e && e.message) || '')) show('Export failed: ' + ((e && e.message) || e)); }
 }
 export { scheduleMonday };
+
+/* ---------- pursuits ---------- */
+// A bid or a deal and the people who decide it (Pursuits.swift). Saved in pursuits.json.
+const tryOr = (fn, fallback) => { try { return fn(); } catch (e) { console.error(e); return fallback; } };
+export const pursuits = () => tryOr(() => api.pursuits(), []);
+export const pursuit = id => tryOr(() => api.pursuit(id), null);
+async function savePursuits(){ await saveFile('pursuits', 'pursuits.json'); M.version++; emit('pursuits'); }
+export async function addPursuit(o){
+  const p = tryOr(() => api.addPursuit(o), null);
+  await savePursuits();
+  return p && p.id;
+}
+export async function updatePursuit(id, patch){ tryOr(() => api.updatePursuit(id, patch), null); await savePursuits(); }
+export async function assignRole(id, role, k, on){ tryOr(() => api.assignRole(id, role, k, on), null); await savePursuits(); }
+export async function removePursuit(id){ tryOr(() => api.removePursuit(id), null); await savePursuits(); }
+
+/* ---------- moves and intros ---------- */
+export const moves = () => tryOr(() => api.moves(), []);
+/** "In this role since", as YYYY-MM, or '' to clear it. */
+export async function setRoleSince(k, ym){ await edit(k, () => api.setRoleSince(k, ym || '')); fx.success(); show(ym ? 'Saved' : 'Cleared'); }
+export const intros = () => tryOr(() => api.intros(), []);
+export async function addIntro(via, to, co){
+  await edit(via, () => api.addIntro(via, to, co));
+  fx.success();
+  show('Tracking it. We’ll nudge you in a week if it hasn’t happened.');
+}
+export async function setIntro(via, id, status){ await edit(via, () => api.setIntro(via, id, status)); }
+
+/* ---------- quick note ---------- */
+/** Who a note names and when to follow up, without saving anything. */
+export const quickPreview = text => tryOr(() => api.quickLog(text, false), {people: [], days: 0});
+/** Files the note on everyone named, logs a touch, and sets the follow-up on the first. */
+export async function quickSave(text){
+  try {
+    const r = api.quickLog(text, true);
+    if (!r.people.length) return r;
+    await saveFile('edits', 'edits.json');
+    refreshAll();
+    fx.success();
+    if (r.days > 0) askNotify();
+    return r;
+  } catch (e) { show('Couldn’t save: ' + ((e && e.message) || e)); return {people: [], days: 0}; }
+}
+export function logLine(r){
+  if (!r || !r.people.length) return 'I couldn’t find anyone you know in that. Say their full name.';
+  const names = listJoin(r.people.map(p => p.name));
+  const due = r.days > 0 ? ` Follow-up set for ${niceDay(plusDays(r.days))}.` : '';
+  return `Saved to ${names}.${due}` + (r.people.length > 1 ? ` The follow-up is on ${r.people[0].name}.` : '');
+}
+export const listJoin = xs => { try { return new Intl.ListFormat('en-US', {style: 'long', type: 'conjunction'}).format(xs); } catch { return xs.join(', '); } };
+
+/* ---------- ask ---------- */
+export const ask = q => tryOr(() => api.ask(q), {kind: 'none', answer: '', people: []});
+
+/* ---------- account trends ---------- */
+export const trend = name => tryOr(() => api.trend(name), null);
+export const targetChanges = () => tryOr(() => api.targetChanges(), []);
+/** A weekly coverage snapshot for each watched company, kept in history.json so trends grow. */
+export async function snapshotTargets(){
+  if (isSample()) return;
+  if (tryOr(() => api.snapshot(), false)) await saveFile('history', 'history.json');
+}
+
+/* ---------- socials ---------- */
+export const socials = () => tryOr(() => api.socials(), {platforms: [], linkedin: 0, unique: 0, both: 0, socialOnly: 0, handlesOnly: 0, strongest: [], people: []});
+const SOCIAL_FILES = {facebook: n => n.includes('friend'), instagram: n => n.includes('follow'), snapchat: n => n.includes('friend'), tiktok: n => n.includes('user_data') || n.includes('follow') || n.includes('fans')};
+/** Reads a data download (zip or JSON) and merges it in. Only the friends and followers files are read. */
+export async function importSocial(platform, name, file){
+  const files = {};
+  const buf = new Uint8Array(await file.arrayBuffer());
+  if (buf[0] === 0x50 && buf[1] === 0x4B){
+    const zip = await JSZip.loadAsync(buf);
+    const want = SOCIAL_FILES[platform] || (() => false);
+    const entries = Object.values(zip.files).filter(f => {
+      const n = f.name.toLowerCase();
+      const size = (f._data && f._data.uncompressedSize) || 0;
+      return !f.dir && n.endsWith('.json') && size < 60e6 && want(n);
+    }).slice(0, 40);
+    for (const f of entries) files[f.name] = await f.async('string');
+  } else files[file.name || `${platform}.json`] = new TextDecoder().decode(buf);
+  if (!Object.keys(files).length) throw new Error(`No ${name} friends or followers in that file. Request the download in JSON format.`);
+  const r = api.importSocial(platform, files);
+  await saveFile('social', 'social.json');
+  refreshAll();
+  fx.success();
+  return r;
+}
+export async function clearSocial(platform){
+  tryOr(() => api.clearSocial(platform), null);
+  await saveFile('social', 'social.json');
+  refreshAll();
+}

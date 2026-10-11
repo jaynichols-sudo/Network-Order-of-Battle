@@ -8,6 +8,8 @@ import { openUnit, open } from './actions.js';
 import { openURL, copy, fx, prefs } from './platform.js';
 import { show } from './model.js';
 import { enrichSection, enrichHandlers } from './enrich.js';
+import { socialBadges } from './socials.js';
+const monthYear = s => { if (!s || s.length < 7) return ''; const [y, m] = s.split('-').map(Number); return new Date(y, m - 1, 1).toLocaleDateString('en-US', {month: 'long', year: 'numeric'}); };
 
 /* ---------- the brief, from facts already in the app ---------- */
 export function briefText(p){
@@ -105,6 +107,7 @@ function personView(k, part){
     menu: () => [
       {label: 'Add meeting notes', icon: 'notePlus', run: () => open('notes', k)},
       {label: 'Write a message', icon: 'pencil', run: () => open('message', k)},
+      {label: 'In this role since…', icon: 'calClock', run: () => open('roleSince', k)},
       ...(part === 'main' ? [{label: 'Details, location and notes', icon: 'text', run: () => push('personDetails', k)}] : []),
     ],
     mount(body){ this.render(body); },
@@ -127,6 +130,7 @@ function personView(k, part){
           ${p.p ? `<p class="prof-title">${esc(p.p)}</p>` : ''}
           ${p.c ? `<button type="button" class="prof-co" data-a="unit" data-v="${esc(p.c)}">${esc(p.c)}${icon('chevR')}</button>` : ''}
           <div class="tags">${tags(p)}</div>
+          ${socialBadges(p.social)}
           <div class="sqactions">
             <button type="button" class="sqact primary" data-a="message">${icon('pencil')}<span>Message</span></button>
             ${sqAction('star', p.starred ? 'Starred' : 'Star', p.starred ? 'starFill' : 'star', 'var(--amber)', p.starred)}
@@ -178,6 +182,7 @@ function personView(k, part){
           ${L && cl.agency ? labeled('Agency or command', esc(cl.agency)) : ''}
           ${cl.certs.length || (L && cl.clr) ? labeled('Certifications', esc((cl.certs.length ? cl.certs.join(', ') : 'None listed') + (L && cl.clr ? ', clearance mentioned' : ''))) : ''}
           ${labeled('Connected', esc(Day.nice(p.d)))}
+          ${labeled('In this role since', `<button type="button" class="link small" data-a="roleSince">${esc(monthYear(ed.rs || p.jc) || 'Set')}</button>`)}
           ${p.x ? labeled('Status', esc(`Not in your export since ${Day.nice(p.x)}`)) : ''}
           ${p.e ? labeled('Email', `<span class="sel">${esc(p.e)}</span>`) : ''}
         </div>
@@ -202,6 +207,7 @@ function personView(k, part){
       ...enrichHandlers(k),
       unit: v => openUnit(v),
       details: () => push('personDetails', k),
+      roleSince: () => open('roleSince', k),
       ways: v => open('intro', v),
       message: () => open('message', k),
       star: () => toggleStar(k),

@@ -13,6 +13,7 @@ import { liveEvents, eventChip } from './events.js';
 import { nextTrip, tripChip } from './trips.js';
 import { birthdaysCard } from './birthdays.js';
 import { reviewYear, yearSeason } from './team.js';
+import { watchlistCard, watchHandlers } from './watchlist.js';
 
 const LINKEDIN_EXPORT = 'https://www.linkedin.com/mypreferences/d/download-my-data';
 let compass = null, compassData = null, compassVersion = -1;
@@ -44,8 +45,8 @@ export const accountButton = () => `<button type="button" class="me-btn" data-a=
 export function accountMenu(){ go('you'); }
 
 /* ---------- the daily five ---------- */
-const EYEBROW = {reply: ['WAITING ON YOU', 'var(--needs)'], congrats: ['NEW ROLE', 'var(--good)'], new: ['NEW CONNECTION', 'var(--info)']};
-const ACTION = {reply: 'Reply', congrats: 'Congratulate', new: 'Say thanks'};
+const EYEBROW = {reply: ['WAITING ON YOU', 'var(--needs)'], congrats: ['NEW ROLE', 'var(--good)'], new: ['NEW CONNECTION', 'var(--info)'], move: ['LIKELY TO MOVE', 'var(--violet)'], intro: ['INTRO PENDING', 'var(--accent)']};
+const ACTION = {reply: 'Reply', congrats: 'Congratulate', new: 'Say thanks', intro: 'Nudge'};
 
 function openLine(picks){
   const o = picks.filter(p => !weeklyDone(p.k));
@@ -111,10 +112,18 @@ function banner(){
   return '';
 }
 
+/** The three stats under the radar, each with the key for what it counts. */
 function stats(d){
   const t = d.tally || {};
-  const stat = (v, label, act, cls = '') => `<button type="button" class="tstat ${cls}" data-a="sig" data-v="${act}" ${v ? '' : 'disabled'} aria-label="${fmt(v)} ${label}"><b class="mono">${fmt(v)}</b><span>${label}</span></button>`;
-  return `<p class="eyebrow">YOUR NETWORK · ${fmt(d.total || 0)}</p>${stat(t.w, 'waiting on you', 'waiting', 'big')}<div class="tstat-row">${stat(t.j, 'new jobs', 'jcw')}${d.rel ? stat(t.close, 'close', 'close') : stat(t.n, 'new', 'new')}</div>`;
+  const stat = (v, label, act, key, cls = '') => `<button type="button" class="gstat ${cls}" data-a="sig" data-v="${act}" ${v ? '' : 'disabled'} aria-label="${fmt(v)} ${label}"><b class="mono">${fmt(v)}</b><span class="gkey">${key}<span>${label}</span></span></button>`;
+  const dot = c => `<i class="dot" style="background:${c}"></i>`, ringKey = '<i class="kring"></i>';
+  return stat(t.w, 'waiting on you', 'waiting', dot('var(--amber)'), 'amber') + stat(t.j, 'new jobs', 'jcw', dot('var(--info)')) + (d.rel ? stat(t.close, 'close', 'close', ringKey) : stat(t.n, 'new', 'new', ringKey));
+}
+/** The three people who wrote most recently and are waiting on you, named on the radar ("Jason J."). */
+function callouts(){
+  const out = {};
+  for (const p of M.people.filter(p => p.waiting && !p.x).sort((a, b) => ((b.rx && b.rx.t) || '').localeCompare((a.rx && a.rx.t) || '')).slice(0, 3)) out[p.k] = `${p.f} ${(p.l || '').slice(0, 1)}.`.trim();
+  return out;
 }
 
 function chips(){
@@ -129,6 +138,8 @@ function chips(){
   const trip = nextTrip(); if (trip) out.push(tripChip(trip));
   if (yearSeason() && !isSample()) out.push(`<button type="button" class="tchip" data-a="year">${icon('sparkles')}Your ${reviewYear()}</button>`);
   out.push(`<button type="button" class="tchip" data-a="notes">${icon('notePlus')}Add meeting notes</button>`);
+  out.push(`<button type="button" class="tchip" data-a="ask">${icon('askSearch')}Ask</button>`);
+  out.push(`<button type="button" class="tchip" data-a="quickNote">${icon('mic')}Quick note</button>`);
   out.push(`<button type="button" class="tchip" data-a="explore">${icon('scope')}Explore</button>`);
   return `<div class="tchips">${out.join('')}</div>`;
 }
@@ -155,10 +166,14 @@ export const HomeView = {
       <header class="today-head"><div><p class="eyebrow date-line"></p><h1 class="headline serif"></h1></div>${accountButton()}</header>
       <div class="strip-slot"></div><div class="five-slot"></div>
       <div class="banner-slot"></div>
-      <section class="card night night-card compass-card mini"><button type="button" class="mini-compass" data-a="explore" aria-label="Your network compass. Opens Explore"></button><div class="tstats"></div></section>
-      <div class="chips-slot"></div><div class="bday-slot"></div><div class="cards-slot"></div></div>`;
-    compass = createCompass({initials: myInitials(), interactive: false, labels: false});
-    $('.mini-compass', el).appendChild(compass.el);
+      <section class="card night night-card compass-card glance">
+        <div class="cc-head"><p class="eyebrow">YOUR NETWORK</p><span class="mono cc-count"></span></div>
+        <button type="button" class="glance-compass" data-a="explore" aria-label="Your network compass. Opens Explore"></button>
+        <p class="cc-key">You’re in the middle. The closer someone sits, the closer you are. The rim is colored by sector.</p>
+        <div class="gstats"></div></section>
+      <div class="chips-slot"></div><div class="watch-slot"></div><div class="bday-slot"></div><div class="cards-slot"></div></div>`;
+    compass = createCompass({initials: myInitials(), interactive: false, labels: false, glance: true});
+    $('.glance-compass', el).appendChild(compass.el);
     this.ptr(el);
     this.update(el);
   },
@@ -170,10 +185,12 @@ export const HomeView = {
     $('.strip-slot', el).innerHTML = progressStrip(picks);
     $('.five-slot', el).innerHTML = dailyFive();
     $('.banner-slot', el).innerHTML = banner();
-    if (compassVersion !== M.version){ compassVersion = M.version; compassData = M.api.compass({}); compass.setData(compassData); compass.setInitials(myInitials()); }
+    if (compassVersion !== M.version){ compassVersion = M.version; compassData = M.api.compass({}); compass.setData(compassData); compass.setCallouts(callouts()); compass.setInitials(myInitials()); }
     if (what === 'theme') compass.retheme();
-    $('.tstats', el).innerHTML = stats(compassData);
+    $('.cc-count', el).textContent = `${fmt(compassData.total || 0)} people`;
+    $('.gstats', el).innerHTML = stats(compassData);
     $('.chips-slot', el).innerHTML = chips();
+    watchlistCard($('.watch-slot', el));
     $('.bday-slot', el).innerHTML = birthdaysCard();
     $('.cards-slot', el).innerHTML = worth();
     animateRings(el);
@@ -200,6 +217,9 @@ export const HomeView = {
       HomeView.update(t.closest('.screen'));
     },
     notes: () => { fx.tap(); open('notes'); },
+    ask: () => { fx.tap(); open('ask'); },
+    quickNote: () => { fx.tap(); open('quickNote'); },
+    ...watchHandlers,
     year: () => open('year'),
     sig: v => { fx.tap(); if (v === 'close') showPeople({rel: ['Close']}); else perform({kind: 'filter', sig: [v]}); },
     card: i => perform((M.home.cards[+i] || {}).act),
