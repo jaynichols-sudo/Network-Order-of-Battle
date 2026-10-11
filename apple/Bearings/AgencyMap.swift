@@ -143,7 +143,9 @@ struct AgencyMapList: View {
                 Circle().fill(color).frame(width: 10, height: 10)
                 VStack(alignment: .leading, spacing: 3) {
                     HStack(spacing: 6) {
-                        Text(r.short).font(Theme.mono(.caption, .semibold)).foregroundStyle(Theme.text2)
+                        if r.short != r.name && !r.name.hasPrefix(r.short + " ") {
+                            Text(r.short).font(Theme.mono(.caption, .semibold)).foregroundStyle(Theme.text2)
+                        }
                         Text(r.name).font(Theme.geist(.subheadline, .semibold)).lineLimit(2)
                     }
                     Text(r.known == 0 ? "No one yet" : "\(r.known) you know\(r.senior > 0 ? " · \(r.senior) senior" : "")\(r.gap.isEmpty ? "" : " · \(r.gap.lowercased())")")
