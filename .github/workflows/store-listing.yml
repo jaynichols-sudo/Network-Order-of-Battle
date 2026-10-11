@@ -78,7 +78,7 @@ jobs:
               xcrun simctl ui $dev appearance $look
               xcrun simctl terminate $dev com.jaynichols.networkoob >/dev/null 2>&1 || true
               xcrun simctl launch $dev com.jaynichols.networkoob -onboarded YES -storeMode YES $args >/dev/null
-              sleep 8
+              sleep 13
               xcrun simctl io $dev screenshot "raw/$p-$name.png" >/dev/null 2>&1
             done
             xcrun simctl shutdown $dev || true
