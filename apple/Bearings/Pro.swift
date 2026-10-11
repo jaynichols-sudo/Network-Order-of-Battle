@@ -62,7 +62,7 @@ final class Pro {
     }
 
     /// Prices to show before the App Store answers (and in screenshots); the real ones come from StoreKit.
-    static let proposed: [String: String] = [yearly: "$29.99", monthly: "$3.99", lifetime: "$79.99"]
+    static let proposed: [String: String] = [yearly: "$99.99", monthly: "$19.99", lifetime: "$249.99"]
 
     private(set) var products: [String: Product] = [:]
     private(set) var owned = false

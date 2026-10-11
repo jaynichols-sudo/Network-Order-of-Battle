@@ -9,7 +9,7 @@ import { fx, openURL, ls } from './platform.js';
 
 export const GATING = false;
 export const IDS = {yearly: 'com.jaynichols.networkoob.pro.yearly', monthly: 'com.jaynichols.networkoob.pro.monthly', lifetime: 'com.jaynichols.networkoob.pro'};
-const PROPOSED = {yearly: '$29.99', monthly: '$3.99', lifetime: '$79.99'};
+const PROPOSED = {yearly: '$99.99', monthly: '$19.99', lifetime: '$249.99'};
 
 export const FEATURES = {
   events: ['Event mode', 'See who you know before a conference, then work the follow-up list.', 'ticket'],
