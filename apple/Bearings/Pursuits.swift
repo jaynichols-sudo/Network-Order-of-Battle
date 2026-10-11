@@ -1,4 +1,5 @@
 import SwiftUI
+import WidgetKit
 
 // Pursuits: an opportunity (a bid, a deal) and the people who decide it. Each seat shows who
 // you know in it, or who could fill it, and the warmest ways into the agency.
@@ -70,6 +71,17 @@ extension AppModel {
     private func savePursuits() async {
         await saveFile("pursuits", "pursuits.json")
         pursuitsRev += 1
+        await writePursuitGlance()
+    }
+
+    /// The "Pursuits due" widget's snapshot: the next three open pursuits, soonest due first.
+    func writePursuitGlance() async {
+        let open = await pursuits().filter { $0.stage != "Won" && $0.stage != "Lost" }
+        let items = open.prefix(3).map {
+            PursuitGlance.Item(id: $0.id, name: $0.name, agency: $0.agency, due: $0.due, stage: $0.stage, filled: $0.filled, roles: $0.roles)
+        }
+        PursuitGlanceStore.save(PursuitGlance(gen: ISO8601DateFormatter().string(from: Date()), open: open.count, items: Array(items)))
+        WidgetCenter.shared.reloadTimelines(ofKind: "BearingsPursuits")
     }
 }
 

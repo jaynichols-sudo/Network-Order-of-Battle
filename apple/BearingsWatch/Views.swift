@@ -5,6 +5,7 @@ import SwiftUI
 enum WatchRoute: Hashable {
     case section(WatchSection)
     case person(String)
+    case quickNote
 }
 
 struct RootView: View {
@@ -25,6 +26,7 @@ struct RootView: View {
                 switch r {
                 case .section(let s): PeopleList(section: s)
                 case .person(let k): PersonView(k: k)
+                case .quickNote: QuickNoteView()
                 }
             }
             .containerBackground(WatchTheme.bg, for: .navigation)
@@ -34,6 +36,7 @@ struct RootView: View {
             switch UserDefaults.standard.string(forKey: "watchOpen") ?? "" {
             case "waiting": path = [.section(.waiting)]
             case "person": if let p = store.waiting.first ?? store.people.first { path = [.section(.waiting), .person(p.k)] }
+            case "quicknote": path = [.quickNote]
             default: break
             }
         }
@@ -145,6 +148,8 @@ struct TodayList: View {
             SummaryHeader()
                 .listRowBackground(Color.clear)
             SummaryCard()
+                .listRowBackground(WatchTheme.rowCard)
+            QuickNoteRow()
                 .listRowBackground(WatchTheme.rowCard)
             let primary: [WatchSection] = [.waiting, .due]
             let rest: [WatchSection] = [.upcoming, .cooling, .moved, .fresh, .anniversaries, .starred, .closest]
@@ -267,6 +272,63 @@ struct SectionRow: View {
                     .font(WatchTheme.font(.body, .semibold))
                     .foregroundStyle(count > 0 && prominent ? section.tint : WatchTheme.text2)
             }
+        }
+    }
+}
+
+/// "Quick note" on the watch home: dictate what happened, and the iPhone files it.
+struct QuickNoteRow: View {
+    var body: some View {
+        NavigationLink(value: WatchRoute.quickNote) {
+            HStack(spacing: 10) {
+                Image(systemName: "mic.fill")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(WatchTheme.amber)
+                    .frame(width: 28, height: 28)
+                    .background(Circle().fill(WatchTheme.soft))
+                    .accessibilityHidden(true)
+                Text("Quick note")
+                    .font(WatchTheme.font(.body, .medium))
+                    .foregroundStyle(WatchTheme.text)
+                Spacer(minLength: 4)
+            }
+        }
+    }
+}
+
+/// Tapping the field opens the watch's text input, where dictation is the first choice.
+struct QuickNoteView: View {
+    @EnvironmentObject var store: WatchStore
+    @State private var draft = ""
+    @State private var opened = false
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Say what happened and with whom. Bearings adds it to them and sets any follow-up you mention.")
+                    .font(WatchTheme.font(.footnote))
+                    .foregroundStyle(WatchTheme.text2)
+                    .fixedSize(horizontal: false, vertical: true)
+                TextField(store.quickNoteStatus == nil ? "Dictate a note" : "Another note", text: $draft)
+                    .onSubmit {
+                        store.quickNote(draft)
+                        draft = ""
+                    }
+                if let s = store.quickNoteStatus {
+                    Text(s)
+                        .font(WatchTheme.font(.footnote, .semibold))
+                        .foregroundStyle(WatchTheme.text)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .watchCard()
+                }
+            }
+        }
+        .navigationTitle("Quick note")
+        .containerBackground(WatchTheme.bg, for: .navigation)
+        .onAppear {
+            // only on the way in: the text input sheet coming and going fires onAppear too
+            if !opened { opened = true; store.quickNoteStatus = nil }
         }
     }
 }

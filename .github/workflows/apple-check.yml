@@ -67,6 +67,35 @@ jobs:
             echo "::error title=Mac build errors::$msg"
             exit 1
           fi
+      - name: Mac screenshots
+        if: ${{ !inputs.quick }}
+        continue-on-error: true
+        timeout-minutes: 10
+        run: |
+          MAC=$(find build/ddmac/Build/Products -maxdepth 2 -name "Bearings.app" -path "*maccatalyst*" | head -1)
+          echo "mac app: $MAC"
+          if [ -z "$MAC" ]; then echo "no Mac Catalyst app"; exit 0; fi
+          # built without signing: an ad-hoc signature lets it launch here
+          codesign --force --deep --sign - "$MAC" >/dev/null 2>&1 || echo "ad-hoc signing failed"
+          mkdir -p shots
+          mshot() { # name args...
+            name=$1; shift
+            if [ -n "${{ inputs.only }}" ] && ! echo "mac-$name" | grep -Eq "${{ inputs.only }}"; then return 0; fi
+            pkill -x Bearings >/dev/null 2>&1 || true
+            sleep 1
+            open -n -F "$MAC" --args -onboarded YES "$@" || { echo "launch failed: $name"; return 0; }
+            sleep 12
+            screencapture -x "shots/mac-$name.png" || echo "screencapture failed: $name"
+          }
+          mshot 01-today
+          mshot 02-pursuit -startTab you -demoOpen pursuit
+          mshot 03-socials -startTab you -demoOpen socials
+          mshot 04-ask -demoOpen ask
+          mshot 05-intros -startTab you -demoOpen intros
+          mshot 06-moves -startTab you -demoOpen moves
+          mshot 07-unit -startTab companies -demoOpen unit
+          pkill -x Bearings >/dev/null 2>&1 || true
+          ls -la shots | grep mac- || true
       - name: UI tests
         if: ${{ !inputs.quick }}
         continue-on-error: true
@@ -191,6 +220,7 @@ jobs:
             wshot; xcrun simctl io $WATCH screenshot shots/watch-01-home.png
             wshot -watchOpen waiting; xcrun simctl io $WATCH screenshot shots/watch-02-waiting.png
             wshot -watchOpen person; xcrun simctl io $WATCH screenshot shots/watch-03-person.png
+            wshot -watchOpen quicknote; xcrun simctl io $WATCH screenshot shots/watch-04-quicknote.png
           else
             echo "no watch simulator ($WATCH) or watch app ($WAPP)"; ls "$APP" || true
           fi
