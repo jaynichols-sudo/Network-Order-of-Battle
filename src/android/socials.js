@@ -9,16 +9,16 @@ import { openURL, fx } from './platform.js';
 
 export const PLATFORMS = [
   {id: 'facebook', name: 'Facebook', color: '#1877F2', letter: 'f', ink: '#fff',
-    how: 'Facebook: Settings & privacy, Settings, Download your information. Choose “Specific types of information”, tick Friends and followers, format JSON.',
+    how: '', steps: ["In the Facebook app, tap Menu, then Settings & privacy, then Settings.", "Tap Accounts Center, then Your information and permissions, then Download your information.", "Tap Download or transfer information, choose your Facebook profile, then Specific types of information.", "Tick Friends and followers only, then Next.", "Choose Download to device. Set Date range to All time and Format to JSON, then Create files.", "Facebook tells you when it’s ready, usually within a few hours. Download the zip, then tap Add file here."],
     url: 'https://accountscenter.facebook.com/info_and_permissions/dyi'},
   {id: 'instagram', name: 'Instagram', color: '#E1306C', letter: 'ig', ink: '#fff',
-    how: 'Instagram: Accounts Center, Your information and permissions, Download your information. Tick Followers and following, format JSON.',
+    how: '', steps: ["In Instagram, go to your profile, tap the menu (three lines), then Accounts Center.", "Tap Your information and permissions, then Download your information.", "Tap Download or transfer information, choose your Instagram account, then Specific types of information.", "Tick Followers and following only, then Next.", "Choose Download to device. Set Date range to All time and Format to JSON, then Create files.", "When Instagram says it’s ready, download the zip, then tap Add file here."],
     url: 'https://accountscenter.instagram.com/info_and_permissions/dyi'},
   {id: 'snapchat', name: 'Snapchat', color: '#F7C600', letter: 'sc', ink: '#000',
-    how: 'Snapchat: Settings, My Data. Tick Friends, and choose JSON.',
+    how: '', steps: ["In Snapchat, tap your profile, then the gear for Settings.", "Scroll to Privacy Controls and tap My Data.", "Turn on Friends (you can leave Memories and other media off to keep it small). Choose JSON if it asks, and All time.", "Tap Submit. Snapchat emails you a link when the file is ready.", "Download the zip from that link, then tap Add file here."],
     url: 'https://accounts.snapchat.com/accounts/downloadmydata'},
   {id: 'tiktok', name: 'TikTok', color: '#25F4EE', letter: 'tt', ink: '#000',
-    how: 'TikTok: Settings and privacy, Account, Download your data. Choose JSON, and request the file.',
+    how: '', steps: ["In TikTok, go to your profile, tap the menu (three lines), then Settings and privacy.", "Tap Account, then Download your data.", "Choose JSON as the file format and select your profile and activity data (it includes who you follow and who follows you).", "Tap Request data. TikTok can take a few days to prepare it.", "When it’s ready, open the Download data tab, download the file, then tap Add file here."],
     url: 'https://www.tiktok.com/setting/download-your-data'},
 ];
 const P = id => PLATFORMS.find(p => p.id === id);
@@ -73,7 +73,7 @@ registerRoute('socials', () => {
         <div class="card list">${PLATFORMS.map(p => { const n = (d.platforms.find(x => x.id === p.id) || {}).n || 0; return `<div class="so-plat">
             <div class="so-plat-top">${badge(p, 30)}<span class="grow"><b>${esc(p.name)}</b><span class="muted small">${n > 0 ? `${fmt(n)} connections` : busy === p.id ? 'Reading…' : 'Not added yet'}</span></span>
               <button type="button" class="pill-btn ${n > 0 ? 'soft' : 'primary'}" data-a="add" data-v="${p.id}" ${busy ? 'disabled' : ''}>${n > 0 ? 'Update' : 'Add file'}</button></div>
-            ${n === 0 ? `<p class="muted small">${esc(p.how)}</p><button type="button" class="link small" data-a="url" data-v="${esc(p.url)}">Request your ${esc(p.name)} download</button>` : `<button type="button" class="link small so-remove" data-a="remove" data-v="${p.id}">Remove ${esc(p.name)}</button>`}
+            ${n === 0 ? `<details class="so-how"><summary class="small strong">How to get your ${esc(p.name)} file</summary><ol class="small muted">${p.steps.map(x => `<li>${esc(x)}</li>`).join('')}</ol><p class="small muted">Only names, usernames and the date you connected come in. No messages, photos, phone numbers or emails.</p></details><button type="button" class="link small" data-a="url" data-v="${esc(p.url)}">Request your ${esc(p.name)} download</button>` : `<button type="button" class="link small so-remove" data-a="remove" data-v="${p.id}">Remove ${esc(p.name)}</button>`}
           </div>`; }).join('')}</div>
         <p class="foot">Each app lets you download your own data. Bearings reads only the friends and followers lists, on this phone, and never signs in to any of them. Facebook and Snapchat include names; Instagram and TikTok only usernames, which Bearings matches by handle.</p>
         ${d.strongest.length ? `<p class="sec-h">Connected everywhere</p><div class="card list">${d.strongest.slice(0, 15).map(entryRow).join('')}</div><p class="foot">Three or more places. Usually your real relationships.</p>` : ''}

@@ -1010,3 +1010,14 @@ input[type=range] { accent-color: var(--accent); }
 .so-name { font-size: 26px; font-weight: 600; margin-top: 4px; }
 .so-link { width: 100%; text-align: left; }
 .so-link > span:first-child { display: inline-flex; align-items: center; gap: 8px; }
+
+/* the federal map */
+.fed-row { display: flex; align-items: center; gap: 8px; }
+.fed-row .fed-main { display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0; text-align: left; background: none; border: 0; padding: 0; color: inherit; font: inherit; }
+.fed-row .fed-main .grow { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.fed-row .fed-main b { font-weight: 600; }
+.fed-row .pill-btn.small { padding: 0 10px; min-height: 28px; font-size: 12px; flex: none; }
+.fed-big { font-family: var(--serif, Georgia, serif); font-size: 40px; font-weight: 600; line-height: 1; margin-right: 6px; }
+.so-how summary { cursor: pointer; padding: 6px 0; }
+.so-how ol { padding-left: 18px; margin: 4px 0 6px; }
+.so-how li { margin: 3px 0; }

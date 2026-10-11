@@ -15,6 +15,7 @@ import { openTrackIntro } from './relationships.js';
 
 let mode = ls.get('bearings.companies') || 'watchlist';
 let gov = false, shownUnc = 25;
+let fedFilter = ls.get('bearings.fedFilter') || 'gaps', fedFocus = ls.get('bearings.fedFocus') || 'all', fedDept = '';
 register('companiesMode', m => { mode = m; ls.set('bearings.companies', m); });
 
 const industryOptions = () => (M.constants.industries || []).filter(i => i.id !== M.constants.unclassified);
@@ -47,6 +48,28 @@ function industries(){
       <p class="foot">${fmt(d.unclassifiedTotal)} companies. Tag a company once and everyone there, now and in future imports, follows.${d.tagged > 0 ? ` ${fmt(d.tagged)} tagged by you so far.` : ''}</p>` : ''}
     ${d.guesses.length ? `<p class="sec-h">Best guesses to check</p><div class="card list">${d.guesses.slice(0, 20).map(([c, n, ind]) => pickerRow(c, n, ind)).join('')}</div><p class="foot">We guessed these from the company name. Fix any that are wrong.</p>` : ''}`;
 }
+/* ---------- the federal map ---------- */
+const FOCUS = [['all', 'Everything'], ['energy', 'Energy'], ['water', 'Water'], ['defense', 'Defense'], ['cyber', 'Cyber'], ['transport', 'Transportation'], ['infrastructure', 'Infrastructure'], ['intel', 'Intelligence']];
+let fedMap = null;
+function federal(){
+  const m = fedMap = M.api.agencyCoverage();
+  const t = m.totals, pct = n => (n / Math.max(1, t.agencies) * 100).toFixed(2);
+  const rank = {none: 0, thin: 1, covered: 2};
+  const rows = m.rows.filter(r => (fedFocus === 'all' || r.tags.includes(fedFocus)) && (!fedDept || r.dept === fedDept)
+    && (fedFilter === 'all' || (fedFilter === 'gaps' ? r.status !== 'covered' : r.status === fedFilter)))
+    .sort((a, b) => rank[a.status] - rank[b.status] || b.known - a.known);
+  const groups = []; for (const r of rows){ let g = groups.find(x => x[0] === r.dept); if (!g) groups.push(g = [r.dept, []]); g[1].push(r); }
+  const AMBER = 'var(--amber)';
+  const col = st => st === 'covered' ? 'var(--good)' : st === 'thin' ? AMBER : 'var(--text3)';
+  const row = r => `<div class="row fed-row"><button type="button" class="fed-main" data-a="fedOpen" data-v="${esc(r.short)}"><i class="dot lg" style="background:${col(r.status)}"></i><span class="grow"><b>${r.short !== r.name && !r.name.startsWith(r.short + ' ') ? `<span class="mono muted small">${esc(r.short)}</span> ` : ''}${esc(r.name)}</b><span class="muted small">${esc(r.known ? `${r.known} you know${r.senior ? ` · ${r.senior} senior` : ''}${r.gap ? ' · ' + r.gap.toLowerCase() : ''}` : 'No one yet')}</span></span></button>${r.watched ? `<span class="accent">${icon('star')}</span>` : `<button type="button" class="pill-btn soft small" data-a="fedWatch" data-v="${esc(r.short)}">Watch</button>`}<button type="button" class="pill-btn soft small" data-a="fedWays" data-v="${esc(r.short)}">Ways in</button></div>`;
+  return `<div class="card pad"><p class="eyebrow">THE FEDERAL MAP</p><p><b class="fed-big">${t.agencies - t.none}</b> <span class="muted">of ${t.agencies} agencies and commands where you know someone</span></p>
+      <div class="stack-bar" style="display:flex;height:10px;border-radius:5px;overflow:hidden;background:var(--hairline);margin:10px 0"><i style="width:${pct(t.covered)}%;background:var(--good)"></i><i style="width:${pct(t.thin)}%;background:var(--amber)"></i></div>
+      <p class="small muted"><i class="dot" style="background:var(--good)"></i> ${t.covered} covered &nbsp; <i class="dot" style="background:var(--amber)"></i> ${t.thin} thin &nbsp; <i class="dot" style="background:var(--text3)"></i> ${t.none} not connected</p></div>
+    ${segmented('fedFilter', [['gaps', 'Gaps'], ['none', 'Not connected'], ['thin', 'Thin'], ['covered', 'Covered'], ['all', 'All']], fedFilter)}
+    <div class="row-between" style="margin:8px 4px"><button type="button" class="link" data-a="fedFocus">${esc((FOCUS.find(f => f[0] === fedFocus) || FOCUS[0])[1])}</button><button type="button" class="link" data-a="fedDept">${esc(fedDept || 'All departments')}</button></div>
+    ${groups.length ? groups.map(([d, rs]) => `<p class="sec-h">${esc(d)}</p><div class="card list">${rs.map(row).join('')}</div>`).join('') : '<p class="muted pad">Nothing here with these filters.</p>'}
+    <p class="foot">Bearings matches each person’s employer and title to ${t.agencies} federal departments, agencies and commands. Covered means you know someone senior and someone warm there.</p>`;
+}
 function allCompanies(){
   const o = M.api.orgs({text: '', filters: {}});
   const bars = items => { const max = Math.max(1, (items[0] || [0, 1])[1]); return `<div class="card list">${items.map(([n, c, col]) => `<button type="button" class="row brow" data-a="unit" data-v="${esc(n)}"><span class="brow-main"><span class="brow-top"><span class="one">${esc(n)}</span><span class="mono muted">${fmt(c)}</span></span><span class="bar"><i style="width:${Math.max(2, c / max * 100)}%;background:${esc(col || '#8F89A8')}"></i></span></span>${icon('chevR', 'chev')}</button>`).join('')}</div>`; };
@@ -59,8 +82,8 @@ export const CompaniesView = {
     this.update(el);
   },
   update(el){
-    $('.seg-wrap', el).innerHTML = segmented('mode', [['watchlist', 'Watchlist'], ['industries', 'Industries'], ['all', 'All']], mode);
-    $('.co-body', el).innerHTML = mode === 'watchlist' ? watchlist() : mode === 'industries' ? industries() : allCompanies();
+    $('.seg-wrap', el).innerHTML = segmented('mode', [['watchlist', 'Watchlist'], ['federal', 'Federal'], ['industries', 'Industries'], ['all', 'All']], mode);
+    $('.co-body', el).innerHTML = mode === 'watchlist' ? watchlist() : mode === 'federal' ? federal() : mode === 'industries' ? industries() : allCompanies();
     animateRings(el);
   },
   handlers: {
@@ -72,6 +95,12 @@ export const CompaniesView = {
     gov(_, t){ gov = !gov; CompaniesView.update(t.closest('.screen')); },
     moreUnc(_, t){ shownUnc += 25; CompaniesView.update(t.closest('.screen')); },
     pickInd: (company, t) => pickIndustry(t, company, t.dataset.cur),
+    fedFilter(v, t){ fx.select(); fedFilter = v; ls.set('bearings.fedFilter', v); CompaniesView.update(t.closest('.screen')); },
+    fedFocus(_, t){ const scr = t.closest('.screen'); menu(t, FOCUS.map(([id, l]) => ({label: l, on: id === fedFocus, run: () => { fedFocus = id; ls.set('bearings.fedFocus', id); CompaniesView.update(scr); }}))); },
+    fedDept(_, t){ const scr = t.closest('.screen'); const ds = (fedMap ? fedMap.depts : []); menu(t, [{label: 'All departments', on: !fedDept, run: () => { fedDept = ''; CompaniesView.update(scr); }}].concat(ds.map(d => ({label: `${d.name} (${d.agencies - d.none}/${d.agencies})`, on: d.name === fedDept, run: () => { fedDept = d.name; CompaniesView.update(scr); }})))); },
+    fedOpen: v => openUnit(v),
+    fedWays: v => openIntro(v),
+    async fedWatch(v, t){ const scr = t.closest('.screen'); await toggleTarget(v); show(`${v} added to your watchlist`); CompaniesView.update(scr); },
   },
 };
 export function pickIndustry(anchor, company, current){
