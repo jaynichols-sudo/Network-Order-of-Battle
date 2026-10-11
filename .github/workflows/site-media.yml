@@ -93,7 +93,7 @@ jobs:
           ls -la out/shots
       - name: Record clips
         continue-on-error: true
-        timeout-minutes: 30
+        timeout-minutes: 40
         run: |
           t() { secs=$1; shift; perl -e 'alarm shift; exec @ARGV' "$secs" "$@"; }
           DEV=$(xcrun simctl list devices available -j | python3 -c "
@@ -115,7 +115,7 @@ jobs:
             # the recorder logs once it has started; note that moment as the video's zero
             for i in $(seq 1 40); do grep -qi "record" raw/$set.rec.log 2>/dev/null && break; sleep 0.25; done
             python3 -c "import time;print('%.3f'%time.time())" > raw/$set.t1
-            SITE=$set TEST_RUNNER_SITE=$set t 1200 xcodebuild -project apple/Bearings.xcodeproj -scheme Bearings -configuration Debug \
+            SITE=$set TEST_RUNNER_SITE=$set t 900 xcodebuild -project apple/Bearings.xcodeproj -scheme Bearings -configuration Debug \
               -destination "id=$DEV" -derivedDataPath build/dd CODE_SIGNING_ALLOWED=NO \
               -only-testing:BearingsUITests/SiteClips test-without-building > raw/$set.test.log 2>&1 || true
             sleep 1
@@ -125,6 +125,13 @@ jobs:
             grep -h "CLIP|" raw/$set.test.log | sed -E 's/.*(CLIP\|)/\1/' | awk '!s[$0]++' > raw/$set.marks
             cat raw/$set.rec.log raw/$set.t0 raw/$set.t1 raw/$set.marks
           done
+          true
+      - name: Cut clips
+        if: always()
+        continue-on-error: true
+        run: |
+          mkdir -p out/clips
+          for set in 1 dark; do [ -f raw/$set.test.log ] && grep -h "CLIP|" raw/$set.test.log | sed -E 's/.*(CLIP\|)/\1/' | awk '!s[$0]++' > raw/$set.marks || true; done
           python3 - <<'EOF'
           import subprocess, os
           for s in ['1', 'dark']:
@@ -146,7 +153,7 @@ jobs:
           r=$(grep -hE "Test Case .*(passed|failed|skipped)|error:" raw/*.test.log | tail -12 | sed 's/%/%25/g' | awk 'BEGIN{ORS="%0A"}{print}')
           echo "::notice title=Clips::$r"
           # keep a small copy of each full recording too, in case the cut points need adjusting
-          for s in 1 dark; do [ -f raw/$s.mp4 ] && ffmpeg -y -loglevel error -i raw/$s.mp4 -vf scale=480:-2,fps=24 -c:v libx264 -crf 28 -an out/full-$s.mp4; cp raw/$s.marks raw/$s.t1 out/ 2>/dev/null; done
+          for s in 1 dark; do [ -f raw/$s.mp4 ] && ffmpeg -y -loglevel error -i raw/$s.mp4 -vf scale=480:-2,fps=24 -c:v libx264 -crf 28 -an out/full-$s.mp4; cp raw/$s.marks raw/$s.t1 out/ 2>/dev/null; grep -E "Test Case|error|CLIP" raw/$s.test.log | tail -80 > out/$s.test.txt 2>/dev/null; done
           true
       - name: Publish to the site-media branch
         if: always()

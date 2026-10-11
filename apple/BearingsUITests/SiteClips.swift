@@ -8,6 +8,25 @@ final class SiteClips: XCTestCase {
         continueAfterFailure = true
         let s = ProcessInfo.processInfo.environment["SITE"] ?? ""
         try XCTSkipUnless(s == "1" || s == "dark", "Only for the site media workflow")
+        Self.skipIdleWaits()
+    }
+
+    /// The radar never stops moving, so XCTest's wait for the app to go idle before each
+    /// event would time out every time. For recording, don't wait.
+    private static var skipped = false
+    private static func skipIdleWaits() {
+        guard !skipped, let cls = NSClassFromString("XCUIApplicationProcess") else { return }
+        skipped = true
+        for name in ["waitForQuiescenceIncludingAnimationsIdle:", "waitForQuiescenceIncludingAnimationsIdle:isPreEvent:"] {
+            guard let m = class_getInstanceMethod(cls, NSSelectorFromString(name)) else { continue }
+            if name.hasSuffix("isPreEvent:") {
+                let block: @convention(block) (AnyObject, Bool, Bool) -> Void = { _, _, _ in }
+                method_setImplementation(m, imp_implementationWithBlock(block))
+            } else {
+                let block: @convention(block) (AnyObject, Bool) -> Void = { _, _ in }
+                method_setImplementation(m, imp_implementationWithBlock(block))
+            }
+        }
     }
 
     private var set: String { ProcessInfo.processInfo.environment["SITE"] ?? "1" }
