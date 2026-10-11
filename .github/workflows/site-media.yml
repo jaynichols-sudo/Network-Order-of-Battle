@@ -1,0 +1,159 @@
+name: Bearings site media
+
+# Records the screenshots and feature clips for the Bearings website from the real app
+# on the sample network. Clean screenshots (no captions) and short MP4 clips go to the
+# site-media branch.
+on:
+  workflow_dispatch:
+    inputs:
+      shots:
+        description: "Also take the clean screenshots"
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+jobs:
+  media:
+    runs-on: xcode-27
+    timeout-minutes: 90
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_27.1.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - name: Build
+        run: |
+          npm ci && npm run build
+          brew install xcodegen >/dev/null
+          (command -v ffmpeg >/dev/null || brew install ffmpeg >/dev/null 2>&1) &
+          (cd apple && xcodegen generate)
+          xcodebuild -project apple/Bearings.xcodeproj -scheme Bearings -configuration Debug \
+            -destination 'generic/platform=iOS Simulator' -derivedDataPath build/dd CODE_SIGNING_ALLOWED=NO build-for-testing > build.log 2>&1 || {
+              msg=$( (grep -E "error:" build.log || tail -40 build.log) | sed -E 's#/Users/runner/work/[^/]+/[^/]+/##' | awk '!s[$0]++' | head -50 | sed 's/%/%25/g' | awk 'BEGIN{ORS="%0A"}{print}')
+              echo "::error title=Build errors::$msg"; exit 1; }
+          wait
+          command -v ffmpeg || brew install ffmpeg >/dev/null 2>&1
+      - name: Screenshots
+        if: ${{ inputs.shots }}
+        continue-on-error: true
+        timeout-minutes: 25
+        run: |
+          APP=$(find build/dd/Build/Products -maxdepth 2 -name "Bearings.app" -path "*iphonesimulator*" | head -1)
+          pick() { xcrun simctl list devices available -j | python3 -c "
+          import json,sys,re
+          d=json.load(sys.stdin)['devices']; want=sys.argv[1]
+          for rt in sorted(d, reverse=True):
+              for x in d[rt]:
+                  if re.fullmatch(want, x['name']): print(x['udid']); sys.exit()
+          " "$1"; }
+          PHONE=$(pick 'iPhone 1[6-9] Pro')
+          PAD=$(pick 'iPad Pro 13-inch.*|iPad Pro 11-inch.*')
+          mkdir -p out/shots
+          shoot() { dev=$1; name=$2; shift 2
+            xcrun simctl terminate $dev com.jaynichols.networkoob >/dev/null 2>&1 || true
+            xcrun simctl launch $dev com.jaynichols.networkoob -onboarded YES -storeMode YES "$@" >/dev/null
+            sleep 7
+            xcrun simctl io $dev screenshot "out/shots/$name.png" >/dev/null 2>&1; }
+          for dev in $PHONE $PAD; do
+            xcrun simctl boot $dev || true
+            xcrun simctl bootstatus $dev -b >/dev/null
+            xcrun simctl status_bar $dev override --time 9:41 --batteryState charged --batteryLevel 100 --cellularBars 4 || true
+            xcrun simctl install $dev "$APP"
+            p=$([ "$dev" = "$PHONE" ] && echo phone || echo pad)
+            xcrun simctl ui $dev appearance light
+            shoot $dev $p-home
+            shoot $dev $p-radar -homeScroll compass
+            shoot $dev $p-profile -startTab people -demoOpen person
+            shoot $dev $p-federal -startTab companies -startCompanies agencies
+            shoot $dev $p-org -startTab companies -demoOpen org
+            shoot $dev $p-pursuit -startTab you -demoOpen pursuit
+            shoot $dev $p-socials -startTab you -demoOpen socials
+            shoot $dev $p-intro -startTab companies -demoOpen intro
+            shoot $dev $p-event -demoOpen event
+            shoot $dev $p-moves -startTab you -demoOpen moves
+            shoot $dev $p-ask -demoOpen ask
+            shoot $dev $p-notes -demoOpen notes
+            shoot $dev $p-unit -startTab companies -demoOpen unit
+            shoot $dev $p-weekly -demoOpen weekly
+            shoot $dev $p-year -demoOpen year
+            shoot $dev $p-catchup -startTab catchup
+            shoot $dev $p-map -startTab explore -exploreMode map
+            xcrun simctl ui $dev appearance dark
+            shoot $dev $p-compass-dark -startTab explore -exploreMode compass
+            shoot $dev $p-clusters-dark -startTab explore -exploreMode clusters
+            shoot $dev $p-home-dark
+            xcrun simctl ui $dev appearance light
+            xcrun simctl shutdown $dev || true
+          done
+          ls -la out/shots
+      - name: Record clips
+        continue-on-error: true
+        timeout-minutes: 30
+        run: |
+          t() { secs=$1; shift; perl -e 'alarm shift; exec @ARGV' "$secs" "$@"; }
+          DEV=$(xcrun simctl list devices available -j | python3 -c "
+          import json,sys,re
+          d=json.load(sys.stdin)['devices']
+          for rt in sorted(d, reverse=True):
+              for x in d[rt]:
+                  if re.fullmatch('iPhone 1[6-9] Pro', x['name']): print(x['udid']); sys.exit()
+          ")
+          t 300 xcrun simctl boot $DEV || true
+          t 400 xcrun simctl bootstatus $DEV -b >/dev/null || true
+          xcrun simctl status_bar $DEV override --time 9:41 --batteryState charged --batteryLevel 100 --cellularBars 4 || true
+          mkdir -p raw out/clips
+          for set in 1 dark; do
+            xcrun simctl ui $DEV appearance $([ $set = dark ] && echo dark || echo light)
+            python3 -c "import time;print('%.3f'%time.time())" > raw/$set.t0
+            xcrun simctl io $DEV recordVideo --codec=h264 --force raw/$set.mp4 2> raw/$set.rec.log &
+            rec=$!
+            # the recorder logs once it has started; note that moment as the video's zero
+            for i in $(seq 1 40); do grep -qi "record" raw/$set.rec.log 2>/dev/null && break; sleep 0.25; done
+            python3 -c "import time;print('%.3f'%time.time())" > raw/$set.t1
+            SITE=$set TEST_RUNNER_SITE=$set t 1200 xcodebuild -project apple/Bearings.xcodeproj -scheme Bearings -configuration Debug \
+              -destination "id=$DEV" -derivedDataPath build/dd CODE_SIGNING_ALLOWED=NO \
+              -only-testing:BearingsUITests/SiteClips test-without-building > raw/$set.test.log 2>&1 || true
+            sleep 1
+            pkill -INT -f "recordVideo" || true
+            for i in $(seq 1 25); do kill -0 $rec 2>/dev/null || break; sleep 1; done
+            pkill -9 -f "recordVideo" || true
+            grep -h "CLIP|" raw/$set.test.log | sed -E 's/.*(CLIP\|)/\1/' | awk '!s[$0]++' > raw/$set.marks
+            cat raw/$set.rec.log raw/$set.t0 raw/$set.t1 raw/$set.marks
+          done
+          python3 - <<'EOF'
+          import subprocess, os
+          for s in ['1', 'dark']:
+              if not os.path.exists(f'raw/{s}.mp4'): continue
+              t1 = float(open(f'raw/{s}.t1').read())
+              marks = {}
+              for line in open(f'raw/{s}.marks'):
+                  _, name, edge, ts = line.strip().split('|')
+                  marks.setdefault(name, {})[edge] = float(ts)
+              for name, m in marks.items():
+                  if 'start' not in m or 'end' not in m: continue
+                  a = max(0, m['start'] - t1 - 0.2); d = m['end'] - m['start'] + 0.4
+                  subprocess.run(['ffmpeg', '-y', '-loglevel', 'error', '-ss', f'{a:.2f}', '-i', f'raw/{s}.mp4', '-t', f'{d:.2f}',
+                                  '-vf', 'scale=720:-2:flags=lanczos,fps=30', '-c:v', 'libx264', '-crf', '20', '-preset', 'slow',
+                                  '-pix_fmt', 'yuv420p', '-movflags', '+faststart', '-an', f'out/clips/{name}.mp4'])
+                  print(name, a, d)
+          EOF
+          ls -la out/clips raw
+          r=$(grep -hE "Test Case .*(passed|failed|skipped)|error:" raw/*.test.log | tail -12 | sed 's/%/%25/g' | awk 'BEGIN{ORS="%0A"}{print}')
+          echo "::notice title=Clips::$r"
+          # keep a small copy of each full recording too, in case the cut points need adjusting
+          for s in 1 dark; do [ -f raw/$s.mp4 ] && ffmpeg -y -loglevel error -i raw/$s.mp4 -vf scale=480:-2,fps=24 -c:v libx264 -crf 28 -an out/full-$s.mp4; cp raw/$s.marks raw/$s.t1 out/ 2>/dev/null; done
+          true
+      - name: Publish to the site-media branch
+        if: always()
+        run: |
+          cd out
+          git init -q -b site-media
+          git config user.name "ci"; git config user.email "ci@users.noreply.github.com"
+          echo "${{ github.sha }}" > SHA
+          git add -A && git commit -qm "site media ${{ github.sha }}"
+          git push -qf "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" site-media
