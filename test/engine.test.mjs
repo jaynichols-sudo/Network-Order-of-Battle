@@ -531,3 +531,25 @@ test('social downloads merge into one picture across platforms', () => {
   const saved = JSON.parse(globalThis.Bearings.fileJSON('social'));
   assert.ok(saved.social.length >= 2);
 });
+
+test('the federal map shows where you are connected and where you are not', () => {
+  const net = ['First Name,Last Name,URL,Email Address,Company,Position,Connected On',
+    'Ann,Lee,,,Cybersecurity and Infrastructure Security Agency,Senior Advisor,05 Oct 2020',
+    'Bo,Kim,,,U.S. Army Corps of Engineers,Director of Programs,01 Jan 2020',
+    'Cy,Ray,,,Acme Corp,Ice cream maker,01 Jan 2020',
+    'Di,Fox,,,Idaho National Laboratory,Program Manager,01 Jan 2020'].join('\n');
+  call('importTexts', { connections: net }, 'test');
+  call('loadFiles', { network: globalThis.Bearings.fileJSON('network') }, null);
+  const m = call('agencyCoverage');
+  assert.ok(m.totals.agencies > 140);
+  const row = s => m.rows.find(r => r.short === s);
+  assert.equal(row('CISA').known, 1);
+  assert.equal(row('USACE').known, 1);
+  assert.equal(row('INL').known, 1);
+  assert.equal(row('ICE').known, 0, 'acronyms match case-sensitively');
+  assert.equal(row('USACE').status, 'thin');
+  assert.equal(row('NSA').status, 'none');
+  assert.equal(row('NSA').gap, 'No one yet');
+  assert.ok(m.depts.find(d => d.name === 'Energy').thin >= 1);
+  assert.equal(m.totals.covered + m.totals.thin + m.totals.none, m.totals.agencies);
+});

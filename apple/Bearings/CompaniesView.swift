@@ -8,6 +8,7 @@ struct CompaniesView: View {
         Group {
             switch model.companiesMode {
             case .watchlist: WatchlistList()
+            case .agencies: AgencyMapList()
             case .industries: IndustriesList()
             case .all: AllCompaniesList()
             }

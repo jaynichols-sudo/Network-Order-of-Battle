@@ -306,6 +306,7 @@ struct YouView: View {
                     row("Ask Bearings", icon: "sparkle.magnifyingglass") { model.showAsk = true }
                     row("Quick note", icon: "mic") { model.showQuickLog = true }
                     row("Pursuits", icon: "scope") { model.open(.pursuits) }
+                    row("The federal map", icon: "building.columns") { model.companiesMode = .agencies; model.paths[.companies] = []; model.tab = .companies }
                     row("Across your socials", icon: "person.3.sequence") { model.open(.socials) }
                     row("Intros", icon: "person.line.dotted.person") { model.open(.intros) }
                     row("Moves and rotations", icon: "arrow.triangle.swap") { model.open(.moves) }

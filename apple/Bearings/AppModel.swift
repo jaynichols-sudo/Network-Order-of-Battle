@@ -48,11 +48,12 @@ enum Route: Hashable {
 }
 
 enum CompaniesMode: String, CaseIterable, Identifiable {
-    case watchlist, industries, all
+    case watchlist, agencies, industries, all
     var id: String { rawValue }
     var label: String {
         switch self {
         case .watchlist: return "Watchlist"
+        case .agencies: return "Federal"
         case .industries: return "Industries"
         case .all: return "All"
         }

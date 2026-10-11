@@ -18,12 +18,40 @@ enum SocialPlatform: String, CaseIterable, Identifiable {
     }
     var letter: String { ["facebook": "f", "instagram": "ig", "snapchat": "sc", "tiktok": "tt"][rawValue]! }
     /// Where to ask for the download, and what to tick.
-    var how: String {
+    var how: String { steps.first ?? "" }
+    /// Step by step, in the app's own words. Menus move around, so the link below goes straight there when it can.
+    var steps: [String] {
         switch self {
-        case .facebook: return "Facebook: Settings & privacy, Settings, Download your information. Choose “Specific types of information”, tick Friends and followers, format JSON."
-        case .instagram: return "Instagram: Accounts Center, Your information and permissions, Download your information. Tick Followers and following, format JSON."
-        case .snapchat: return "Snapchat: Settings, My Data. Tick Friends, and choose JSON."
-        case .tiktok: return "TikTok: Settings and privacy, Account, Download your data. Choose JSON, and request the file."
+        case .facebook: return [
+            "In the Facebook app, tap Menu, then Settings & privacy, then Settings.",
+            "Tap Accounts Center, then Your information and permissions, then Download your information.",
+            "Tap Download or transfer information, choose your Facebook profile, then Specific types of information.",
+            "Tick Friends and followers only, then Next.",
+            "Choose Download to device. Set Date range to All time and Format to JSON, then Create files.",
+            "Facebook tells you when it’s ready, usually within a few hours. Download the zip, then tap Add file here (or share the zip to Bearings).",
+        ]
+        case .instagram: return [
+            "In Instagram, go to your profile, tap the menu (three lines), then Accounts Center.",
+            "Tap Your information and permissions, then Download your information.",
+            "Tap Download or transfer information, choose your Instagram account, then Specific types of information.",
+            "Tick Followers and following only, then Next.",
+            "Choose Download to device. Set Date range to All time and Format to JSON, then Create files.",
+            "When Instagram says it’s ready, download the zip, then tap Add file here.",
+        ]
+        case .snapchat: return [
+            "In Snapchat, tap your profile, then the gear for Settings.",
+            "Scroll to Privacy Controls and tap My Data.",
+            "Turn on Friends (you can leave Memories and other media off to keep it small). Choose JSON if it asks, and All time.",
+            "Tap Submit. Snapchat emails you a link when the file is ready.",
+            "Download the zip from that link, then tap Add file here.",
+        ]
+        case .tiktok: return [
+            "In TikTok, go to your profile, tap the menu (three lines), then Settings and privacy.",
+            "Tap Account, then Download your data.",
+            "Choose JSON as the file format and select your profile and activity data (it includes who you follow and who follows you).",
+            "Tap Request data. TikTok can take a few days to prepare it.",
+            "When it’s ready, open the Download data tab, download the file, then tap Add file here.",
+        ]
         }
     }
     var url: URL? {
@@ -213,7 +241,22 @@ struct SocialsView: View {
                 Button(n > 0 ? "Update" : "Add file") { importing = p }.buttonStyle(PillButtonStyle(kind: n > 0 ? .soft : .primary))
             }
             if n == 0 {
-                Text(p.how).font(Theme.geist(.caption)).foregroundStyle(.secondary)
+                DisclosureGroup {
+                    VStack(alignment: .leading, spacing: 6) {
+                        ForEach(Array(p.steps.enumerated()), id: \.offset) { i, s in
+                            HStack(alignment: .top, spacing: 8) {
+                                Text("\(i + 1)").font(Theme.mono(.caption, .semibold)).foregroundStyle(p == .snapchat ? .black : .white)
+                                    .frame(width: 18, height: 18).background(p.color, in: Circle())
+                                Text(s).font(Theme.geist(.caption)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
+                        Text("Only names, usernames and the date you connected come in. No messages, photos, phone numbers or emails.")
+                            .font(Theme.geist(.caption2)).foregroundStyle(.tertiary).padding(.top, 2)
+                    }
+                    .padding(.top, 4)
+                } label: {
+                    Text("How to get your \(p.name) file").font(Theme.geist(.caption, .semibold))
+                }
                 if let u = p.url { Link("Request your \(p.name) download", destination: u).font(Theme.geist(.caption, .semibold)) }
             }
         }

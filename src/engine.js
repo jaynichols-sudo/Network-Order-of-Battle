@@ -8,6 +8,7 @@ import {
 } from './core.js';
 import { parseQuery, matchNL } from './nlq.js';
 import { findAgency, officeOf } from './agencies.js';
+import {compileFederal} from './federal.js';
 import { INDUSTRIES, indColor, indShort, setIndustryOverrides, companyKey, UNCLASSIFIED, GOV_IND } from './industry.js';
 
 /* ---------- state ---------- */
@@ -1094,6 +1095,37 @@ function socials(){
   };
 }
 
+
+/* ---------- federal coverage map ---------- */
+// Every department, agency and major command, with where you are connected and where
+// you are not. "Covered" means someone senior and someone warm; "thin" means you know
+// someone there, but not both.
+function agencyCoverage(){
+  const F = S._fed || (S._fed = compileFederal());
+  const by = new Map(F.map(a => [a.id, []]));
+  for (const r of live()){
+    const co = `${r.c || ''} ${r.cl.agency || ''}`;
+    let hits = F.filter(a => a.test(co));
+    if (!hits.length && r.p && !/\b(former|retired|ex-)\b/i.test(r.p)) hits = F.filter(a => a.test(r.p));
+    for (const a of hits) by.get(a.id).push(r);
+  }
+  const rows = F.map(a => {
+    const ps = by.get(a.id);
+    const senior = ps.filter(r => r.cl.lv <= 2).length, warm = ps.filter(r => r.wm.band === 'strong' || r.wm.band === 'warm').length;
+    const status = !ps.length ? 'none' : senior && warm ? 'covered' : 'thin';
+    const best = ps.slice().sort((x, y) => y.wm.score - x.wm.score || bySenior(x, y)).slice(0, 3).map(r => r.k);
+    const gap = !ps.length ? 'No one yet' : !senior ? 'No one senior' : !warm ? 'No warm relationship' : '';
+    return {id: a.id, dept: a.dept, name: a.name, short: a.short, tags: a.tags, known: ps.length, senior, warm, status, gap, best,
+      watched: S.targets.some(t => t.name === a.short || t.name === a.name)};
+  });
+  const depts = [...new Set(F.map(a => a.dept))].map(d => {
+    const rs = rows.filter(r => r.dept === d);
+    return {name: d, agencies: rs.length, covered: rs.filter(r => r.status === 'covered').length, thin: rs.filter(r => r.status === 'thin').length, none: rs.filter(r => r.status === 'none').length};
+  });
+  const count = st => rows.filter(r => r.status === st).length;
+  return {rows, depts, totals: {agencies: rows.length, covered: count('covered'), thin: count('thin'), none: count('none')}};
+}
+
 /* ---------- intro finder ---------- */
 // "Who can get me into X?": people there now, people who used to be, and people
 // you're close to in the same sector, with the best few paths first.
@@ -1599,7 +1631,7 @@ function constants(){
 
 const api = {load, loadSample, loadFiles, clearNotes, clusters, placeClues, setCompanyLocation, companyPlaces, messages, matchAttendees, alsoAt, setLens, info, people, person, search, facets, home, payoff, targets, unit, addTargetCandidates, toggleTarget, setTargetNote, orgs,
   industries, industry, setCompanyIndustry, setCompanyLink, ranks, deck, deckCount, reviewed, radar, compass, startFromContacts, introPaths, weekly, touch, setCircle, setEdit, followUp, markReplied, addNote,
-  importTexts, importSnapshot, yearInReview, teamPack, addTeamPack, removeTeamPack, teamList, matchEnrichment, readNotes, memory, applyMail, clearMail, addProspects, clearProspects, addPursuit, updatePursuit, removePursuit, assignRole, pursuits, pursuit, moves, setRoleSince, quickLog, addIntro, setIntro, intros, trend, snapshot, targetChanges, ask, importSocial, clearSocial, socials, orgChart, structureFor, setReportsTo, backup, restore, exportCSV, reminders, watch, constants};
+  importTexts, importSnapshot, yearInReview, teamPack, addTeamPack, removeTeamPack, teamList, matchEnrichment, readNotes, memory, applyMail, clearMail, addProspects, clearProspects, addPursuit, updatePursuit, removePursuit, assignRole, pursuits, pursuit, moves, setRoleSince, quickLog, addIntro, setIntro, intros, trend, snapshot, targetChanges, ask, importSocial, clearSocial, socials, agencyCoverage, orgChart, structureFor, setReportsTo, backup, restore, exportCSV, reminders, watch, constants};
 // Every call goes through here: JSON string in, JSON string out, errors as {error}.
 globalThis.Bearings = {
   call(name, argsJSON){
