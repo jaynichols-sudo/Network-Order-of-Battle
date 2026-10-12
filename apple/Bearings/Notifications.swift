@@ -130,6 +130,7 @@ final class Notifications: NSObject, UNUserNotificationCenterDelegate, @unchecke
         } else if action == UNNotificationDefaultActionIdentifier {
             if let m = info["meeting"] as? String { action = "meeting:" + m }
             else if let t = info["trip"] as? String { action = "trip:" + t }
+            else if let o = info["opportunity"] as? String { action = "opportunity:" + o }
             else if info["arrival"] != nil { action = "arrival" }
             else { action = info["refresh"] != nil ? "refresh" : "open" }
         }

@@ -31,6 +31,7 @@ struct SettingsView: View {
                 MailSettingsSection()
                 CRMSettingsSection()
                 EnrichSettingsSection()
+                SamSettingsSection()
                 dataSection
                 aboutSection
             }

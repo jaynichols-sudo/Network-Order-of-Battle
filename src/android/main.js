@@ -86,6 +86,7 @@ async function boot(){
     if (ex.k){ go('people'); openPerson(ex.k); return; }
     if (ex.weekly){ open('weekly'); return; }
     if (ex.event){ go('home'); open('event', ex.event); return; }
+    if (ex.opportunity){ go('home'); push('opportunities'); push('opportunity', ex.opportunity); return; }
     if (ex.refresh) open('import');
   });
   scheduleMonday();

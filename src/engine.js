@@ -10,6 +10,7 @@ import {
 import { parseQuery, matchNL } from './nlq.js';
 import { findAgency, officeOf } from './agencies.js';
 import {compileFederal} from './federal.js';
+import { matchOpportunities as matchOpps, opportunityFilters, opportunityRequests as oppRequests, opportunityPage, demoOpportunities as demoOpps, markSeen, agencyFor } from './opportunities.js';
 import { INDUSTRIES, indColor, indShort, setIndustryOverrides, companyKey, UNCLASSIFIED, GOV_IND } from './industry.js';
 
 /* ---------- state ---------- */
@@ -1143,6 +1144,20 @@ function agencyCoverage(withTeam){
     mine: {covered: count('covered', 'mine'), thin: count('thin', 'mine'), none: count('none', 'mine')}, withTeam: !!withTeam, hasTeam: S.team.length > 0};
 }
 
+/* ---------- SAM.gov opportunities ---------- */
+// The apps fetch notices from SAM.gov with the user's own key; this matches them to the
+// federal map and the people you know there (see opportunities.js).
+const fedRows = () => S._fed || (S._fed = compileFederal());
+const oppCtx = () => ({today: TODAY, F: fedRows(), people: live(), targets: S.targets, pursuits: S.pursuits, fedHits, fullName, agencyOf: n => agencyFor(n, fedRows())});
+/** Notices matched to your network, ranked: see opportunities.js for the options. */
+function matchOpportunities(list, opts){ return matchOpps(list, opts, oppCtx()); }
+/** The searches to run against SAM.gov for these filters, posted in the last `days` days. */
+function opportunityRequests(filters, days){ return oppRequests(filters, days, TODAY); }
+/** Fictional notices for the sample network only, so the feature shows without a key. */
+function demoOpportunities(){ return S.mode === 'sample' ? demoOpps(TODAY) : []; }
+/** The seen list to save after showing these ids. */
+function markOpportunitiesSeen(seen, ids){ return markSeen(seen, ids); }
+
 /* ---------- intro finder ---------- */
 // "Who can get me into X?": people there now, people who used to be, and people
 // you're close to in the same sector, with the best few paths first.
@@ -1731,7 +1746,7 @@ function constants(){
 
 const api = {load, loadSample, loadFiles, clearNotes, clusters, placeClues, setCompanyLocation, companyPlaces, messages, matchAttendees, alsoAt, setLens, info, people, person, search, facets, home, payoff, targets, unit, addTargetCandidates, toggleTarget, setTargetNote, orgs,
   industries, industry, setCompanyIndustry, setCompanyLink, ranks, deck, deckCount, reviewed, radar, compass, startFromContacts, introPaths, weekly, touch, setCircle, setEdit, followUp, markReplied, addNote,
-  importTexts, importSnapshot, yearInReview, teamPack, teamShare, addTeamPack, setTeamShares, removeTeamPack, teamList, teamOverview, demoTeamShares, matchEnrichment, readNotes, memory, applyMail, clearMail, addProspects, clearProspects, addPursuit, updatePursuit, removePursuit, assignRole, pursuits, pursuit, moves, setRoleSince, quickLog, addIntro, setIntro, intros, trend, snapshot, targetChanges, ask, importSocial, clearSocial, socials, agencyCoverage, orgChart, structureFor, setReportsTo, backup, restore, exportCSV, reminders, watch, constants, quote};
+  importTexts, importSnapshot, yearInReview, teamPack, teamShare, addTeamPack, setTeamShares, removeTeamPack, teamList, teamOverview, demoTeamShares, matchEnrichment, readNotes, memory, applyMail, clearMail, addProspects, clearProspects, addPursuit, updatePursuit, removePursuit, assignRole, pursuits, pursuit, moves, setRoleSince, quickLog, addIntro, setIntro, intros, trend, snapshot, targetChanges, ask, importSocial, clearSocial, socials, agencyCoverage, matchOpportunities, opportunityFilters, opportunityRequests, opportunityPage, demoOpportunities, markOpportunitiesSeen, orgChart, structureFor, setReportsTo, backup, restore, exportCSV, reminders, watch, constants, quote};
 // Every call goes through here: JSON string in, JSON string out, errors as {error}.
 globalThis.Bearings = {
   call(name, argsJSON){

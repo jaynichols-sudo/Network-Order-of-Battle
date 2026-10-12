@@ -12,6 +12,7 @@ import { reviewYear, yearSeason } from './team.js';
 import { unlocked, GATING, teamPro } from './pro.js';
 import { onTeam, teamState } from './teamsync.js';
 import './enrich.js';
+import { match as oppMatch } from './opportunities.js';
 
 const row = (a, ic, label, detail = '', chev = true) => `<button type="button" class="row act" data-a="${a}">${icon(ic)}<span>${esc(label)}</span>${detail ? `<span class="muted">${esc(detail)}</span>` : ''}${chev ? icon('chevR', 'chev') : ''}</button>`;
 
@@ -55,6 +56,7 @@ export const YouView = {
         ${row('ask', 'askSearch', 'Ask Northfix')}
         ${row('quickNote', 'mic', 'Quick note')}
         ${row('pursuits', 'target', 'Pursuits', pursuits().length ? fmt(pursuits().length) : '')}
+        ${row('opportunities', 'building', 'SAM.gov opportunities', oppMatch() && oppMatch().newCount ? `${fmt(oppMatch().newCount)} new` : '')}
         ${row('socials', 'people', 'Across your socials')}
         ${row('intros', 'waysIn', 'Intros', intros().filter(x => x.st === 'asked').length ? `${fmt(intros().filter(x => x.st === 'asked').length)} open` : '')}
         ${row('moves', 'swap', 'Moves and rotations')}
@@ -87,6 +89,7 @@ export const YouView = {
     ask: () => { fx.tap(); open('ask'); },
     quickNote: () => { fx.tap(); open('quickNote'); },
     pursuits: () => open('pursuits'),
+    opportunities: () => open('opportunities'),
     socials: () => open('socials'),
     intros: () => open('intros'),
     moves: () => open('moves'),

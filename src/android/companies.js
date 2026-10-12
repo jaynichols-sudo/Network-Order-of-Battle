@@ -10,6 +10,7 @@ import { openURL, fx, prefs, ls } from './platform.js';
 import { openMessage } from './sheets.js';
 import { allow } from './pro.js';
 import { trendSection } from './watchlist.js';
+import { samSection } from './opportunities.js';
 import { openNewPursuit } from './pursuits.js';
 import { openTrackIntro } from './relationships.js';
 
@@ -178,6 +179,7 @@ registerRoute('unit', name => {
         <p class="foot">Handy for a command, base or office where everyone works in one place. It shows them on the Map. A location you set on a person still wins.</p>
         <div class="card pad gaps">${u.gaps.length ? u.gaps.map(g => `<p class="bad">${icon('alert')}${esc(g)}</p>`).join('') : `<p class="good">${icon('checkCircle')}Covered at every level</p>`}</div>
         ${trendSection(name)}
+        ${samSection(name)}
         ${u.rungs.map(rung).join('')}
         ${alumni ? `<p class="sec-h">Used to work here</p><div class="card list">${alumni}</div><p class="foot">People who were here at an earlier refresh and have since moved on. Often the best way in.</p>` : ''}
         ${u.isTarget ? `<p class="sec-h">Notes</p><div class="card"><textarea class="field" rows="4" data-in="note" placeholder="What you’re working on here, who to meet next">${esc(st.note)}</textarea></div>` : ''}
@@ -188,6 +190,8 @@ registerRoute('unit', name => {
     handlers: {
       open: k => openPerson(k),
       url: v => openURL(v),
+      opp: id => { fx.tap(); push('opportunity', id); },
+      oppAll: () => { fx.tap(); push('opportunities'); },
       async target(_, t){ await toggleTarget(name); view.render(t.closest('.page-body')); },
       inPeople(){ const u = M.api.unit(name); showPeople(M.info.lens && !u.isCompany ? {agency: name} : {company: name}); },
       ways: () => openIntro(name),
