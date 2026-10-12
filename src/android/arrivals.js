@@ -1,6 +1,6 @@
 // Arrival check on Android. The iPhone watches for significant location changes in the
-// background; on Android that needs Google Play's background-location review, so Bearings
-// checks only when you open the app: land somewhere 75+ miles from home, open Bearings, and
+// background; on Android that needs Google Play's background-location review, so Northfix
+// checks only when you open the app: land somewhere 75+ miles from home, open Northfix, and
 // it tells you who you know there. Location is used on this phone only.
 import { M, isSample } from './model.js';
 import { esc, icon, plural } from './ui.js';

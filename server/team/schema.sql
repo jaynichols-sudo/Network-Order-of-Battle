@@ -1,4 +1,4 @@
--- Bearings Team: D1 schema. Safe to run again (every statement is IF NOT EXISTS).
+-- Northfix Team: D1 schema. Safe to run again (every statement is IF NOT EXISTS).
 -- Encrypted fields (*_enc, shares.body) hold base64 ciphertext from the apps.
 -- The server never decrypts them. Times are milliseconds since 1970.
 

@@ -113,7 +113,7 @@ final class WatchLink: NSObject, WCSessionDelegate {
             } else {
                 // the app hasn't finished starting: keep it for drainWatch
                 enqueue(message)
-                replyHandler(["line": "Saved. Bearings files it when it opens on your iPhone."])
+                replyHandler(["line": "Saved. Northfix files it when it opens on your iPhone."])
             }
             return
         }

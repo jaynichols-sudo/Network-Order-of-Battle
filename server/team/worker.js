@@ -1,4 +1,4 @@
-// Bearings Team server. The contract is docs/team.md.
+// Northfix Team server. The contract is docs/team.md.
 //
 // Teams pool encrypted network summaries. Every team name, profile and share arrives
 // already encrypted with a team key the server never sees (it lives after the # in invite
@@ -418,16 +418,16 @@ a{color:#FFB52E}.small{font-size:.9rem}[hidden]{display:none}</style></head><bod
 
 async function invitePage(db, env, code) {
   const store = /^https:\/\//.test(env.APP_STORE_URL || '') ? env.APP_STORE_URL : SITE;
-  const getApp = `<p class="small">Don't have Bearings yet? <a href="${escapeHtml(store)}">Get it here</a>.</p>`;
+  const getApp = `<p class="small">Don't have Northfix yet? <a href="${escapeHtml(store)}">Get it here</a>.</p>`;
   if (!(await validInvite(db, code))) {
     return page('Invite expired', `<h1>This invite has expired or was revoked.</h1><p>Ask your teammate for a new invite.</p>${getApp}`, 404);
   }
   // The key lives after the # and never reaches this server. The script reads it in the browser.
   const nonce = randomId();
   const codeJs = JSON.stringify(code).replace(/</g, '\\u003c');
-  return page("You're invited to a team on Bearings", `<h1>You're invited to a team on Bearings</h1>
-<p>Open the invite in the Bearings app to join. Your team's data is encrypted, and the key stays on your devices.</p>
-<a class="btn" id="open" href="#" hidden>Open in Bearings</a>
+  return page("You're invited to a team on Northfix", `<h1>You're invited to a team on Northfix</h1>
+<p>Open the invite in the Northfix app to join. Your team's data is encrypted, and the key stays on your devices.</p>
+<a class="btn" id="open" href="#" hidden>Open in Northfix</a>
 <p id="nokey" hidden>This link is missing its key. Ask your teammate for a new invite.</p>
 ${getApp}
 <script nonce="${nonce}">(function(){var m=/(?:^#|&)k=([A-Za-z0-9_-]{43})(?:&|$)/.exec(location.hash);
@@ -445,7 +445,7 @@ async function route(req, env) {
   let m;
 
   if (path === '/health' && method === 'GET') return json({ok: true});
-  if (path === '/billing/done' && method === 'GET') return page("You're all set", "<h1>You're all set.</h1><p>Go back to Bearings.</p>");
+  if (path === '/billing/done' && method === 'GET') return page("You're all set", "<h1>You're all set.</h1><p>Go back to Northfix.</p>");
   if ((m = /^\/join\/([^/]+)$/.exec(path)) && method === 'GET') return invitePage(db, env, decodeURIComponent(m[1]));
   if (path === '/stripe/webhook' && method === 'POST') return webhook(req, db, env);
 

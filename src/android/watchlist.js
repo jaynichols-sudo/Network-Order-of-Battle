@@ -123,7 +123,7 @@ export function openWatchAll(){
     body.innerHTML = `${changes.length ? `<p class="sec-h">People</p><div class="card list">${changes.map(c => { const p = person(c.k); return p ? personRow(p, {sub: `${c.kind === 'moved' ? 'Moved to' : 'New connection at'} ${c.target}`}) : ''; }).join('')}</div>` : ''}
       ${Object.keys(groups).sort().map(t => `<p class="sec-h">${esc(t)}</p><div class="card list">${groups[t].map(([h, i]) => `<button type="button" class="row headline" data-a="newsOpen" data-v="${i}"><span class="hl-main"><b>${esc(h.title)}</b><span class="muted small">${esc([h.source, ago(h.date)].filter(Boolean).join(' · '))}</span></span></button>`).join('')}</div>`).join('')}
       ${!changes.length && !heads.length ? '<p class="foot">Nothing new at the companies you watch yet.</p>' : ''}
-      <p class="foot">Headlines come from Google News. Bearings sends only the names on your watchlist, nothing about you.</p>
+      <p class="foot">Headlines come from Google News. Northfix sends only the names on your watchlist, nothing about you.</p>
       <button type="button" class="btn top12" data-a="reload">${icon('refresh')}Check for news</button>`;
   };
   openSheet({

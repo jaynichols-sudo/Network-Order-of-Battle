@@ -1,4 +1,4 @@
-// You: who you are in Bearings, the share card, your stuff (the week's five, lists,
+// You: who you are in Northfix, the share card, your stuff (the week's five, lists,
 // Catch Up, Explore), your data (import or refresh, backup) and settings and help.
 import { M, isSample, isStarter, myInitials, runList, lastBackup, pursuits, intros } from './model.js';
 import { esc, fmt, icon, meAvatar, Day, empty, $, plural } from './ui.js';
@@ -52,7 +52,7 @@ export const YouView = {
       <button type="button" class="card share-card" data-a="share"><span class="sc-ic">${icon('share')}</span><span class="you-text"><b>Share card</b><span>A picture of your network. Dots and sector totals only.</span></span>${icon('chevR', 'chev')}</button>
       <section class="card list"><div class="card-head static"><h2>Your stuff</h2></div>
         ${row('weekly', 'checkCircle', 'This week’s five')}
-        ${row('ask', 'askSearch', 'Ask Bearings')}
+        ${row('ask', 'askSearch', 'Ask Northfix')}
         ${row('quickNote', 'mic', 'Quick note')}
         ${row('pursuits', 'target', 'Pursuits', pursuits().length ? fmt(pursuits().length) : '')}
         ${row('socials', 'people', 'Across your socials')}
@@ -74,7 +74,7 @@ export const YouView = {
         ${isSample() ? '' : row('enrichFile', 'download', 'Import an enrichment file', 'CSV', false)}
       </section>
       <section class="card list">
-        ${row('pro', 'starCircle', 'Bearings Pro', teamPro() ? 'Through your team' : !GATING ? 'Unlocked for now' : unlocked() ? 'Active' : '')}
+        ${row('pro', 'starCircle', 'Northfix Pro', teamPro() ? 'Through your team' : !GATING ? 'Unlocked for now' : unlocked() ? 'Active' : '')}
         ${row('settings', 'gear', 'Settings')}
         ${row('help', 'mail', 'Help and contact support', '', false)}
       </section>
@@ -103,6 +103,6 @@ export const YouView = {
     pro: () => open('paywall'),
     enrichFile: () => open('enrichFile'),
     notes: () => { fx.tap(); open('notes'); },
-    help: () => openURL('mailto:jay@jaynichols.net?subject=' + encodeURIComponent('Bearings for Android: help')),
+    help: () => openURL('mailto:jay@jaynichols.net?subject=' + encodeURIComponent('Northfix for Android: help')),
   },
 };

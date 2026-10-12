@@ -1207,7 +1207,7 @@ function teamShare(owner){
 }
 function parseShare(text){
   let d; try { d = typeof text === 'string' ? JSON.parse(text) : text; } catch { d = null; }
-  if (!d || (d.kind !== 'bearings-team-pack' && d.kind !== 'bearings-team-share') || !Array.isArray(d.people)) throw new Error('That isn’t a Bearings team pack.');
+  if (!d || (d.kind !== 'bearings-team-pack' && d.kind !== 'bearings-team-share') || !Array.isArray(d.people)) throw new Error('That isn’t a Northfix team pack.');
   const band = b => BAND_RANK[b] != null ? b : 'none';
   const people = d.people.slice(0, 50000).filter(p => p && (p.f || p.l)).map(p => ({f: clip(p.f, 80), l: clip(p.l, 80), c: clip(p.c, 160), p: clip(p.p, 240), u: clip(p.u, 300), b: band(p.b)}));
   const pursuits = (Array.isArray(d.pursuits) ? d.pursuits : []).slice(0, 200).filter(p => p && p.name).map(p => ({name: clip(p.name, 160), agency: clip(p.agency, 160),
@@ -1607,7 +1607,7 @@ function carryStarterNotes(incoming){
 function backup(){ return JSON.stringify({app: 'order-of-battle', kind: 'notes-backup', version: 1, created: new Date().toISOString(), edits: S.edits, targets: S.targets, companies: S.coInd, links: S.coLink, locations: S.coLoc, review: S.review}); }
 function restore(text){
   const data = JSON.parse(text);
-  if (!data || data.kind !== 'notes-backup' || typeof data.edits !== 'object') throw new Error('That isn’t a Bearings backup file.');
+  if (!data || data.kind !== 'notes-backup' || typeof data.edits !== 'object') throw new Error('That isn’t a Northfix backup file.');
   let added = 0, kept = 0;
   for (const [k, e] of Object.entries(data.edits || {})){
     const cur = S.edits[k];

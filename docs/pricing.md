@@ -1,4 +1,4 @@
-# Bearings pricing
+# Northfix pricing
 
 ## Proposal
 
@@ -9,7 +9,7 @@
 - Catch Up, reminders, circles and notes
 - widgets, the Watch app and Siri
 
-**Bearings Pro**, the tools for working a network:
+**Northfix Pro**, the tools for working a network:
 - Event mode
 - Ways in (warm intro paths)
 - Team packs
@@ -23,7 +23,7 @@
 | `com.jaynichols.networkoob.pro.monthly` | Auto-renewing subscription | $19.99 a month |
 | `com.jaynichols.networkoob.pro` | Non-consumable (lifetime) | $249.99 |
 
-The subscriptions share one subscription group: "Bearings Pro".
+The subscriptions share one subscription group: "Northfix Pro".
 
 ## Why this shape
 
@@ -35,14 +35,14 @@ Decided October 11, 2026.
 - **Lifetime is permanent.** It stays on sale, and a lifetime purchase is Pro for good: no expiry and no later move to a subscription. At about 2.5 years of yearly, it doesn't undercut the yearly plan.
 - **What it nets.** Under Apple's Small Business Program (15%), yearly nets about $85 per subscriber.
 
-## Bearings Team
+## Northfix Team
 
-Proposed: **$49 per person per month, billed yearly ($588 per seat a year)**, with a 30-day free trial for up to 5 people. Everyone on a team gets Bearings Pro while they're on it.
+Proposed: **$49 per person per month, billed yearly ($588 per seat a year)**, with a 30-day free trial for up to 5 people. Everyone on a team gets Northfix Pro while they're on it.
 
 - **Sold on the web, not in the App Store.** Teams subscribe through Stripe, which Apple allows for services sold to organizations (guideline 3.1.3(c)). Apple's 15% doesn't apply.
 - **Separate from Pro,** so lifetime Pro stays lifetime: a lifetime buyer who joins a team pays for the seat, not for Pro.
-- **Why $49:** BD and capture teams already pay several hundred to a few thousand dollars a seat for market intelligence. Bearings answers a question those tools can't: who on *my* team knows someone there.
-- **To turn it on:** in Stripe, create a product "Bearings Team" with a yearly per-seat price, then add `STRIPE_SECRET_KEY`, `STRIPE_PRICE_ID` and `STRIPE_WEBHOOK_SECRET` as GitHub secrets and run the Team server workflow. See [team.md](team.md).
+- **Why $49:** BD and capture teams already pay several hundred to a few thousand dollars a seat for market intelligence. Northfix answers a question those tools can't: who on *my* team knows someone there.
+- **To turn it on:** in Stripe, create a product "Northfix Team" with a yearly per-seat price, then add `STRIPE_SECRET_KEY`, `STRIPE_PRICE_ID` and `STRIPE_WEBHOOK_SECRET` as GitHub secrets and run the Team server workflow. See [team.md](team.md).
 
 ## To turn it on
 

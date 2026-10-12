@@ -19,7 +19,7 @@ export function openMessage(k, ctx = {}){
       body.innerHTML = `${drafts.length ? `<p class="sec-h">Start from</p><div class="chips-scroll pad">${drafts.map(d => `<button type="button" class="chip ${d.id === picked ? 'on' : ''}" data-a="pick" data-v="${esc(d.id)}">${esc(d.label)}</button>`).join('')}</div>` : ''}
         <p class="sec-h">Your message</p>
         <div class="card"><textarea class="msg-text" rows="9" aria-label="Your message">${esc(drafts[0] ? drafts[0].text : '')}</textarea></div>
-        <p class="foot">Edit it to sound like you. LinkedIn doesn’t let other apps send messages, so Bearings copies the text and opens their profile. Tap Message there and paste.</p>
+        <p class="foot">Edit it to sound like you. LinkedIn doesn’t let other apps send messages, so Northfix copies the text and opens their profile. Tap Message there and paste.</p>
         <div class="card list actions">
           ${profile ? `<button type="button" class="row act" data-a="copyOpen">${icon('ext')}<span>Copy and open LinkedIn</span></button>` : ''}
           ${p.e ? `<button type="button" class="row act" data-a="email">${icon('mail')}<span>Email instead</span></button>` : ''}
@@ -103,11 +103,11 @@ export function renderShareCard(data, {sample = false, initials = ''} = {}){
     ctx.textAlign = 'right'; ctx.fillStyle = 'rgba(255,255,255,0.7)'; ctx.font = '500 14px "Geist Mono", monospace'; ctx.fillText(fmt(w.n), W - P, y);
     y += 26;
   }
-  ctx.textAlign = 'left'; ctx.fillStyle = 'rgba(255,255,255,0.85)'; ctx.font = '600 12px Geist, sans-serif'; ctx.fillText('Mapped with Bearings', P, H - P);
+  ctx.textAlign = 'left'; ctx.fillStyle = 'rgba(255,255,255,0.85)'; ctx.font = '600 12px Geist, sans-serif'; ctx.fillText('Mapped with Northfix', P, H - P);
   ctx.textAlign = 'right'; ctx.fillStyle = 'rgba(255,255,255,0.5)'; ctx.font = '400 12px Geist, sans-serif'; ctx.fillText('Your network, mapped', W - P, H - P);
   return cv;
 }
-/** The Bearings mark (brand/bearings-mark.svg), drawn small. */
+/** The Northfix mark (brand/northfix-mark.svg), drawn small. */
 function drawMark(ctx, x, y, s){
   ctx.save(); ctx.translate(x, y); ctx.scale(s / 1024, s / 1024);
   const bg = ctx.createLinearGradient(0, 0, 1024, 1024); bg.addColorStop(0, '#3D3078'); bg.addColorStop(1, '#1C1636');

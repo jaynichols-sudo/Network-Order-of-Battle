@@ -98,7 +98,7 @@ final class WatchStore: NSObject, ObservableObject {
             Task { @MainActor in
                 if timedOut {
                     // the phone may have it already; sending again could file it twice
-                    WatchStore.shared.quickNoteStatus = "Sent. Check Bearings on your iPhone."
+                    WatchStore.shared.quickNoteStatus = "Sent. Check Northfix on your iPhone."
                 } else {
                     WCSession.default.transferUserInfo(["kind": "quicklog", "text": String(t.prefix(500)), "at": Date().timeIntervalSince1970])
                     WatchStore.shared.quickNoteStatus = "Queued. Your iPhone files it when it’s nearby."

@@ -1,7 +1,7 @@
 import Foundation
 import JavaScriptCore
 
-/// Runs the shared Bearings logic (classification, scoring, search, import)
+/// Runs the shared Northfix logic (classification, scoring, search, import)
 /// in JavaScriptCore on its own serial queue. Calls are JSON in, JSON out.
 final class Engine: @unchecked Sendable {
     struct Failure: LocalizedError {
@@ -19,7 +19,7 @@ final class Engine: @unchecked Sendable {
         queue.sync {
             let ctx = JSContext()!
             ctx.exceptionHandler = { _, ex in
-                NSLog("Bearings engine exception: \(ex?.toString() ?? "?")")
+                NSLog("Northfix engine exception: \(ex?.toString() ?? "?")")
             }
             if let url = Bundle.main.url(forResource: "engine", withExtension: "js"),
                let src = try? String(contentsOf: url, encoding: .utf8) {
@@ -63,7 +63,7 @@ final class Engine: @unchecked Sendable {
         return try await withCheckedThrowingContinuation { cont in
             queue.async {
                 guard let bridge = self.bridge, !bridge.isUndefined else {
-                    cont.resume(throwing: Failure(message: "The Bearings engine didn’t load."))
+                    cont.resume(throwing: Failure(message: "The Northfix engine didn’t load."))
                     return
                 }
                 let v = bridge.invokeMethod("call", withArguments: [name, argJSON])

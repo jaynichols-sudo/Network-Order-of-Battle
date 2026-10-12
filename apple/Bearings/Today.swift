@@ -303,7 +303,7 @@ struct YouView: View {
 
                 group("Your stuff") {
                     row("This week’s five", icon: "checklist") { model.showWeekly = true }
-                    row("Ask Bearings", icon: "sparkle.magnifyingglass") { model.showAsk = true }
+                    row("Ask Northfix", icon: "sparkle.magnifyingglass") { model.showAsk = true }
                     row("Quick note", icon: "mic") { model.showQuickLog = true }
                     row("Pursuits", icon: "scope") { model.open(.pursuits) }
                     row("The federal map", icon: "building.columns") { model.companiesMode = .agencies; model.paths[.companies] = []; model.tab = .companies }
@@ -334,7 +334,7 @@ struct YouView: View {
                 }
 
                 group(nil) {
-                    row(Pro.shared.owned ? "Bearings Pro (thank you!)" : "Bearings Pro", icon: "sparkles") { model.showPaywall = true }
+                    row(Pro.shared.owned ? "Northfix Pro (thank you!)" : "Northfix Pro", icon: "sparkles") { model.showPaywall = true }
                     row("Send feedback", icon: "bubble.left.and.exclamationmark.bubble.right") { model.feedback = FeedbackRequest(screenshot: nil) }
                     row("Settings", icon: "gearshape") { model.showSettings = true }
                     row("Help and support", icon: "questionmark.circle") {

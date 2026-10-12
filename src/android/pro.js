@@ -1,4 +1,4 @@
-// Bearings Pro on Android, through Google Play Billing (cordova-plugin-purchase).
+// Northfix Pro on Android, through Google Play Billing (cordova-plugin-purchase).
 // Same products and features as the iPhone. Nothing is locked until GATING is on, which
 // waits on the products existing in the Play Console (see docs/pricing.md).
 import { esc, icon } from './ui.js';
@@ -15,12 +15,12 @@ export const FEATURES = {
   events: ['Event mode', 'See who you know before a conference, then work the follow-up list.', 'ticket'],
   waysIn: ['Ways in', 'The best paths into any company, with the intro ask drafted.', 'waysIn'],
   team: ['Team', 'Pool who your team knows, privately, to find warm paths.', 'people'],
-  arrivals: ['Arrival check', 'Open Bearings in a new city and see who you know there.', 'plane'],
+  arrivals: ['Arrival check', 'Open Northfix in a new city and see who you know there.', 'plane'],
   enrich: ['ZoomInfo and Seamless.AI', 'Fill in emails, phones and locations from your own account.', 'sparkles'],
 };
 
 const P = {owned: ls.get('bearings.pro') === '1', ready: false, store: null};
-// Everyone on an active (not read-only) Bearings Team gets Pro; teamsync.js keeps this flag.
+// Everyone on an active (not read-only) Northfix Team gets Pro; teamsync.js keeps this flag.
 export const teamPro = () => ls.get('bearings.teamPro') === '1';
 export const unlocked = () => !GATING || P.owned || teamPro();
 
@@ -76,7 +76,7 @@ export function openPaywall(feature = ''){
       <p class="foot">Subscriptions renew automatically until you cancel in Google Play. Your network never leaves your devices either way.</p></div>`;
   };
   openSheet({
-    title: 'Bearings Pro', right: ['Not now'], full: true,
+    title: 'Northfix Pro', right: ['Not now'], full: true,
     mount: render,
     handlers: {
       plan(v, t){ plan = v; fx.select(); render(t.closest('.sheet-body')); },
@@ -89,7 +89,7 @@ export function openPaywall(feature = ''){
         try { const err = await offer.order(); if (err && err.code !== cdv().ErrorCode.PAYMENT_CANCELLED) note = err.message || 'The purchase didn’t go through.'; }
         catch (e) { note = (e && e.message) || 'The purchase didn’t go through.'; }
         busy = false; refresh();
-        if (P.owned){ fx.success(); closeSheet(); show('Welcome to Bearings Pro'); } else render(body);
+        if (P.owned){ fx.success(); closeSheet(); show('Welcome to Northfix Pro'); } else render(body);
       },
       async restore(_, t){
         if (P.store) { try { await P.store.restorePurchases(); } catch {} refresh(); }

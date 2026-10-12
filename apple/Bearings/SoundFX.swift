@@ -68,7 +68,7 @@ struct AppIconPicker: View {
     }
 }
 
-/// Bearings' signature: a soft rising two-note chime with a matching tap-then-swell on the
+/// Northfix' signature: a soft rising two-note chime with a matching tap-then-swell on the
 /// Taptic Engine, for the moments that matter (someone ticked off, all five done, notes saved).
 /// Synthesized on the fly, so there's nothing to bundle. Respects the Sounds and Haptics settings.
 @MainActor

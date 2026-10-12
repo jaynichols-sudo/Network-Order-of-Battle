@@ -78,7 +78,7 @@ struct YearCardView: View {
             }
             Spacer(minLength: 12)
             HStack {
-                Text("Mapped with Bearings").font(.custom("Geist-SemiBold", fixedSize: 12)).foregroundStyle(.white.opacity(0.85))
+                Text("Mapped with Northfix").font(.custom("Geist-SemiBold", fixedSize: 12)).foregroundStyle(.white.opacity(0.85))
                 Spacer()
                 Text("\(r.total.formatted()) people").font(.custom("Geist-Regular", fixedSize: 12)).foregroundStyle(.white.opacity(0.5))
             }
@@ -148,7 +148,7 @@ struct YearInReviewView: View {
                         Label("Only counts and sectors. No names.", systemImage: "lock.fill")
                             .font(Theme.geist(.footnote, .medium)).foregroundStyle(Theme.text2)
                         ShareLink(item: Image(uiImage: image), subject: Text("My year in networking"),
-                                  message: Text("My year in networking, mapped with Bearings."),
+                                  message: Text("My year in networking, mapped with Northfix."),
                                   preview: SharePreview("My year", image: Image(uiImage: image))) {
                             Text("Share").font(Theme.geist(.body, .semibold))
                                 .frame(maxWidth: .infinity, minHeight: 48)

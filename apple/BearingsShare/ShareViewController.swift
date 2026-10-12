@@ -2,8 +2,8 @@ import UIKit
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// "Share to Bearings" from Plaud, Apple Notes, reMarkable, Mail or Files. Reads the
-/// text (or the handwriting) on the device, leaves it for Bearings, and says so. Bearings
+/// "Share to Northfix" from Plaud, Apple Notes, reMarkable, Mail or Files. Reads the
+/// text (or the handwriting) on the device, leaves it for Northfix, and says so. Northfix
 /// then matches it to the people you know the next time it opens.
 final class ShareViewController: UIViewController {
     private let state = ShareState()
@@ -133,7 +133,7 @@ struct ShareCard: View {
     private var title: String {
         switch state.phase {
         case .reading: return "Reading…"
-        case .saved: return "Added to Bearings"
+        case .saved: return "Added to Northfix"
         case .empty: return "Nothing to add"
         }
     }
@@ -141,8 +141,8 @@ struct ShareCard: View {
     private var detail: String {
         switch state.phase {
         case .reading: return "Reading it on this iPhone. Handwriting takes a few seconds."
-        case .saved: return "\(state.words.formatted()) words. Open Bearings and it will match them to the people you know."
-        case .empty: return "Bearings couldn’t find any text in that. Try sharing the notes as text or a PDF."
+        case .saved: return "\(state.words.formatted()) words. Open Northfix and it will match them to the people you know."
+        case .empty: return "Northfix couldn’t find any text in that. Try sharing the notes as text or a PDF."
         }
     }
 }

@@ -3,7 +3,7 @@ import SwiftUI
 import ActivityKit
 #endif
 
-// Bearings remembers what you talked about. Before a meeting with someone you know it puts
+// Northfix remembers what you talked about. Before a meeting with someone you know it puts
 // the one thing worth remembering on the Lock Screen and the watch, and every profile
 // opens with it.
 

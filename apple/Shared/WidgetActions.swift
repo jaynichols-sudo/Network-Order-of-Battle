@@ -68,9 +68,9 @@ struct WidgetPersonIntent: AppIntent {
     }
 }
 
-/// Opens a screen in Bearings, for Control Center buttons.
+/// Opens a screen in Northfix, for Control Center buttons.
 struct OpenBearingsIntent: AppIntent {
-    static var title: LocalizedStringResource = "Open Bearings"
+    static var title: LocalizedStringResource = "Open Northfix"
     static var openAppWhenRun = true
     static var isDiscoverable = false
     @Parameter(title: "Screen") var screen: String

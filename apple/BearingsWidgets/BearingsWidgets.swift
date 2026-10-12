@@ -106,7 +106,7 @@ struct BearingsWidgets: Widget {
             GlanceView(entry: entry)
                 .containerBackground(.fill.tertiary, for: .widget)
         }
-        .configurationDisplayName("Bearings")
+        .configurationDisplayName("Northfix")
         .description("How many people to get back to, and who’s next.")
         .supportedFamilies([.accessoryCircular, .accessoryRectangular, .accessoryInline, .accessoryCorner])
     }

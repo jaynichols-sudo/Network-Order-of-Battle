@@ -1,7 +1,7 @@
 import SwiftUI
 import StoreKit
 
-/// Bearings Pro: what you get and the three ways to pay.
+/// Northfix Pro: what you get and the three ways to pay.
 struct PaywallView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
@@ -19,7 +19,7 @@ struct PaywallView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
                     VStack(alignment: .leading, spacing: 6) {
-                        Text("Bearings Pro").font(Theme.serif(.largeTitle, .semibold)).foregroundStyle(.primary)
+                        Text("Northfix Pro").font(Theme.serif(.largeTitle, .semibold)).foregroundStyle(.primary)
                         (Text(feature.map { "\($0.title) is part of Pro. " } ?? "")
                             + Text("The map, Today, search and reminders stay free. Pro adds the tools for working your network."))
                             .font(Theme.geist(.subheadline))

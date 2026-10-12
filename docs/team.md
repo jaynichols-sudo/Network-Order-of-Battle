@@ -1,6 +1,6 @@
-# Bearings Team
+# Northfix Team
 
-Bearings Team lets a business development or capture team pool who they know, without giving up what makes Bearings different: **the Bearings server can't read anyone's network.**
+Northfix Team lets a business development or capture team pool who they know, without giving up what makes Northfix different: **the Northfix server can't read anyone's network.**
 
 Each teammate shares a summary of their network, their pursuits and their watchlist. Everyone on the team then sees:
 
@@ -24,7 +24,7 @@ Members never see each other's notes, messages, emails, tags or contact details.
 | Plan | What you get |
 |---|---|
 | Trial | 30 days, up to 5 people, everything included |
-| Team | Per seat, billed yearly. Every member also gets Bearings Pro while they're on the team |
+| Team | Per seat, billed yearly. Every member also gets Northfix Pro while they're on the team |
 
 The proposed price is in [pricing.md](pricing.md). Teams pay on the web (Stripe), which Apple allows for services sold to organizations (App Store Review Guideline 3.1.3(c)). When the trial ends without a subscription, the team becomes read-only: people can still see what's there, but can't upload new shares or invite more people.
 
@@ -61,7 +61,7 @@ The plaintext is UTF-8 JSON, compressed with raw DEFLATE (RFC 1951; zlib on Appl
 
 ## Links
 
-- **Invite link:** `https://<team server>/join/<code>#k=<team key>`. Opening it shows a page with an **Open in Bearings** button that hands off to the app as `bearings://team/join?code=<code>&k=<team key>`. That page's script reads the key from the `#` part, so the key never reaches the server.
+- **Invite link:** `https://<team server>/join/<code>#k=<team key>`. Opening it shows a page with an **Open in Northfix** button that hands off to the app as `bearings://team/join?code=<code>&k=<team key>`. That page's script reads the key from the `#` part, so the key never reaches the server.
 - An invite has a role, a number of uses (1 to 50, default 10) and an expiry (1 to 30 days, default 14). Admins can revoke one at any time.
 
 ## Server API

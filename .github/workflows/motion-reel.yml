@@ -1,4 +1,4 @@
-name: Bearings motion reel
+name: Northfix motion reel
 
 # Records the app's animations on the simulator while a UI test drives them
 # (scrolling, zooming, the Lens, the paywall, the year card). Video goes to the motion-reel branch.

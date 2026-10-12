@@ -35,7 +35,7 @@ registerRoute('pursuits', () => {
       const list = pursuits();
       body.innerHTML = list.length
         ? `<div class="card list top8">${list.map(row).join('')}</div>${sampleNote()}`
-        : empty('target', 'No pursuits yet', 'Add a bid or a deal, and Bearings maps the people who decide it: who you know in each seat, the gaps, and your warmest ways in.', '<button type="button" class="btn prominent" data-a="add">Add a pursuit</button>');
+        : empty('target', 'No pursuits yet', 'Add a bid or a deal, and Northfix maps the people who decide it: who you know in each seat, the gaps, and your warmest ways in.', '<button type="button" class="btn prominent" data-a="add">Add a pursuit</button>');
     },
     handlers: {
       add: () => openNewPursuit(),

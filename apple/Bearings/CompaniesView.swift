@@ -79,7 +79,7 @@ struct WatchlistList: View {
                 ContentUnavailableView {
                     Label("No watchlist yet", systemImage: "scope")
                 } description: {
-                    Text("Pick the companies you’re working. Bearings shows where you don’t know anyone senior yet.")
+                    Text("Pick the companies you’re working. Northfix shows where you don’t know anyone senior yet.")
                 } actions: {
                     Button("Add a company") { model.showAddTarget = true }.buttonStyle(.borderedProminent)
                 }

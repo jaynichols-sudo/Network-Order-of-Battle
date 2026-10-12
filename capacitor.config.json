@@ -1,6 +1,6 @@
 {
   "appId": "com.jaynichols.networkoob",
-  "appName": "Bearings",
+  "appName": "Northfix",
   "webDir": "www",
   "ios": { "contentInset": "never", "scheme": "OrderOfBattle" },
   "android": { "allowMixedContent": false },

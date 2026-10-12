@@ -4,7 +4,7 @@ Paste these into Play Console > Grow > Store presence > Main store listing.
 
 ## App name (30 max)
 
-Bearings: Your Network Map
+Northfix: Your Network Map
 
 ## Short description (80 max)
 
@@ -12,7 +12,7 @@ See who needs you this week, who changed jobs, and who you know at every company
 
 ## Full description (4000 max)
 
-Bearings turns your LinkedIn export into a private, living map of the people you know, so you always know where you stand and who to reach out to.
+Northfix turns your LinkedIn export into a private, living map of the people you know, so you always know where you stand and who to reach out to.
 
 KNOW WHO NEEDS YOU
 • Today opens on the people worth your time this week, each with one plain reason and one tap to reply, congratulate or check in
@@ -39,9 +39,9 @@ EXPLORE YOUR NETWORK
 • An optional federal and military view with branch, rank, agency and segment
 
 PRIVATE BY DESIGN
-No account and no Bearings server. Your network stays on your phone. Contacts and location are read on your phone and never uploaded. No ads, no tracking. Back up your notes to a file whenever you like.
+No account and no Northfix server. Your network stays on your phone. Contacts and location are read on your phone and never uploaded. No ads, no tracking. Back up your notes to a file whenever you like.
 
-To start, request your data from LinkedIn (Settings, Data privacy, Get a copy of your data) and open the zip in Bearings. You can also start from your phone's contacts while you wait for LinkedIn's email.
+To start, request your data from LinkedIn (Settings, Data privacy, Get a copy of your data) and open the zip in Northfix. You can also start from your phone's contacts while you wait for LinkedIn's email.
 
 ## Category and contact
 

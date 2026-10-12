@@ -1,4 +1,4 @@
-# Bearings Team server
+# Northfix Team server
 
 A small Cloudflare Worker with a D1 database that lets a team pool encrypted network summaries. The full contract (API, roles, limits, plans, encryption format) is in [docs/team.md](../../docs/team.md).
 
@@ -15,7 +15,7 @@ Leaving or being removed deletes that member's share and revokes their token. De
 3. Add a repository variable `TEAM_URL` set to that address.
 4. Optional, for billing: add the GitHub secrets `STRIPE_SECRET_KEY`, `STRIPE_PRICE_ID` (the per-seat yearly price) and `STRIPE_WEBHOOK_SECRET`, then run the workflow again. In Stripe, point a webhook at `<TEAM_URL>/stripe/webhook` with the events `checkout.session.completed`, `customer.subscription.updated` and `customer.subscription.deleted`. Until billing is set up, the billing endpoints return 501 and teams stay on the trial.
 
-You can also set `APP_STORE_URL` as a worker variable. The invite page links to it for people who don't have Bearings yet (otherwise it links to the Bearings site).
+You can also set `APP_STORE_URL` as a worker variable. The invite page links to it for people who don't have Northfix yet (otherwise it links to the Northfix site).
 
 ## Raising seats by hand
 

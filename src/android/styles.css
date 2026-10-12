@@ -1,4 +1,4 @@
-/* Bearings for Android: "the mix" (apple/Bearings/Editorial.swift). In light, a white
+/* Northfix for Android: "the mix" (apple/Bearings/Editorial.swift). In light, a white
    page with white hairline cards, a serif voice for headlines and small mono eyebrows.
    Dark is the night sky, purple and amber. Explore, the compass card and first run wear
    the night sky whatever the theme (the .night class). */
@@ -1022,7 +1022,7 @@ input[type=range] { accent-color: var(--accent); }
 .so-how ol { padding-left: 18px; margin: 4px 0 6px; }
 .so-how li { margin: 3px 0; }
 
-/* Bearings Team */
+/* Northfix Team */
 .team-pitch h2 { font-size: 22px; line-height: 1.2; margin-bottom: 8px; }
 .team-pitch p + p { margin-top: 8px; }
 .team-head h2 { font-size: 22px; font-weight: 700; letter-spacing: -.01em; }

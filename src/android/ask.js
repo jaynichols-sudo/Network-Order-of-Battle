@@ -1,4 +1,4 @@
-// Talk to Bearings: log a conversation in one breath, or ask a plain question.
+// Talk to Northfix: log a conversation in one breath, or ask a plain question.
 // Ports QuickLogSheet and AskView in AskBearings.swift.
 import { M, person, quickPreview, quickSave, logLine, ask, show } from './model.js';
 import { esc, plural, icon, avatar, Day, $ } from './ui.js';
@@ -103,7 +103,7 @@ export function openAsk(initial = ''){
     result = r; fx.tap(); draw(body);
   };
   openSheet({
-    title: 'Ask Bearings', right: ['Done'], full: true,
+    title: 'Ask Northfix', right: ['Done'], full: true,
     mount(body){
       body.innerHTML = `<label class="searchbox">${icon('askSearch')}<input type="search" data-in="q" data-enter="go" value="${esc(q)}" placeholder="Ask about your network" autocomplete="off" enterkeyhint="search" aria-label="Ask about your network"></label><div class="ask-out"></div>`;
       draw(body);

@@ -44,7 +44,7 @@ const TripsView = {
         <label class="frow"><span>To</span><input type="date" class="date" name="end" value="${esc(keep.end)}"></label>
         <button type="button" class="btn prominent block" data-a="add">${icon('plus')}Add trip</button>
       </div>
-      <p class="foot">Trips stay on this phone. Bearings can’t read your calendar on Android, so add them here.</p>`;
+      <p class="foot">Trips stay on this phone. Northfix can’t read your calendar on Android, so add them here.</p>`;
   },
   handlers: {
     trip: id => push('trip', id),
@@ -89,7 +89,7 @@ function tripView(id){
             <button type="button" class="nrow-main" data-a="open" data-v="${esc(p.k)}">${avatar(p, 40)}<span class="nrow-text"><b>${esc(p.full)}</b><span>${esc([p.p, p.c].filter(Boolean).join(' · '))}</span><span class="near-line">${esc(place.name)}, ${d < 1 ? 'in town' : `${Math.round(d)} mi`}</span></span></button>
             <button type="button" class="pill-btn soft" data-a="write" data-v="${esc(p.k)}">Message</button></div>`).join('')}</div>
             <p class="foot">Tap Message for a ready-made “I’ll be in town” note.</p>`
-          : noPlaces && !isSample() ? callout({ic: 'contactCheck', tint: 'var(--info)', title: 'Find out where people are', text: 'LinkedIn’s export doesn’t say where people live. Bearings can work it out on this phone from your Contacts. Nothing leaves your phone.', button: M.locating ? 'Working…' : 'Use my Contacts', act: 'locate'})
+          : noPlaces && !isSample() ? callout({ic: 'contactCheck', tint: 'var(--info)', title: 'Find out where people are', text: 'LinkedIn’s export doesn’t say where people live. Northfix can work it out on this phone from your Contacts. Nothing leaves your phone.', button: M.locating ? 'Working…' : 'Use my Contacts', act: 'locate'})
           : `<p class="foot">Nobody you know is placed near ${esc(t.city.split(',')[0])} yet. Try a wider distance, or set people’s locations from their profiles.</p>`}
         <button type="button" class="btn big tint-bad del-ev" data-a="remove">${icon('trash')}Remove this trip</button>`;
       body.scrollTop = st;

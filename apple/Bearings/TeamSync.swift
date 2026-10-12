@@ -2,7 +2,7 @@ import Foundation
 import CryptoKit
 import Observation
 
-// Bearings Team: pool who your team knows through a small server that only ever sees ciphertext.
+// Northfix Team: pool who your team knows through a small server that only ever sees ciphertext.
 // The team key lives in the invite link after the "#", in this device's Keychain, and nowhere
 // else. See docs/team.md for the format and the API.
 
@@ -103,7 +103,7 @@ final class TeamSync {
     var trialEnds: Date? { saved?.trialEnds ?? (demo ? Date().addingTimeInterval(23 * 86400) : nil) }
     var myName: String { saved?.myName ?? "" }
     var myTitle: String { saved?.myTitle ?? "" }
-    /// Everyone on an active team gets Bearings Pro.
+    /// Everyone on an active team gets Northfix Pro.
     var grantsPro: Bool { saved != nil && !readOnly }
 
     private init() {
@@ -125,7 +125,7 @@ final class TeamSync {
             switch self {
             case .server(let m): return m
             case .notConfigured: return "Team isn’t set up in this build yet."
-            case .badLink: return "That doesn’t look like a Bearings team invite. Ask for a new link."
+            case .badLink: return "That doesn’t look like a Northfix team invite. Ask for a new link."
             case .cantRead: return "Couldn’t unlock a teammate’s share. Ask them to sync again."
             }
         }

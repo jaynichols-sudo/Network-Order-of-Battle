@@ -2,13 +2,13 @@ import Foundation
 import EventKit
 
 /// Follow-ups in Apple Reminders. With it on, "Remind me" also adds a reminder to a
-/// "Bearings" list (so it shows in Siri, on the watch and on the Mac), and checking it
+/// "Northfix" list (so it shows in Siri, on the watch and on the Mac), and checking it
 /// off in Reminders marks the follow-up done here. Everything stays on the device.
 @MainActor
 final class ReminderSync {
     static let shared = ReminderSync()
     private let store = EKEventStore()
-    private let listName = "Bearings"
+    private let listName = "Northfix"
 
     var enabled: Bool {
         get { UserDefaults.standard.bool(forKey: "remindersSync") }
@@ -28,9 +28,18 @@ final class ReminderSync {
         set { UserDefaults.standard.set(newValue, forKey: "reminderIDs") }
     }
 
+    /// Renames the old "Bearings" list in place, so checked-off follow-ups keep syncing.
+    private func rename(_ c: EKCalendar) {
+        guard c.title == "Bearings" else { return }
+        c.title = listName
+        try? store.saveCalendar(c, commit: true)
+    }
+
     private func list() -> EKCalendar? {
-        if let id = UserDefaults.standard.string(forKey: "reminderList"), let c = store.calendar(withIdentifier: id) { return c }
-        if let c = store.calendars(for: .reminder).first(where: { $0.title == listName }) {
+        if let id = UserDefaults.standard.string(forKey: "reminderList"), let c = store.calendar(withIdentifier: id) { rename(c); return c }
+        // the list was called "Bearings" before the app was renamed
+        if let c = store.calendars(for: .reminder).first(where: { $0.title == listName || $0.title == "Bearings" }) {
+            rename(c)
             UserDefaults.standard.set(c.calendarIdentifier, forKey: "reminderList")
             return c
         }

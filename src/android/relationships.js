@@ -15,7 +15,7 @@ registerRoute('moves', () => ({
     const leaving = list.filter(m => m.kind === 'transition'), rotating = list.filter(m => m.kind === 'pcs');
     const rows = ms => `<div class="card list">${ms.map(m => { const p = person(m.k); return p ? `<div class="best">${personRow(p)}<p class="muted why">${esc(m.why)}</p></div>` : ''; }).join('')}</div>`;
     body.innerHTML = !list.length
-      ? empty('swap', 'No moves spotted', 'Bearings looks for people whose titles say they’re transitioning or retiring, and service members who’ve been in an assignment two years or more. Set “In this role since” on a profile to sharpen it.')
+      ? empty('swap', 'No moves spotted', 'Northfix looks for people whose titles say they’re transitioning or retiring, and service members who’ve been in an assignment two years or more. Set “In this role since” on a profile to sharpen it.')
       : `${leaving.length ? `<p class="sec-h">Leaving service or retiring</p>${rows(leaving)}<p class="foot">A good moment to help, and to stay close as they land somewhere new.</p>` : ''}
          ${rotating.length ? `<p class="sec-h">Likely to rotate</p>${rows(rotating)}<p class="foot">Most tours run two to three years. Reconnect before they move, then again after.</p>` : ''}`;
   },
@@ -47,7 +47,7 @@ registerRoute('intros', () => ({
   update(body){
     const list = intros();
     body.innerHTML = !list.length
-      ? empty('waysIn', 'No intros yet', 'When you ask someone for an intro from Ways in, tap Track it. Bearings follows it from asked to made to met.')
+      ? empty('waysIn', 'No intros yet', 'When you ask someone for an intro from Ways in, tap Track it. Northfix follows it from asked to made to met.')
       : ['asked', 'made', 'met', 'declined'].map(st => { const rows = list.filter(x => x.st === st); return rows.length ? `<p class="sec-h">${ST_LABEL[st]}</p><div class="card list">${rows.map(introRow).join('')}</div>` : ''; }).join('');
   },
   handlers: {
@@ -83,7 +83,7 @@ export function openTrackIntro(via, company){
       body.innerHTML = `<div class="card form"><input type="text" class="field" placeholder="Who you want to meet (optional)" autocomplete="off">
           <div class="lrow"><span class="muted">At</span><span>${esc(company)}</span></div>
           <div class="lrow"><span class="muted">Asking</span><span>${esc(p.full)}</span></div></div>
-        <p class="foot">Bearings reminds you to nudge after a week, and keeps the history on their profile.</p>`;
+        <p class="foot">Northfix reminds you to nudge after a week, and keeps the history on their profile.</p>`;
       setTimeout(() => { const i = $('input', body); if (i) i.focus(); }, 300);
     },
   });

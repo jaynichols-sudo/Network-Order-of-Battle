@@ -103,7 +103,7 @@ function banner(){
   if (M.error) return callout({ic: 'warn', tint: 'var(--bad)', title: 'Couldn’t load', text: M.error});
   if (isStarter()){
     const at = exportRequestedAt();
-    if (at) return callout({ic: 'mail', tint: 'var(--info)', title: 'Watch for LinkedIn’s email', text: `You asked for your LinkedIn data ${Day.ago(at.toISOString().slice(0, 10))}. When the email arrives, download the file and open it with Bearings. Your notes and stars come along.`, button: 'I have the file', act: 'import'});
+    if (at) return callout({ic: 'mail', tint: 'var(--info)', title: 'Watch for LinkedIn’s email', text: `You asked for your LinkedIn data ${Day.ago(at.toISOString().slice(0, 10))}. When the email arrives, download the file and open it with Northfix. Your notes and stars come along.`, button: 'I have the file', act: 'import'});
     return callout({ic: 'download', tint: 'var(--accent)', title: 'This is your contacts. Add LinkedIn for the full picture', text: 'LinkedIn adds everyone you’re connected to, who you message, and who changed jobs.', button: 'Ask LinkedIn for my data', act: 'askLinkedIn'});
   }
   if (isSample()) return callout({ic: 'download', tint: 'var(--accent)', title: 'See your own network', text: 'Import your LinkedIn connections. It takes about three minutes and stays private to you.', button: 'Import connections', act: 'import'});

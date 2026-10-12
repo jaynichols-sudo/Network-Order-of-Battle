@@ -1,4 +1,4 @@
-// Bearings Team on Android: the encrypted team (teamsync.js), the team overview, team pack
+// Northfix Team on Android: the encrypted team (teamsync.js), the team overview, team pack
 // files shared by hand, and the year in review. The same files and card as the iPhone.
 import { M, show, isSample, saveFile, persons, refreshAll } from './model.js';
 import { esc, icon, fmt, Day, plural, $, menu, prompt, confirmDialog } from './ui.js';
@@ -30,11 +30,11 @@ const previewing = () => M.api.teamList().some(t => /^demo-/.test(t.id));
 
 function pitch(){
   return `<div class="card pad team-pitch"><h2 class="serif">Pool who your team knows, privately.</h2>
-      <p>Everything is encrypted on your phone before it leaves; the Bearings server can’t read it.</p>
+      <p>Everything is encrypted on your phone before it leaves; the Northfix server can’t read it.</p>
       <p class="muted small">Teammates see names, titles, employers and how well you know each person, plus your pursuits and watchlist. Never notes, messages, emails or tags.</p></div>
     <div class="btn-stack"><button type="button" class="btn prominent big block" data-a="start">${icon('people')}Start a team</button>
       <button type="button" class="btn big block" data-a="joinLink">${icon('link')}Join with a link</button></div>
-    <p class="foot">A team gets a 30-day free trial for up to 5 people. Everyone on a team gets Bearings Pro.</p>`;
+    <p class="foot">A team gets a 30-day free trial for up to 5 people. Everyone on a team gets Northfix Pro.</p>`;
 }
 
 function memberRow(m, info){
@@ -182,7 +182,7 @@ export function openTeam(){
         await load(body);
       },
       async copyLink(){ if (await copy(ctx.link)) show('Invite link copied'); },
-      async shareLink(){ const r = await shareText(`Join my team on Bearings: ${ctx.link}`, 'Join my team on Bearings'); if (r === 'copied') show('Invite link copied'); },
+      async shareLink(){ const r = await shareText(`Join my team on Northfix: ${ctx.link}`, 'Join my team on Northfix'); if (r === 'copied') show('Invite link copied'); },
       async copyInvite(code){ try { if (await copy(await T.linkFor(code))) show('Invite link copied'); } catch (e) { show(errText(e)); } },
       async revoke(code, t){
         const body = t.closest('.sheet-body');
@@ -232,7 +232,7 @@ export function openTeam(){
       },
       async share(){
         const me = (prefs.name || '').trim();
-        try { await shareFile(`Bearings team pack${me ? ' - ' + me : ''}.json`, M.api.teamPack(me || 'A teammate'), {title: 'Share your team pack'}); }
+        try { await shareFile(`Northfix team pack${me ? ' - ' + me : ''}.json`, M.api.teamPack(me || 'A teammate'), {title: 'Share your team pack'}); }
         catch (e) { if (!/cancel/i.test((e && e.message) || '')) show('Couldn’t share: ' + errText(e)); }
       },
       add(_, t){
@@ -297,7 +297,7 @@ export function openJoin(inv, done){
       catch (e) { st.busy = false; sync(); say(errText(e), true); }
     }],
     mount(body){
-      body.innerHTML = `${st.inv ? '<div class="card pad"><p>You’re invited to a team on Bearings. Add your name so your teammates know who you are.</p></div>'
+      body.innerHTML = `${st.inv ? '<div class="card pad"><p>You’re invited to a team on Northfix. Add your name so your teammates know who you are.</p></div>'
           : `<div class="card form"><textarea class="field" rows="3" data-in="link" placeholder="Paste the invite link" autocapitalize="none" autocorrect="off" spellcheck="false"></textarea></div>`}
         <div class="card form top12">
           <input type="text" class="field" data-in="name" value="${esc(st.name)}" placeholder="Your name" autocomplete="name">
@@ -309,7 +309,7 @@ export function openJoin(inv, done){
       if (st.inv) T.checkInvite(st.inv.code).catch(e => say(errText(e), true));
     },
     handlers: {
-      link(v){ st.link = v; sync(); say(v.trim() && !T.parseInvite(v) ? 'That doesn’t look like a Bearings invite link.' : '', true); },
+      link(v){ st.link = v; sync(); say(v.trim() && !T.parseInvite(v) ? 'That doesn’t look like a Northfix invite link.' : '', true); },
       name(v){ st.name = v; sync(); },
       title(v){ st.title = v; },
     },
@@ -364,7 +364,7 @@ function drawYear(r, sample){
       y += 24;
     }
   }
-  c.fillStyle = 'rgba(255,255,255,.85)'; c.font = '600 12px Geist'; c.fillText('Mapped with Bearings', 26, H - 26);
+  c.fillStyle = 'rgba(255,255,255,.85)'; c.font = '600 12px Geist'; c.fillText('Mapped with Northfix', 26, H - 26);
   c.fillStyle = 'rgba(255,255,255,.5)'; c.font = '400 12px Geist'; c.textAlign = 'right'; c.fillText(`${fmt(r.total)} people`, W - 26, H - 26);
   return cv;
 }

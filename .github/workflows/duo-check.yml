@@ -1,4 +1,4 @@
-name: Bearings iPhone Duo check
+name: Northfix iPhone Duo check
 
 # Builds with Xcode 27.1 (the iPhone Duo SDK) and screenshots the app on the Duo simulator's
 # outer (closed) screen; the simulator has no command to unfold it. Screens go to the duo-screens branch.

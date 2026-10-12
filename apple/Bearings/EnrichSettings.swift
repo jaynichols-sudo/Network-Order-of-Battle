@@ -88,7 +88,7 @@ struct EnrichSettingsSection: View {
             Text("ZoomInfo and Seamless.AI")
         } footer: {
             Text(provider == .seamless
-                 ? "Uses your own Seamless.AI account: sign in on Seamless.AI’s page (Bearings never sees your password). Each person looked up uses one of your research credits. Only the names, companies and titles you choose to look up are sent to Seamless.AI. Your sign-in stays in this device’s Keychain."
+                 ? "Uses your own Seamless.AI account: sign in on Seamless.AI’s page (Northfix never sees your password). Each person looked up uses one of your research credits. Only the names, companies and titles you choose to look up are sent to Seamless.AI. Your sign-in stays in this device’s Keychain."
                  : "Uses your own account to fill in work email, phone, current title and city for the people you choose. Only their names and companies are sent to the provider, and only when you ask. Your login stays in this device’s Keychain and is never synced. ZoomInfo’s API needs API access on your contract. No account? Export a CSV from any provider (ZoomInfo, Seamless.AI, Apollo) and use Import an enrichment file on the You tab; it’s matched on this device.")
         }
     }

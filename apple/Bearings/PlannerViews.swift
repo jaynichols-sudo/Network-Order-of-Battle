@@ -14,7 +14,7 @@ struct ComingUp: View {
             if !cal.enabled || !cal.authorized {
                 if !promptHidden && !model.info.isSample {
                     Callout(icon: "calendar.badge.clock", tint: Theme.violet, title: "Prep for meetings and trips",
-                            text: "Bearings can read your calendar on this device to brief you before meetings with people you know, and to show who’s near where you’re traveling.",
+                            text: "Northfix can read your calendar on this device to brief you before meetings with people you know, and to show who’s near where you’re traveling.",
                             button: "Use my calendar") {
                         Task {
                             if await CalendarService.shared.requestAccess() { await CalendarService.shared.scan(model: model, force: true) }
@@ -36,7 +36,7 @@ struct ComingUp: View {
             }
             if cal.enabled && cal.authorized && cal.home == nil && !model.info.isSample {
                 Callout(icon: "house", tint: Theme.info, title: "Where’s home?",
-                        text: "Tell Bearings your home city so it can tell trips from local meetings. You can set it in Settings.",
+                        text: "Tell Northfix your home city so it can tell trips from local meetings. You can set it in Settings.",
                         button: "Open Settings") { model.showSettings = true }
             }
         }
@@ -269,7 +269,7 @@ struct TripsView: View {
                         .listRowBackground(Color.clear)
                 }
                 if CalendarService.shared.trips.isEmpty {
-                    Text(CalendarService.shared.enabled ? "No trips found in the next two months. Add one below." : "Add a trip, or turn on your calendar in Settings so Bearings finds them for you.")
+                    Text(CalendarService.shared.enabled ? "No trips found in the next two months. Add one below." : "Add a trip, or turn on your calendar in Settings so Northfix finds them for you.")
                         .foregroundStyle(.secondary)
                 }
             }

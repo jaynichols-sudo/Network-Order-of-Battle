@@ -74,7 +74,7 @@ final class BearingsUITests: XCTestCase {
         team.tap()
         XCTAssertTrue(text(app, containing: "Share my pack").waitForExistence(timeout: 10))
         app.navigationBars.buttons.firstMatch.tap()
-        let pro = text(app, containing: "Bearings Pro")
+        let pro = text(app, containing: "Northfix Pro")
         XCTAssertTrue(pro.waitForExistence(timeout: 10))
         pro.tap()
         XCTAssertTrue(text(app, containing: "Yearly").waitForExistence(timeout: 10))

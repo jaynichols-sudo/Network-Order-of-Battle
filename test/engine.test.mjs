@@ -123,7 +123,7 @@ test('notes and stars survive a backup and restore', () => {
 });
 
 test('restore rejects files that are not backups', () => {
-  assert.match(raw('restore', '{"hello":1}').error, /isn’t a Bearings backup/);
+  assert.match(raw('restore', '{"hello":1}').error, /isn’t a Northfix backup/);
 });
 
 test('ways in: finds people at a company from the sample', () => {
@@ -194,7 +194,7 @@ test('team packs: share who you know, never your notes, and they show up in Ways
   assert.equal(call('teamList').length, 1);
   call('removeTeamPack', 'Jim');
   assert.equal(call('introPaths', 'NAVFAC').team.length, 0);
-  assert.throws(() => call('addTeamPack', '{"kind":"notes-backup"}'), /isn’t a Bearings team pack/);
+  assert.throws(() => call('addTeamPack', '{"kind":"notes-backup"}'), /isn’t a Northfix team pack/);
 });
 
 test('year in review counts this year only', () => {

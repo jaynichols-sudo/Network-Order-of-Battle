@@ -38,7 +38,7 @@ final class Diagnostics: NSObject, MXMetricManagerSubscriber, @unchecked Sendabl
         let info = Bundle.main.infoDictionary ?? [:]
         let v = info["CFBundleShortVersionString"] as? String ?? "", b = info["CFBundleVersion"] as? String ?? ""
         return """
-        Bearings \(v) (\(b))
+        Northfix \(v) (\(b))
         \(UIDevice.current.model), iOS \(UIDevice.current.systemVersion)
         Network: \(model.info.isSample ? "sample" : "\(model.info.count) people"), \(model.places.count) placed, saved to \(model.isCloud ? "iCloud" : "device")
         Crash reports attached: \(reports.count)
@@ -60,7 +60,7 @@ struct FeedbackMail: UIViewControllerRepresentable {
         let vc = MFMailComposeViewController()
         vc.mailComposeDelegate = context.coordinator
         vc.setToRecipients([to])
-        vc.setSubject("Bearings feedback")
+        vc.setSubject("Northfix feedback")
         vc.setMessageBody(body, isHTML: false)
         for u in attachments { if let d = try? Data(contentsOf: u) { vc.addAttachmentData(d, mimeType: "application/json", fileName: u.lastPathComponent) } }
         if let d = screenshot?.jpegData(compressionQuality: 0.8) { vc.addAttachmentData(d, mimeType: "image/jpeg", fileName: "screen.jpg") }
@@ -131,7 +131,7 @@ struct FeedbackSheet: View {
                         if FeedbackMail.available { composing = true }
                         else {
                             let body = (text + "\n\n—\n" + Diagnostics.shared.summary(model: model)).addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
-                            if let u = URL(string: "mailto:\(AppInfo.supportEmail)?subject=Bearings%20feedback&body=\(body)") { UIApplication.shared.open(u) }
+                            if let u = URL(string: "mailto:\(AppInfo.supportEmail)?subject=Northfix%20feedback&body=\(body)") { UIApplication.shared.open(u) }
                             dismiss()
                         }
                     }

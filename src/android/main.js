@@ -1,4 +1,4 @@
-// Bearings for Android: boots the shell, loads the saved network through the shared
+// Northfix for Android: boots the shell, loads the saved network through the shared
 // engine, and wires up the device (back button, incoming files, notifications).
 import { M, reload, setToast, onChange, isSample, refreshAll, person, followUp } from './model.js';
 import { mountShell, registerTab, go, push, refreshVisible, back, toast, N } from './nav.js';
@@ -65,7 +65,7 @@ async function boot(){
     resume: () => { if (new Date().toDateString() !== bootDay) location.reload(); else { checkArrival(); autoSync(); } },
     url: async u => {
       if (handleTeamUrl(u) || handleLinkedInUrl(u) || handleSeamlessUrl(u)) return;
-      // text shared to Bearings (MainActivity turns it into bearings://notes?text=…)
+      // text shared to Northfix (MainActivity turns it into bearings://notes?text=…)
       if (/^bearings:\/\/notes/i.test(u)){ const t = new URL(u).searchParams.get('text') || ''; if (t.trim()){ go('home'); ingestNotes(t, guessSource(t, new URL(u).searchParams.get('from') || '')); } return; }
       if (!/^(content|file):/i.test(u)) return;
       try {
@@ -95,5 +95,5 @@ async function boot(){
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => refreshVisible('fonts'));
   document.documentElement.classList.add('ready');
 }
-boot().catch(e => { console.error(e); const a = document.getElementById('app'); if (a) a.innerHTML = `<p style="padding:40px 24px;font:16px system-ui">Bearings couldn’t start: ${String((e && e.message) || e).replace(/</g, '&lt;')}</p>`; });
+boot().catch(e => { console.error(e); const a = document.getElementById('app'); if (a) a.innerHTML = `<p style="padding:40px 24px;font:16px system-ui">Northfix couldn’t start: ${String((e && e.message) || e).replace(/</g, '&lt;')}</p>`; });
 export { N, refreshAll };

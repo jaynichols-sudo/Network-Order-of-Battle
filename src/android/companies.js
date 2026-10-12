@@ -23,7 +23,7 @@ const industryOptions = () => (M.constants.industries || []).filter(i => i.id !=
 function knowLine(t){ let s = `You know ${fmt(t.count)}`; if (t.stars > 0) s += `, ${t.stars} starred`; if (t.news > 0) s += `, ${t.news} new or moved`; return s; }
 
 function watchlist(){
-  if (!M.targets.length) return empty('scope', 'No watchlist yet', 'Pick the companies you’re working. Bearings shows where you don’t know anyone senior yet.', '<button type="button" class="btn prominent" data-a="add">Add a company</button>');
+  if (!M.targets.length) return empty('scope', 'No watchlist yet', 'Pick the companies you’re working. Northfix shows where you don’t know anyone senior yet.', '<button type="button" class="btn prominent" data-a="add">Add a company</button>');
   return `<div class="card list">${M.targets.map(t => `<button type="button" class="row trow" data-a="unit" data-v="${esc(t.name)}">${ring(t.score, 50)}<span class="trow-main"><b>${esc(t.name)}</b><span class="muted">${esc(knowLine(t))}</span><span class="small ${t.gaps.length ? 'bad' : 'good'}">${esc(t.gap)}</span></span>${icon('chevR', 'chev')}</button>`).join('')}
     <button type="button" class="row act accent" data-a="add">${icon('plusCircle')}<span>${M.info.lens ? 'Add a company, agency or command' : 'Add a company'}</span></button></div>
     <p class="foot">Coverage shows whether you know someone at each level: executive, director, manager and staff.</p>`;
@@ -80,7 +80,7 @@ function federal(){
     ${segmented('fedFilter', [['gaps', 'Gaps'], ['none', 'Not connected'], ['thin', 'Thin'], ['covered', 'Covered'], ['all', 'All']], fedFilter)}
     <div class="row-between" style="margin:8px 4px"><button type="button" class="link" data-a="fedFocus">${esc((FOCUS.find(f => f[0] === fedFocus) || FOCUS[0])[1])}</button><button type="button" class="link" data-a="fedDept">${esc(fedDept || 'All departments')}</button></div>
     ${groups.length ? groups.map(([d, rs]) => `<p class="sec-h">${esc(d)}</p><div class="card list">${rs.map(row).join('')}</div>`).join('') : '<p class="muted pad">Nothing here with these filters.</p>'}
-    <p class="foot">Bearings matches each person’s employer and title to ${t.agencies} federal departments, agencies and commands. Covered means ${withTeam ? 'you or a teammate know' : 'you know'} someone senior and someone warm there.</p>`;
+    <p class="foot">Northfix matches each person’s employer and title to ${t.agencies} federal departments, agencies and commands. Covered means ${withTeam ? 'you or a teammate know' : 'you know'} someone senior and someone warm there.</p>`;
 }
 function allCompanies(){
   const o = M.api.orgs({text: '', filters: {}});
@@ -236,7 +236,7 @@ export function openIntro(initial = ''){
   const results = body => {
     const out = $('.intro-out', body);
     if (q.trim().length < 2){
-      out.innerHTML = `<p class="muted pad">Type a company, agency or command. Bearings finds who works there now, who used to, and who you’re close to nearby in the same field.</p>`;
+      out.innerHTML = `<p class="muted pad">Type a company, agency or command. Northfix finds who works there now, who used to, and who you’re close to nearby in the same field.</p>`;
       return;
     }
     const p = M.api.introPaths(q);

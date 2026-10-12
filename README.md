@@ -1,15 +1,15 @@
-# Bearings
+# Northfix
 
 **Know where everyone in your network landed.**
 
-Bearings turns your LinkedIn export into a private map of your network. It shows:
+Northfix turns your LinkedIn export into a private map of your network. It shows:
 
 - who changed jobs
 - who's waiting on your reply
 - who's near where you're traveling
 - who you know, and who you used to know, at the companies you're working
 
-Everything stays on your devices and in your own iCloud. There is no Bearings account and no Bearings server.
+Everything stays on your devices and in your own iCloud. There is no Northfix account and no Northfix server.
 
 ## Apps
 

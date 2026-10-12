@@ -2,7 +2,7 @@ import Foundation
 import AuthenticationServices
 import UIKit
 
-/// Sign-ins that go through Bearings' small helper (server/connect): LinkedIn's data portability
+/// Sign-ins that go through Northfix' small helper (server/connect): LinkedIn's data portability
 /// API and Seamless.AI. The helper only swaps the sign-in code for a token, because that step
 /// needs a secret the app can't hold. Data goes straight between the provider and the device.
 enum ConnectHelper {

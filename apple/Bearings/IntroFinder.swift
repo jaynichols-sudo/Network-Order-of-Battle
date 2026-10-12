@@ -30,7 +30,7 @@ struct IntroFinderView: View {
                     results(p)
                 } else {
                     Section {
-                        Text("Type a company, agency or command. Bearings finds who works there now, who used to, and who you’re close to nearby in the same field.")
+                        Text("Type a company, agency or command. Northfix finds who works there now, who used to, and who you’re close to nearby in the same field.")
                             .font(Theme.geist(.subheadline)).foregroundStyle(.secondary)
                     }
                     if !suggestions.isEmpty {
@@ -207,7 +207,7 @@ struct AccountMapDocument: View {
                 }
             }
             Divider()
-            Text("Prepared with Bearings. Relationship strength comes from your own LinkedIn messages. Confidential.")
+            Text("Prepared with Northfix. Relationship strength comes from your own LinkedIn messages. Confidential.")
                 .font(.custom("Geist-Regular", fixedSize: 9)).foregroundStyle(.black.opacity(0.45))
         }
         .padding(36)

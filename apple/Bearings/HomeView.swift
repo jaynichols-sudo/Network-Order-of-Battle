@@ -142,7 +142,7 @@ struct HomeView: View {
         } else if model.info.isStarter {
             if let at = ExportReminder.requestedAt {
                 Callout(icon: "envelope.badge", tint: Theme.info, title: "Watch for LinkedIn’s email",
-                        text: "You asked for your LinkedIn data \(Day.ago(Day.fmt.string(from: at))). When the email arrives, download the file and share it to Bearings. Your notes and stars come along.",
+                        text: "You asked for your LinkedIn data \(Day.ago(Day.fmt.string(from: at))). When the email arrives, download the file and share it to Northfix. Your notes and stars come along.",
                         button: "I have the file") { model.showImport = true }
             } else {
                 Callout(icon: "square.and.arrow.down", tint: Theme.accent, title: "This is your contacts. Add LinkedIn for the full picture",

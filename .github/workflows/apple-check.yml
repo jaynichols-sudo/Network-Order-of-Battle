@@ -1,4 +1,4 @@
-name: Bearings native app check
+name: Northfix native app check
 
 on:
   # run by hand from the Actions tab: Mac runners use build minutes ten times faster

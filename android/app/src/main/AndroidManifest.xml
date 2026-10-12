@@ -19,7 +19,7 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
-            <!-- "Open with Bearings" for the LinkedIn export (.zip) or Connections.csv -->
+            <!-- "Open with Northfix" for the LinkedIn export (.zip) or Connections.csv -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -40,11 +40,11 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="bearings" android:host="linkedin" />
                 <data android:scheme="bearings" android:host="seamless" />
-                <!-- a Bearings Team invite, handed off from the invite page -->
+                <!-- a Northfix Team invite, handed off from the invite page -->
                 <data android:scheme="bearings" android:host="team" />
             </intent-filter>
 
-            <!-- "Share to Bearings" from Gmail, Files or Drive; MainActivity turns it into a VIEW -->
+            <!-- "Share to Northfix" from Gmail, Files or Drive; MainActivity turns it into a VIEW -->
             <intent-filter>
                 <action android:name="android.intent.action.SEND" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -55,7 +55,7 @@
                 <data android:mimeType="application/json" />
             </intent-filter>
 
-            <!-- "Share to Bearings" for meeting notes as text (Plaud, Keep, Samsung Notes) -->
+            <!-- "Share to Northfix" for meeting notes as text (Plaud, Keep, Samsung Notes) -->
             <intent-filter>
                 <action android:name="android.intent.action.SEND" />
                 <category android:name="android.intent.category.DEFAULT" />

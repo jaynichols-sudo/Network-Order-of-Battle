@@ -91,7 +91,7 @@ struct AgencyMapList: View {
                     }
                 }
                 Section {
-                    Text("Bearings matches each person’s employer and title to \(m.totals.agencies) federal departments, agencies and commands. Covered means you know someone senior and someone warm there. Agencies change names: an old name still matches.")
+                    Text("Northfix matches each person’s employer and title to \(m.totals.agencies) federal departments, agencies and commands. Covered means you know someone senior and someone warm there. Agencies change names: an old name still matches.")
                         .font(Theme.geist(.footnote)).foregroundStyle(.secondary)
                 }
             } else {

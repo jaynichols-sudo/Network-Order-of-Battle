@@ -2,7 +2,7 @@ import Foundation
 import StoreKit
 import Observation
 
-/// Bearings Pro. The map, Today, People, Companies, Catch Up, search and reminders stay
+/// Northfix Pro. The map, Today, People, Companies, Catch Up, search and reminders stay
 /// free. Pro adds the tools for working a network: event mode, ways in, team packs,
 /// arrival alerts, the account map PDF and Salesforce.
 ///

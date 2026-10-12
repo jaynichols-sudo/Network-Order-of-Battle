@@ -96,13 +96,13 @@ export async function copy(text){
     ta.remove(); return ok;
   }
 }
-export async function shareText(text, title = 'Bearings'){
+export async function shareText(text, title = 'Northfix'){
   if (NATIVE){ try { await Share.share({title, text, dialogTitle: title}); return true; } catch { return false; } }
   if (navigator.share){ try { await navigator.share({title, text}); return true; } catch { return false; } }
   await copy(text); return 'copied';
 }
 /** Writes a file to the cache folder and opens the share sheet; in a browser it downloads. */
-export async function shareFile(name, data, {type = 'application/json', base64 = false, title = 'Bearings'} = {}){
+export async function shareFile(name, data, {type = 'application/json', base64 = false, title = 'Northfix'} = {}){
   if (NATIVE){
     const w = await Filesystem.writeFile({path: name, data, directory: Directory.Cache, ...(base64 ? {} : {encoding: Encoding.UTF8})});
     await Share.share({title, files: [w.uri], dialogTitle: title});
@@ -114,7 +114,7 @@ export async function shareFile(name, data, {type = 'application/json', base64 =
   return true;
 }
 
-/* ---------- incoming files ("Open with" / "Share to Bearings") ---------- */
+/* ---------- incoming files ("Open with" / "Share to Northfix") ---------- */
 export async function readIncoming(url){
   const r = await Filesystem.readFile({path: url});
   const b64 = typeof r.data === 'string' ? r.data : '';
@@ -182,7 +182,7 @@ export async function scheduleMonday(){
     await cancelIds([N_MONDAY]);
     if (!prefs.mondayBrief || !prefs.notify) return;
     if (!(await askNotify())) return;
-    await LocalNotifications.schedule({notifications: [{id: N_MONDAY, title: 'Your week in Bearings', body: 'Five people worth reaching out to, with a reason and a draft for each. About ten minutes.',
+    await LocalNotifications.schedule({notifications: [{id: N_MONDAY, title: 'Your week in Northfix', body: 'Five people worth reaching out to, with a reason and a draft for each. About ten minutes.',
       schedule: {on: {weekday: 2, hour: 7, minute: 30}, allowWhileIdle: true}, extra: {weekly: true}}]});
   } catch {}
 }
@@ -196,8 +196,8 @@ export async function exportRequested(){
     await cancelIds([N_EXPORT1, N_EXPORT2]);
     const next = new Date(); next.setDate(next.getDate() + 1); next.setHours(9, 30, 0, 0);
     await LocalNotifications.schedule({notifications: [
-      {id: N_EXPORT1, title: 'Your LinkedIn data may be ready', body: 'Look for an email from LinkedIn, download the file, then open it with Bearings.', schedule: {at: new Date(Date.now() + 20 * 60000), allowWhileIdle: true}, extra: {refresh: true}},
-      {id: N_EXPORT2, title: 'Your full LinkedIn archive should be in', body: 'The full archive, with messages, takes up to a day. Open the email from LinkedIn and open the zip with Bearings to see who you talk to.', schedule: {at: next, allowWhileIdle: true}, extra: {refresh: true}},
+      {id: N_EXPORT1, title: 'Your LinkedIn data may be ready', body: 'Look for an email from LinkedIn, download the file, then open it with Northfix.', schedule: {at: new Date(Date.now() + 20 * 60000), allowWhileIdle: true}, extra: {refresh: true}},
+      {id: N_EXPORT2, title: 'Your full LinkedIn archive should be in', body: 'The full archive, with messages, takes up to a day. Open the email from LinkedIn and open the zip with Northfix to see who you talk to.', schedule: {at: next, allowWhileIdle: true}, extra: {refresh: true}},
     ]});
   } catch {}
 }
@@ -236,7 +236,7 @@ export async function contactsAllowed(){
 async function askContacts(){
   if (!NATIVE) throw new Error('Reading your contacts works in the phone app.');
   const p = await Contacts.requestPermissions();
-  if (p.contacts !== 'granted' && p.contacts !== 'limited') throw new Error('Bearings needs access to Contacts for this. You can turn it on in Android Settings under Apps, Bearings, Permissions.');
+  if (p.contacts !== 'granted' && p.contacts !== 'limited') throw new Error('Northfix needs access to Contacts for this. You can turn it on in Android Settings under Apps, Northfix, Permissions.');
 }
 /** Raw cards with names, company, emails, phones and addresses, for placing people on the map. */
 export async function readContactCards(){

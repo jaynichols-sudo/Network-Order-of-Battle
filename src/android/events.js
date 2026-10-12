@@ -197,7 +197,7 @@ export function openMetForm(eventId, m, editing = false){
         </div>
         <p class="sec-h">Note</p>
         <div class="card form"><textarea class="field" name="note" rows="5" placeholder="What you talked about, what you promised">${esc(m.note || '')}</textarea></div>
-        <p class="foot">Tap the microphone on the keyboard to dictate.${m.k ? '' : ' If they’re in your network, Bearings links them by name or email.'}</p>`;
+        <p class="foot">Tap the microphone on the keyboard to dictate.${m.k ? '' : ' If they’re in your network, Northfix links them by name or email.'}</p>`;
       if (!m.name) setTimeout(() => { const i = $('input[name="name"]', body); if (i) i.focus(); }, 300);
     },
   });

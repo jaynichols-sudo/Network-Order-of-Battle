@@ -1,5 +1,5 @@
 // Meeting notes from anywhere (apple/Bearings/MeetingNotes.swift): paste a Plaud summary,
-// a Google Keep or Samsung note, a reMarkable page, or share text to Bearings. The engine
+// a Google Keep or Samsung note, a reMarkable page, or share text to Northfix. The engine
 // finds the people you know in it and the action items; you pick who gets a short note,
 // and the action items become follow-ups. The full text stays where it came from.
 import { M, person, isSample, readNotes, saveMeetingNotes, show } from './model.js';
@@ -35,10 +35,10 @@ export function openNotes(forPerson = ''){
     title: 'Add meeting notes', left: ['Cancel'], right: ['Read', s => go(s)], full: true,
     mount(body){
       const p = forPerson && person(forPerson);
-      body.innerHTML = `<p class="foot first">A Plaud summary, a note from your notes app, a reMarkable page or any notes. Bearings finds the people you know and the action items.${p ? ` ${esc(p.f)} is included either way.` : ''}</p>
+      body.innerHTML = `<p class="foot first">A Plaud summary, a note from your notes app, a reMarkable page or any notes. Northfix finds the people you know and the action items.${p ? ` ${esc(p.f)} is included either way.` : ''}</p>
         <div class="card top8"><textarea class="msg-text notes-paste" data-in="text" placeholder="Paste your notes here" aria-label="Meeting notes"></textarea></div>
         <div class="btn-row"><button type="button" class="btn" data-a="paste">${icon('copy')}Paste</button><button type="button" class="btn" data-a="file">${icon('note')}Choose a file</button></div>
-        <p class="foot">You can also share notes to Bearings from Plaud or your notes app.</p>`;
+        <p class="foot">You can also share notes to Northfix from Plaud or your notes app.</p>`;
     },
     handlers: {
       text: v => { text = v; },

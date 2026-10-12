@@ -94,7 +94,7 @@ struct PursuitsWidgetView: View {
     }
 
     private var emptyText: String {
-        entry.glance.gen.isEmpty ? "Open Bearings to load your pursuits." : "No open pursuits. Add one from the You tab."
+        entry.glance.gen.isEmpty ? "Open Northfix to load your pursuits." : "No open pursuits. Add one from the You tab."
     }
 
     private func dueColor(_ p: PursuitGlance.Item) -> Color {

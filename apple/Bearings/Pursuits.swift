@@ -99,7 +99,7 @@ struct PursuitsView: View {
                 ContentUnavailableView {
                     Label("No pursuits yet", systemImage: "scope")
                 } description: {
-                    Text("Add a bid or a deal, and Bearings maps the people who decide it: who you know in each seat, the gaps, and your warmest ways in.")
+                    Text("Add a bid or a deal, and Northfix maps the people who decide it: who you know in each seat, the gaps, and your warmest ways in.")
                 } actions: {
                     Button("Add a pursuit") { adding = true }.buttonStyle(PillButtonStyle(kind: .primary))
                 }

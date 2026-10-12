@@ -45,8 +45,8 @@ struct ImportView: View {
                 }
                 Section {
                     step(1, "Ask LinkedIn for your data", "On LinkedIn’s “Get a copy of your data” page, choose “Want something in particular?” and tick Connections, Messages and Invitations. Then tap Request archive.")
-                    step(2, "Wait for the email", "That version usually arrives in about 10 minutes. Bearings will remind you. (The larger archive works too, but can take a day.)")
-                    step(3, "Bring the file here", "Download the zip and choose it below, or open it from Mail or Files and share it to Bearings.")
+                    step(2, "Wait for the email", "That version usually arrives in about 10 minutes. Northfix will remind you. (The larger archive works too, but can take a day.)")
+                    step(3, "Bring the file here", "Download the zip and choose it below, or open it from Mail or Files and share it to Northfix.")
                     Button {
                         if let u = URL(string: "https://www.linkedin.com/mypreferences/d/download-my-data") { openURL(u) }
                         Task { await ExportReminder.requested() }

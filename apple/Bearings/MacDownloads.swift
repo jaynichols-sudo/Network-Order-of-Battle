@@ -1,6 +1,6 @@
 import Foundation
 
-/// On the Mac, Bearings looks in Downloads for a LinkedIn export newer than the last import
+/// On the Mac, Northfix looks in Downloads for a LinkedIn export newer than the last import
 /// and offers to bring it in, so a refresh is one click after LinkedIn's email arrives.
 enum MacDownloads {
     static func newestExport(after: Date?) -> URL? {

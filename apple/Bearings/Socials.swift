@@ -28,7 +28,7 @@ enum SocialPlatform: String, CaseIterable, Identifiable {
             "Tap Download or transfer information, choose your Facebook profile, then Specific types of information.",
             "Tick Friends and followers only, then Next.",
             "Choose Download to device. Set Date range to All time and Format to JSON, then Create files.",
-            "Facebook tells you when it’s ready, usually within a few hours. Download the zip, then tap Add file here (or share the zip to Bearings).",
+            "Facebook tells you when it’s ready, usually within a few hours. Download the zip, then tap Add file here (or share the zip to Northfix).",
         ]
         case .instagram: return [
             "In Instagram, go to your profile, tap the menu (three lines), then Accounts Center.",
@@ -172,7 +172,7 @@ struct SocialsView: View {
             Section {
                 ForEach(SocialPlatform.allCases) { p in platformRow(p) }
             } header: { Text("Your downloads") } footer: {
-                Text("Each app lets you download your own data. Bearings reads only the friends and followers lists, on this iPhone, and never signs in to any of them. Facebook and Snapchat include names; Instagram and TikTok only usernames, which Bearings matches by handle.")
+                Text("Each app lets you download your own data. Northfix reads only the friends and followers lists, on this iPhone, and never signs in to any of them. Facebook and Snapchat include names; Instagram and TikTok only usernames, which Northfix matches by handle.")
             }
             if !d.strongest.isEmpty {
                 Section {

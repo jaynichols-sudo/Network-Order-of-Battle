@@ -73,7 +73,7 @@ struct MessageSheet: View {
                 } header: {
                     Text("Your message")
                 } footer: {
-                    Text("Edit it to sound like you. LinkedIn doesn’t let other apps send messages, so Bearings copies the text and opens their profile. Tap Message there and paste.")
+                    Text("Edit it to sound like you. LinkedIn doesn’t let other apps send messages, so Northfix copies the text and opens their profile. Tap Message there and paste.")
                 }
                 Section {
                     if !profile.isEmpty {

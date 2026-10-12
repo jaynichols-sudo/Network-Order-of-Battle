@@ -1,7 +1,7 @@
 {
   "name": "bearings",
   "version": "1.0.0",
-  "description": "Bearings: know where everyone in your network landed",
+  "description": "Northfix: know where everyone in your network landed",
   "scripts": {
     "build": "node scripts/build.mjs",
     "sync": "npm run build && npx cap sync",

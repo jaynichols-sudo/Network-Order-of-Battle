@@ -1,4 +1,4 @@
-// The federal map: departments, agencies and major military commands, so Bearings can
+// The federal map: departments, agencies and major military commands, so Northfix can
 // show where you are connected and, more importantly, where you are not.
 //
 // Each row: [department, name, short, aliases, tags]

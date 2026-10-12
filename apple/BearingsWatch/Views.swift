@@ -21,7 +21,7 @@ struct RootView: View {
                     TodayList()
                 }
             }
-            .navigationTitle(store.snap == nil ? "Bearings" : "Today")
+            .navigationTitle(store.snap == nil ? "Northfix" : "Today")
             .navigationDestination(for: WatchRoute.self) { r in
                 switch r {
                 case .section(let s): PeopleList(section: s)
@@ -51,7 +51,7 @@ struct EmptyStateView: View {
                     .font(.system(size: 42))
                     .foregroundStyle(WatchTheme.amber)
                     .accessibilityHidden(true)
-                Text("Open Bearings on your iPhone")
+                Text("Open Northfix on your iPhone")
                     .font(WatchTheme.font(.headline, .bold))
                     .foregroundStyle(WatchTheme.text)
                     .multilineTextAlignment(.center)
@@ -305,7 +305,7 @@ struct QuickNoteView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 10) {
-                Text("Say what happened and with whom. Bearings adds it to them and sets any follow-up you mention.")
+                Text("Say what happened and with whom. Northfix adds it to them and sets any follow-up you mention.")
                     .font(WatchTheme.font(.footnote))
                     .foregroundStyle(WatchTheme.text2)
                     .fixedSize(horizontal: false, vertical: true)

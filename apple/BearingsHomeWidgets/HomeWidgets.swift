@@ -50,7 +50,7 @@ struct HomeWidgetView: View {
     private var need: Int { entry.waiting + entry.due }
     private var items: [Glance.Item] { entry.glance.next ?? [] }
     private var headline: String {
-        entry.glance.gen.isEmpty ? "Open Bearings to load your network." : Calm.needLine(need)
+        entry.glance.gen.isEmpty ? "Open Northfix to load your network." : Calm.needLine(need)
     }
 
     var body: some View {
@@ -65,9 +65,9 @@ struct HomeWidgetView: View {
             }
             .widgetAccentable()
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel(need == 0 ? "Bearings, all caught up" : "Bearings, \(need) to get back to")
+            .accessibilityLabel(need == 0 ? "Northfix, all caught up" : "Northfix, \(need) to get back to")
         case .accessoryInline:
-            Text(need == 0 ? "Bearings: all caught up" : "\(entry.waiting) to reply · \(entry.due) to follow up")
+            Text(need == 0 ? "Northfix: all caught up" : "\(entry.waiting) to reply · \(entry.due) to follow up")
         case .accessoryRectangular:
             VStack(alignment: .leading, spacing: 1) {
                 Text(need == 0 ? "All caught up" : "\(need) to get back to")
@@ -170,7 +170,7 @@ struct HomeWidgetView: View {
             }
             if list.isEmpty {
                 Spacer(minLength: 0)
-                Text(entry.glance.gen.isEmpty ? "Your network appears here once Bearings has opened." : "No one is waiting on you.")
+                Text(entry.glance.gen.isEmpty ? "Your network appears here once Northfix has opened." : "No one is waiting on you.")
                     .font(Calm.font(13, .medium, relativeTo: .footnote))
                     .foregroundStyle(t.text2)
                 Spacer(minLength: 0)
@@ -334,7 +334,7 @@ struct BearingsHomeWidgets: Widget {
             HomeWidgetView(entry: entry)
                 .containerBackground(for: .widget) { CalmWidgetBackground() }
         }
-        .configurationDisplayName("Bearings")
+        .configurationDisplayName("Northfix")
         .description("Who needs you: who’s waiting on a reply and which follow-ups are due.")
         .supportedFamilies([.systemSmall, .systemMedium, .systemLarge, .accessoryCircular, .accessoryRectangular, .accessoryInline])
     }
@@ -349,7 +349,7 @@ struct CatchUpControl: ControlWidget {
                 Label("Catch Up", systemImage: "rectangle.stack")
             }
         }
-        .displayName("Bearings Catch Up")
+        .displayName("Northfix Catch Up")
         .description("Swipe through new connections and job changes.")
     }
 }
@@ -363,7 +363,7 @@ struct NearbyControl: ControlWidget {
             }
         }
         .displayName("Who’s nearby")
-        .description("Opens the Bearings map around you.")
+        .description("Opens the Northfix map around you.")
     }
 }
 #endif

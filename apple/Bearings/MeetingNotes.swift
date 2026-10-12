@@ -3,7 +3,7 @@ import UIKit
 import UniformTypeIdentifiers
 
 // Meeting notes from anywhere: a Plaud transcript or summary, an Apple Note, a reMarkable
-// page (handwriting read on the phone), or a file. Bearings finds the people you know in
+// page (handwriting read on the phone), or a file. Northfix finds the people you know in
 // it and the action items, then files a short note on each person and turns the action
 // items into reminders. The full text stays where it came from.
 
@@ -47,7 +47,7 @@ extension AppModel {
         await ingestNotes(text, source: NotesInbox.guessSource(text, fileName: url.lastPathComponent + " " + extra), forPerson: forPerson)
     }
 
-    /// Notes shared from other apps while Bearings was closed.
+    /// Notes shared from other apps while Northfix was closed.
     func drainNotesInbox() async {
         guard loaded, notesDraft == nil, let item = NotesInbox.drain().last else { return }
         await ingestNotes(item.text, source: item.source)
@@ -140,7 +140,7 @@ struct MeetingNotesSheet: View {
                     } header: {
                         Text("Action items")
                     } footer: {
-                        Text(useReminders ? "Each one goes on your Bearings list in Reminders, due in three days." : "Each one becomes a follow-up in Bearings for the person it mentions.")
+                        Text(useReminders ? "Each one goes on your Northfix list in Reminders, due in three days." : "Each one becomes a follow-up in Northfix for the person it mentions.")
                     }
                 }
 
@@ -237,7 +237,7 @@ struct AddNotesPrompt: ViewModifier {
                 }
                 Button("Choose a file or photo") { picking = true }
             } message: {
-                Text("A Plaud summary, an Apple Note, a reMarkable page or any notes. Bearings finds the people you know and the action items. You can also share notes to Bearings from those apps.")
+                Text("A Plaud summary, an Apple Note, a reMarkable page or any notes. Northfix finds the people you know and the action items. You can also share notes to Northfix from those apps.")
             }
             .fileImporter(isPresented: $picking, allowedContentTypes: NoteText.types) { r in
                 if case .success(let url) = r { Task { await model.ingestNotesFile(url, forPerson: forPerson) } }

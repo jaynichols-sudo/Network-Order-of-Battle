@@ -2,7 +2,7 @@ import SwiftUI
 import AppIntents
 import CoreLocation
 
-// Talk to Bearings: log a conversation in one breath, or ask a plain question.
+// Talk to Northfix: log a conversation in one breath, or ask a plain question.
 // Both work in the app, from Siri and from the Action button.
 
 struct QuickLogResult: Decodable {
@@ -59,7 +59,7 @@ extension AppModel {
     }
 }
 
-/// "Quick note": say or type what happened; Bearings files it.
+/// "Quick note": say or type what happened; Northfix files it.
 struct QuickLogSheet: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
@@ -127,7 +127,7 @@ struct QuickLogSheet: View {
     }
 }
 
-/// Ask Bearings: plain questions answered from your own network, on the device.
+/// Ask Northfix: plain questions answered from your own network, on the device.
 struct AskView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
@@ -182,7 +182,7 @@ struct AskView: View {
                 }
             }
             .overlay { if busy { ProgressView() } }
-            .navigationTitle("Ask Bearings")
+            .navigationTitle("Ask Northfix")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
             .onAppear { focused = true }
@@ -201,7 +201,7 @@ struct AskView: View {
 
 struct QuickLogIntent: AppIntent {
     static var title: LocalizedStringResource = "Log a conversation"
-    static var description = IntentDescription("Say what happened and with whom. Bearings adds a note to that person, marks you in touch, and sets a follow-up if you mention one.")
+    static var description = IntentDescription("Say what happened and with whom. Northfix adds a note to that person, marks you in touch, and sets a follow-up if you mention one.")
     @Parameter(title: "What happened?", requestValueDialog: "What happened, and with whom?") var text: String
 
     @MainActor func perform() async throws -> some IntentResult & ProvidesDialog {
@@ -213,7 +213,7 @@ struct QuickLogIntent: AppIntent {
 }
 
 struct AskBearingsIntent: AppIntent {
-    static var title: LocalizedStringResource = "Ask Bearings"
+    static var title: LocalizedStringResource = "Ask Northfix"
     static var description = IntentDescription("Ask a plain question about your network, like “Who do I know at DISA?”")
     @Parameter(title: "Question", requestValueDialog: "What would you like to know?") var question: String
 

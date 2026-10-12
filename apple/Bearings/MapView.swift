@@ -166,7 +166,7 @@ struct PeopleMapView: View {
 
     private var explainer: some View {
         Callout(icon: "person.crop.circle.badge.questionmark", tint: Theme.info, title: "Find out where people are",
-                text: "LinkedIn’s export doesn’t say where people live. Bearings can work it out on this device from their cards in your iPhone Contacts (address, then phone area code) and from places named in their titles. Nothing leaves your devices.",
+                text: "LinkedIn’s export doesn’t say where people live. Northfix can work it out on this device from their cards in your iPhone Contacts (address, then phone area code) and from places named in their titles. Nothing leaves your devices.",
                 button: model.locating ? "Working…" : "Use my Contacts") {
             Task { await model.locate() }
         }

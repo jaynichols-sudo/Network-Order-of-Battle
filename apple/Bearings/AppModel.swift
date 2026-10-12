@@ -1041,7 +1041,7 @@ final class AppModel {
     /// to look at while the LinkedIn export is on its way.
     func startFromContacts() async throws -> StarterResult {
         guard await Locator.requestContacts() else {
-            throw Engine.Failure(message: "Bearings needs access to Contacts for this. You can turn it on in the Settings app under Bearings.")
+            throw Engine.Failure(message: "Northfix needs access to Contacts for this. You can turn it on in the Settings app under Northfix.")
         }
         let list = await StarterContacts.read()
         guard !list.isEmpty else { throw Engine.Failure(message: "There’s no one in your contacts to map yet.") }

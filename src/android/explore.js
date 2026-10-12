@@ -274,7 +274,7 @@ function mapSection(){
     const top = groups.sort((a, b) => b.people.length - a.people.length).slice(0, 12);
     list = top.length ? `<h3 class="h3 pad-x">Where your people are</h3>${top.map(g => card(g, g.rough ? 'roughly placed' : '')).join('')}` : '';
   }
-  const explain = !isSample() && !M.placesBuilt ? callout({ic: 'contactCheck', tint: 'var(--info)', title: 'Find out where people are', text: 'LinkedIn’s export doesn’t say where people live. Bearings can work it out on this phone from their cards in your Contacts (address, then phone area code). Nothing leaves your phone.', button: M.locating ? 'Working…' : 'Use my Contacts', act: 'locate'}) : '';
+  const explain = !isSample() && !M.placesBuilt ? callout({ic: 'contactCheck', tint: 'var(--info)', title: 'Find out where people are', text: 'LinkedIn’s export doesn’t say where people live. Northfix can work it out on this phone from their cards in your Contacts (address, then phone area code). Nothing leaves your phone.', button: M.locating ? 'Working…' : 'Use my Contacts', act: 'locate'}) : '';
   return `<div class="map-controls"><label class="searchbox">${icon('search')}<input type="search" data-ch="mapSearch" placeholder="Where are you headed?" enterkeyhint="search" autocomplete="off"><button type="button" class="tool small" data-a="nearMe" aria-label="People near me">${icon('location')}</button></label>
     ${MAP.center ? segmented('radius', [['25', '25 mi'], ['50', '50 mi'], ['100', '100 mi'], ['250', '250 mi']], String(MAP.radius)) : ''}</div>
     <div class="map-box card"><div id="leaflet"></div></div>${explain}<div class="map-list">${list}</div>

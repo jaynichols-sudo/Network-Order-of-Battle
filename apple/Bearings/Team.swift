@@ -18,7 +18,7 @@ extension AppModel {
     func makeTeamPack() async -> URL? {
         let me = (prefs.string(forKey: "name") ?? "").trimmingCharacters(in: .whitespaces)
         guard let text = try? await engine.call("teamPack", [me.isEmpty ? "A teammate" : me], as: String.self) else { return nil }
-        let url = FileManager.default.temporaryDirectory.appendingPathComponent("Bearings team pack\(me.isEmpty ? "" : " - " + me).json")
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("Northfix team pack\(me.isEmpty ? "" : " - " + me).json")
         do { try text.write(to: url, atomically: true, encoding: .utf8); return url } catch { return nil }
     }
 
@@ -49,7 +49,7 @@ extension AppModel {
     }
 }
 
-/// Bearings Team: start or join a team, invite people, sync, and see the team's combined reach.
+/// Northfix Team: start or join a team, invite people, sync, and see the team's combined reach.
 /// Sharing a pack file by hand still works, for people who'd rather not use the team server.
 struct TeamView: View {
     @Environment(AppModel.self) private var model
@@ -114,14 +114,14 @@ struct TeamView: View {
             Text("Pool who your team knows, privately.").font(Theme.serif(.title2, .semibold))
             Text("See who on your team knows someone at an account, the team’s federal map, everyone’s pursuits and the team watchlist.")
                 .font(Theme.geist(.subheadline))
-            Label("Everything is encrypted on your phone before it leaves. The Bearings server can’t read it. Teammates see names, titles, employers and how well you know each person. Never notes, messages, emails or tags.", systemImage: "lock.fill")
+            Label("Everything is encrypted on your phone before it leaves. The Northfix server can’t read it. Teammates see names, titles, employers and how well you know each person. Never notes, messages, emails or tags.", systemImage: "lock.fill")
                 .font(Theme.geist(.footnote)).foregroundStyle(Theme.text2)
             if team.configured {
                 Button { starting = true } label: { Label("Start a team", systemImage: "person.3.fill").frame(maxWidth: .infinity, minHeight: 46) }
                     .buttonStyle(PillButtonStyle(kind: .primary))
                 Button { joining = "" } label: { Label("Join with a link", systemImage: "link").frame(maxWidth: .infinity, minHeight: 46) }
                     .buttonStyle(PillButtonStyle(kind: .soft))
-                Text("Free for 30 days for up to 5 people. Everyone on a team gets Bearings Pro.")
+                Text("Free for 30 days for up to 5 people. Everyone on a team gets Northfix Pro.")
                     .font(Theme.geist(.footnote)).foregroundStyle(Theme.text2)
             }
         }
@@ -395,7 +395,7 @@ struct JoinTeamSheet: View {
         NavigationStack {
             Form {
                 Section { TextField("Paste the invite link", text: $link, axis: .vertical).textInputAutocapitalization(.never).autocorrectionDisabled() }
-                    footer: { Text(TeamSync.parse(link) == nil && !link.isEmpty ? "That doesn’t look like a Bearings invite." : "The link holds the team’s key. Anyone with it can join until it expires.") }
+                    footer: { Text(TeamSync.parse(link) == nil && !link.isEmpty ? "That doesn’t look like a Northfix invite." : "The link holds the team’s key. Anyone with it can join until it expires.") }
                 Section("You") {
                     TextField("Your name", text: $name).textContentType(.name)
                     TextField("Your title", text: $title).textContentType(.jobTitle)
@@ -494,7 +494,7 @@ struct BillingRow: View {
                     } else {
                         Stepper("\(seats) seats", value: $seats, in: max(1, b.used)...200)
                         Button("Subscribe on the web") { open { try await TeamSync.shared.checkoutURL(seats: seats) } }.buttonStyle(PillButtonStyle(kind: .primary))
-                        Text("Billed yearly per seat. Everyone on the team gets Bearings Pro.").font(Theme.geist(.caption)).foregroundStyle(Theme.text2)
+                        Text("Billed yearly per seat. Everyone on the team gets Northfix Pro.").font(Theme.geist(.caption)).foregroundStyle(Theme.text2)
                     }
                     if let error { Text(error).font(Theme.geist(.footnote)).foregroundStyle(Theme.needs) }
                 }

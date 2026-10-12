@@ -31,7 +31,7 @@ enum WeeklyBrief {
         guard enabled else { return }
         await Notifications.shared.requestPermission()
         let c = UNMutableNotificationContent()
-        c.title = "Your week in Bearings"
+        c.title = "Your week in Northfix"
         c.body = "Five people worth reaching out to, with a reason and a draft for each. About ten minutes."
         c.sound = .default
         c.userInfo = ["weekly": true]

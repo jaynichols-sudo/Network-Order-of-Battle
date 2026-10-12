@@ -3,8 +3,8 @@ import CryptoKit
 import Security
 import Observation
 
-/// Sends people, follow-ups and notes from Bearings to Salesforce.
-/// Sign-in is OAuth 2.0 with PKCE straight from the device: no Bearings server,
+/// Sends people, follow-ups and notes from Northfix to Salesforce.
+/// Sign-in is OAuth 2.0 with PKCE straight from the device: no Northfix server,
 /// no stored password. Tokens live in the iPhone keychain.
 @MainActor
 @Observable
@@ -208,7 +208,7 @@ final class Salesforce {
         } else {
             fields["FirstName"] = String(p.f.prefix(40))
             fields["LastName"] = String((p.l.isEmpty ? "(unknown)" : p.l).prefix(80))
-            fields["Description"] = "LinkedIn: \(profileURL)\nAdded from Bearings on \(Day.nice(Day.today))."
+            fields["Description"] = "LinkedIn: \(profileURL)\nAdded from Northfix on \(Day.nice(Day.today))."
             let made = try await call("POST", "/sobjects/Contact", fields) as? [String: Any]
             guard let id = made?["id"] as? String else { throw SFError("Salesforce didn’t create the contact.") }
             link = Link(contact: id, account: accountId, synced: Day.today)
@@ -218,7 +218,7 @@ final class Salesforce {
         // follow-up task
         let due = p.ed?.due ?? ""
         if !due.isEmpty && due != l.taskDue {
-            let task: [String: Any] = ["Subject": "Follow up with \(p.fullName)", "ActivityDate": due, "WhoId": l.contact, "Status": "Not Started", "Description": "Follow-up set in Bearings."]
+            let task: [String: Any] = ["Subject": "Follow up with \(p.fullName)", "ActivityDate": due, "WhoId": l.contact, "Status": "Not Started", "Description": "Follow-up set in Northfix."]
             if let t = l.task, (try? await call("PATCH", "/sobjects/Task/\(t)", ["ActivityDate": due, "Status": "Not Started"])) != nil {
                 l.taskDue = due
             } else {
@@ -242,7 +242,7 @@ final class Salesforce {
             if let n = l.note, (try? await call("PATCH", "/sobjects/ContentNote/\(n)", ["Content": content])) != nil {
                 l.noteHash = hash
             } else {
-                let made = try await call("POST", "/sobjects/ContentNote", ["Title": "Notes from Bearings", "Content": content]) as? [String: Any]
+                let made = try await call("POST", "/sobjects/ContentNote", ["Title": "Notes from Northfix", "Content": content]) as? [String: Any]
                 if let id = made?["id"] as? String {
                     _ = try? await call("POST", "/sobjects/ContentDocumentLink", ["ContentDocumentId": id, "LinkedEntityId": l.contact, "ShareType": "V"])
                     l.note = id

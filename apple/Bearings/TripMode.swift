@@ -3,7 +3,7 @@ import SwiftUI
 import ActivityKit
 #endif
 
-/// Trip mode: when a trip is under way or starts within two days, Bearings puts it on
+/// Trip mode: when a trip is under way or starts within two days, Northfix puts it on
 /// the Lock Screen and in the Dynamic Island with how many people you know nearby.
 @MainActor
 enum TripMode {

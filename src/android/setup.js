@@ -28,8 +28,8 @@ export function openImport(file = null){
       ${linkedInAvailable() ? `<div class="card list"><button type="button" class="row choose" data-a="connect" ${st.connecting || st.reading || st.saving ? 'disabled' : ''}>${icon('ext')}<span><b>Connect LinkedIn</b><span class="muted small">${esc(st.connecting || 'One tap. LinkedIn sends your connections and messages straight to this phone.')}</span></span>${st.connecting ? '<span class="spinner sm"></span>' : ''}</button></div>
         <p class="foot">Available in the EEA and Switzerland, where LinkedIn lets members share their data with apps. Or use the export file below.</p>` : ''}
       <div class="card pad steps">${step(1, 'Ask LinkedIn for your data', 'On LinkedIn’s “Get a copy of your data” page, choose “Want something in particular?” and tick Connections, Messages and Invitations. Then tap Request archive.')}
-        ${step(2, 'Wait for the email', 'That version usually arrives in about 10 minutes. Bearings will remind you. (The larger archive works too, but can take a day.)')}
-        ${step(3, 'Bring the file here', 'Download the zip and choose it below, or open it from your Downloads or Files app with Bearings.')}
+        ${step(2, 'Wait for the email', 'That version usually arrives in about 10 minutes. Northfix will remind you. (The larger archive works too, but can take a day.)')}
+        ${step(3, 'Bring the file here', 'Download the zip and choose it below, or open it from your Downloads or Files app with Northfix.')}
         <button type="button" class="link" data-a="linkedin">${icon('ext')}Open LinkedIn’s data page</button></div>
       <div class="card list"><button type="button" class="row choose" data-a="choose" ${st.reading || st.saving ? 'disabled' : ''}>${icon('zip')}<span><b>Choose your LinkedIn file</b><span class="muted small">The .zip from LinkedIn, or the Connections.csv inside it</span></span></button>
         ${st.reading ? `<p class="pad muted"><span class="spinner sm"></span> Reading ${esc(st.name)}…</p>` : ''}${st.error ? `<p class="pad bad">${esc(st.error)}</p>` : ''}</div>
@@ -125,7 +125,7 @@ export function openSettings(){
       <p class="sec-h">You</p><div class="card form"><label class="frow col"><span>Your name</span><input type="text" class="field" data-ch="name" value="${esc(prefs.name)}" placeholder="Used to greet you and sign drafts" autocomplete="name"></label></div>
       <p class="sec-h">Appearance</p><div class="card pad">${segmented('theme', [['system', 'Automatic'], ['light', 'Light'], ['dark', 'Dark']], prefs.theme || 'system')}</div>
       <p class="sec-h">Federal and military view</p><div class="card pad">${segmented('lens', [['auto', `Automatic${M.info.lensAuto ? ' (on)' : ' (off)'}`], ['on', 'On'], ['off', 'Off']], lens)}<p class="muted small top8">Sorts out ranks, agencies and commands, and splits government into DoD, federal civilian, and state and local.</p></div>
-      <p class="sec-h">Preferences</p><div class="card list">${toggle('salesnav', 'I use Sales Navigator')}${toggle('notify', 'Reminders', 'Follow-ups and refresh nudges')}${toggle('mondayBrief', 'Monday brief', 'Five people worth reaching out to, every Monday at 7:30')}${toggle('haptics', 'Haptics')}${toggle('arrivals', 'Arrival check', 'Open Bearings in a new city to see who you know there')}</div>
+      <p class="sec-h">Preferences</p><div class="card list">${toggle('salesnav', 'I use Sales Navigator')}${toggle('notify', 'Reminders', 'Follow-ups and refresh nudges')}${toggle('mondayBrief', 'Monday brief', 'Five people worth reaching out to, every Monday at 7:30')}${toggle('haptics', 'Haptics')}${toggle('arrivals', 'Arrival check', 'Open Northfix in a new city to see who you know there')}</div>
       <p class="sec-h">Places</p><div class="card list"><button type="button" class="row act" data-a="locate" ${M.locating ? 'disabled' : ''}>${icon('contactCheck')}<span>${M.locating ? 'Matching…' : 'Match with my Contacts'}</span></button></div>
       <p class="foot">Works out where people are from their cards in your Contacts: the address, then the phone area code. It all happens on this phone.</p>
       <p class="sec-h">Enrichment</p><div class="card list"><button type="button" class="row act" data-a="enrich">${icon('sparkles')}<span>ZoomInfo and Seamless.AI</span>${icon('chevR', 'chev')}</button></div>
@@ -137,7 +137,7 @@ export function openSettings(){
       <p class="foot">${isSample() ? 'You’re looking at a sample network.' : `${fmt(M.info.count)} people${M.info.lastImport ? `, last refreshed ${esc(M.info.lastImport)}` : ''}.`} Everything stays on this phone. Back up your notes now and then; the file holds your notes, stars, follow-ups, watchlist and industry choices.</p>
       <div class="card list"><button type="button" class="row act" data-a="tour">${icon('sparkles')}<span>Show the welcome tour</span></button>
         <button type="button" class="row act" data-a="feedback">${icon('mail')}<span>Send feedback</span></button></div>
-      <p class="foot center">Bearings for Android</p>`;
+      <p class="foot center">Northfix for Android</p>`;
   };
   openSheet({
     title: 'Settings', right: ['Done'], full: true,
@@ -149,7 +149,7 @@ export function openSettings(){
       async pref(v, t){
         const k = t.dataset.k; prefs[k] = !!v; savePrefs(); fx.select();
         if (k === 'notify' && v) await askNotify();
-        if (k === 'arrivals' && v){ if (!allow('arrivals') || !(await enableArrivals())){ prefs.arrivals = false; savePrefs(); t.checked = false; if (unlocked()) show('Allow location for Bearings to use the arrival check.'); } }
+        if (k === 'arrivals' && v){ if (!allow('arrivals') || !(await enableArrivals())){ prefs.arrivals = false; savePrefs(); t.checked = false; if (unlocked()) show('Allow location for Northfix to use the arrival check.'); } }
         if (k === 'mondayBrief' || k === 'notify') scheduleMonday();
         if (k === 'notify') M.version++;
       },
@@ -160,7 +160,7 @@ export function openSettings(){
       backup: () => backup(),
       async restore(){ const f = await pickFile('.json,application/json'); if (f) restore(f); },
       tour(){ closeSheet(); setTimeout(() => openOnboarding(0), 300); },
-      feedback: () => openURL('mailto:jay@jaynichols.net?subject=' + encodeURIComponent('Bearings for Android')),
+      feedback: () => openURL('mailto:jay@jaynichols.net?subject=' + encodeURIComponent('Northfix for Android')),
     },
   });
 }
@@ -196,7 +196,7 @@ export function openOnboarding(startStep = 0){
       html = `<div class="ob-step welcome"><div class="ob-compass"></div><div class="ob-center"><h1>Your network, mapped.</h1><p class="muted">See everyone you know at a glance: who’s close, who’s waiting on you, and who just changed jobs.</p></div>
         <div class="ob-foot"><p class="lock-note">${icon('lock')}No account. Nothing leaves your phone.</p><button type="button" class="btn prominent big" data-a="start">Get started</button></div></div>`;
     } else if (st.step === 1){
-      html = `<div class="ob-step">${header('What do you use your network for?', 'Bearings sets itself up to match. You can change this later.')}
+      html = `<div class="ob-step">${header('What do you use your network for?', 'Northfix sets itself up to match. You can change this later.')}
         <div class="ob-scroll">${USES.map(([id, t, d, ic]) => `<button type="button" class="card use ${st.use === id ? 'on' : ''}" data-a="use" data-v="${id}"><span class="use-ic">${icon(ic)}</span><span class="use-t"><b>${esc(t)}</b><span class="muted">${esc(d)}</span></span><span class="use-check">${st.use === id ? icon('checkFill') : '<i class="ring-empty"></i>'}</span></button>`).join('')}</div>
         <div class="ob-foot"><button type="button" class="btn prominent big" data-a="cont" ${st.use ? '' : 'disabled'}>Continue</button></div></div>`;
     } else if (st.step === 2){
@@ -207,8 +207,8 @@ export function openOnboarding(startStep = 0){
         <div class="ob-foot"><button type="button" class="link strong" data-a="sample">Just look around a sample network</button></div></div>`;
     } else {
       html = `<div class="ob-step">${st.built ? `<div class="ob-built"><p class="good strong">${icon('checkCircle')}${esc(plural(st.built.count, 'person', 'people'))} mapped</p><p class="muted">from your contacts, at ${esc(plural(st.built.companies, 'company', 'companies'))}.</p></div>` : ''}
-        ${header(hasReal() ? 'Keep it fresh' : 'Now get the full picture', hasReal() ? 'Every few weeks, grab a new LinkedIn export. Bearings spots job changes and new connections.' : 'LinkedIn adds everyone you’re connected to, who you message, and who changed jobs. Ask for your data now; it arrives by email.')}
-        <div class="ob-scroll steps">${step(1, 'Ask LinkedIn for your data', 'Choose “Want something in particular?” and tick Connections, Messages and Invitations.')}${step(2, 'Wait for the email', 'Usually about 10 minutes. We’ll remind you.')}${step(3, 'Open the file with Bearings', 'Download it, then open it from your Downloads or Files app and choose Bearings.')}</div>
+        ${header(hasReal() ? 'Keep it fresh' : 'Now get the full picture', hasReal() ? 'Every few weeks, grab a new LinkedIn export. Northfix spots job changes and new connections.' : 'LinkedIn adds everyone you’re connected to, who you message, and who changed jobs. Ask for your data now; it arrives by email.')}
+        <div class="ob-scroll steps">${step(1, 'Ask LinkedIn for your data', 'Choose “Want something in particular?” and tick Connections, Messages and Invitations.')}${step(2, 'Wait for the email', 'Usually about 10 minutes. We’ll remind you.')}${step(3, 'Open the file with Northfix', 'Download it, then open it from your Downloads or Files app and choose Northfix.')}</div>
         <div class="ob-foot"><button type="button" class="btn prominent big" data-a="ask">Ask LinkedIn for my data</button><button type="button" class="link strong" data-a="later">I’ll do it later</button></div></div>`;
     }
     el.innerHTML = html;

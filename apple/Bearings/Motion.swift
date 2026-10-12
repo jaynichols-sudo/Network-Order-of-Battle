@@ -1,6 +1,6 @@
 import SwiftUI
 
-// Bearings' motion language. One idea runs through it: things come from somewhere.
+// Northfix' motion language. One idea runs through it: things come from somewhere.
 // People zoom out of the row you tapped, dots bloom outward from you, numbers count up
 // to where they are, cards ease in as they scroll into view. Springs, not linear tweens.
 // Everything here checks Reduce Motion and falls back to a plain fade or nothing.

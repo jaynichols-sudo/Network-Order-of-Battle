@@ -6,7 +6,7 @@ import UIKit
 // Email as a source: who you emailed, when, and the subject line. Never the message body.
 // Outlook (Microsoft 365 or Outlook.com) through Microsoft Graph with Mail.ReadBasic, which
 // can't see bodies at all, and Gmail with the gmail.metadata scope, which can't either.
-// Sign-in is OAuth with PKCE straight between the phone and the provider; no Bearings server.
+// Sign-in is OAuth with PKCE straight between the phone and the provider; no Northfix server.
 
 enum MailProvider: String, Codable, CaseIterable, Identifiable {
     case outlook, gmail
@@ -385,7 +385,7 @@ struct MailSettingsSection: View {
             Text("Email")
         } footer: {
             Text(MailProvider.allCases.contains { $0.available }
-                 ? "Bearings reads only who you emailed, when, and the subject line, never the message itself. It uses this to remember your last conversation and to spot who’s waiting on you. Nothing goes to a Bearings server."
+                 ? "Northfix reads only who you emailed, when, and the subject line, never the message itself. It uses this to remember your last conversation and to spot who’s waiting on you. Nothing goes to a Northfix server."
                  : "Email isn’t switched on in this version yet.")
         }
     }

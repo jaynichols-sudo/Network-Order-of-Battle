@@ -103,9 +103,9 @@ def feature_graphic():
     W, H = 1024, 500
     bg = backdrop(W, H, W * 0.77, H * 0.56, W * 0.62)
     d = ImageDraw.Draw(bg)
-    mark = Image.open('brand/bearings-mark-1024.png').convert('RGBA').resize((92, 92), Image.LANCZOS)
+    mark = Image.open('brand/northfix-mark-1024.png').convert('RGBA').resize((92, 92), Image.LANCZOS)
     bg.paste(mark, (64, 70), mark)
-    d.text((64, 196), 'Bearings', font=font('Geist-Bold.ttf', 76), fill=INK)
+    d.text((64, 196), 'Northfix', font=font('Geist-Bold.ttf', 76), fill=INK)
     sub = font('Geist-Medium.ttf', 30)
     y = 296
     for ln in ['Your professional network, mapped.', 'Private, on your phone.']:

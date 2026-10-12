@@ -258,7 +258,7 @@ test('invite page', async () => {
   const ok = await call('GET', `/join/${inv.code}`);
   assert.equal(ok.status, 200);
   assert.match(ok.headers.get('content-type'), /text\/html/);
-  assert.match(ok.data, /You're invited to a team on Bearings/);
+  assert.match(ok.data, /You're invited to a team on Northfix/);
   assert.match(ok.data, /bearings:\/\/team\/join\?code=/);
   assert.match(ok.data, /This link is missing its key/);
   assert.match(ok.data, /jaynichols-sudo\.github\.io\/Bearings-site/);
@@ -357,5 +357,5 @@ test('billing done page', async () => {
   const r = await plain.call('GET', '/billing/done');
   assert.equal(r.status, 200);
   assert.match(r.data, /You're all set\./);
-  assert.match(r.data, /Go back to Bearings\./);
+  assert.match(r.data, /Go back to Northfix\./);
 });

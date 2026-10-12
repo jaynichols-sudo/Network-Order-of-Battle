@@ -54,7 +54,7 @@ struct MovesView: View {
             let rotating = list.filter { $0.kind == "pcs" }
             if list.isEmpty {
                 ContentUnavailableView("No moves spotted", systemImage: "arrow.triangle.swap",
-                                       description: Text("Bearings looks for people whose titles say they’re transitioning or retiring, and service members who’ve been in an assignment two years or more. Set “In this role since” on a profile to sharpen it."))
+                                       description: Text("Northfix looks for people whose titles say they’re transitioning or retiring, and service members who’ve been in an assignment two years or more. Set “In this role since” on a profile to sharpen it."))
             }
             if !leaving.isEmpty {
                 Section {
@@ -118,7 +118,7 @@ struct IntrosView: View {
         List {
             if list.isEmpty {
                 ContentUnavailableView("No intros yet", systemImage: "person.line.dotted.person",
-                                       description: Text("When you ask someone for an intro from Ways in, tap Track it. Bearings follows it from asked to made to met."))
+                                       description: Text("When you ask someone for an intro from Ways in, tap Track it. Northfix follows it from asked to made to met."))
             }
             ForEach(["asked", "made", "met", "declined"], id: \.self) { st in
                 let rows = list.filter { $0.st == st }
@@ -181,7 +181,7 @@ struct TrackIntroSheet: View {
                     TextField("Who you want to meet (optional)", text: $to)
                     LabeledContent("At", value: company)
                     if let p = model.person(via) { LabeledContent("Asking", value: p.fullName) }
-                } footer: { Text("Bearings reminds you to nudge after a week, and keeps the history on their profile.") }
+                } footer: { Text("Northfix reminds you to nudge after a week, and keeps the history on their profile.") }
             }
             .navigationTitle("Track this intro")
             .navigationBarTitleDisplayMode(.inline)

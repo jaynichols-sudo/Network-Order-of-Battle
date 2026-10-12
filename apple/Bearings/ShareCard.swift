@@ -42,7 +42,7 @@ struct ShareCardView: View {
             }
             Spacer(minLength: 14)
             HStack {
-                Text("Mapped with Bearings").font(.custom("Geist-SemiBold", fixedSize: 12)).foregroundStyle(.white.opacity(0.85))
+                Text("Mapped with Northfix").font(.custom("Geist-SemiBold", fixedSize: 12)).foregroundStyle(.white.opacity(0.85))
                 Spacer()
                 Text("Your network, mapped").font(.custom("Geist-Regular", fixedSize: 12)).foregroundStyle(.white.opacity(0.5))
             }

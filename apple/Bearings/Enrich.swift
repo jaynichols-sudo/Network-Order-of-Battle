@@ -21,7 +21,7 @@ struct Enriched: Codable, Hashable {
     var sourceName: String { src == "zoominfo" ? "ZoomInfo" : src == "seamless" ? "Seamless.AI" : src == "file" ? "your enrichment file" : src }
     var location: String { [city, state].compactMap { $0?.isEmpty == false ? $0 : nil }.joined(separator: ", ") }
 
-    /// A city on the map, when it's one Bearings knows (US cities offline).
+    /// A city on the map, when it's one Northfix knows (US cities offline).
     var place: PersonPlace? {
         guard let city, !city.isEmpty else { return nil }
         let st = state.map { s in s.count == 2 ? s.uppercased() : (PlaceIndex.usStates[s.lowercased()] ?? "") } ?? ""

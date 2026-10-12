@@ -1,4 +1,4 @@
-name: Bearings Android build
+name: Northfix Android build
 
 on:
   push:

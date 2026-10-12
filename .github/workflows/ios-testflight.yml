@@ -1,4 +1,4 @@
-name: Bearings iOS + Mac → TestFlight
+name: Northfix iOS + Mac → TestFlight
 
 on:
   push:

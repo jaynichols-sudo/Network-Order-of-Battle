@@ -1,4 +1,4 @@
-# Bearings design: "Calm cards"
+# Northfix design: "Calm cards"
 
 The app's visual language. iPhone (SwiftUI) and Android (`src/android`) follow the same spec.
 

@@ -22,7 +22,7 @@ public class MainActivity extends BridgeActivity {
 
     /**
      * Capacitor's App plugin only reports VIEW intents (appUrlOpen). A file shared to
-     * Bearings arrives as SEND with the file in EXTRA_STREAM, so hand it on as a VIEW
+     * Northfix arrives as SEND with the file in EXTRA_STREAM, so hand it on as a VIEW
      * of that file; the web app then reads it like any other opened file.
      */
     @SuppressWarnings("deprecation")

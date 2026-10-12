@@ -1,4 +1,4 @@
-// Bearings sign-in helper: "Connect LinkedIn" (EEA and Switzerland) and "Sign in with Seamless.AI".
+// Northfix sign-in helper: "Connect LinkedIn" (EEA and Switzerland) and "Sign in with Seamless.AI".
 //
 // Both providers need an OAuth client secret to turn a sign-in code into an access token,
 // and a secret can't live inside an app. This tiny worker does only that swap (and Seamless'
@@ -84,6 +84,6 @@ export default {
     const url = new URL(req.url);
     if (url.pathname.startsWith('/linkedin/')) return linkedin(url, env);
     if (url.pathname.startsWith('/seamless/')) { const r = await seamless(req, url, env); if (r) return r; }
-    return new Response('Bearings', {status: 404});
+    return new Response('Northfix', {status: 404});
   },
 };

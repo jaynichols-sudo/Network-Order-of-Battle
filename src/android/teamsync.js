@@ -1,4 +1,4 @@
-// Bearings Team on Android: the client for the team server (server/team/worker.js).
+// Northfix Team on Android: the client for the team server (server/team/worker.js).
 // The contract is docs/team.md. Every team name, profile and share is encrypted on this
 // phone with the team key before it leaves; the key travels only inside invite links,
 // after the #, and is kept here with the app's other secrets.
@@ -109,7 +109,7 @@ const profileOf = (name, title) => ({name: String(name || '').trim().slice(0, 12
 
 /* ---------- starting and joining ---------- */
 export async function createTeam(teamName, myName, myTitle){
-  if (!TEAM_URL) throw new Error('Bearings Team isn’t set up in this build.');
+  if (!TEAM_URL) throw new Error('Northfix Team isn’t set up in this build.');
   const k = newKey(), p = profileOf(myName, myTitle);
   const r = await api('POST', '/v1/teams', {name: await encrypt(k, {name: teamName.trim()}), profile: await encrypt(k, p)}, {auth: false, base: TEAM_URL});
   await begin(r, k, teamName.trim(), p.name, p.title);
@@ -128,7 +128,7 @@ export function parseInvite(text){
 }
 export async function checkInvite(code){ return api('GET', `/v1/invites/${encodeURIComponent(code)}`, undefined, {auth: false, base: TEAM_URL}); }
 export async function joinFromLink(code, keyText, myName, myTitle){
-  if (!TEAM_URL) throw new Error('Bearings Team isn’t set up in this build.');
+  if (!TEAM_URL) throw new Error('Northfix Team isn’t set up in this build.');
   if (onTeam()) throw new Error('You’re already on a team. Leave it first to join another.');
   await importKey(keyText);
   await checkInvite(code);

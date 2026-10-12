@@ -17,7 +17,7 @@ struct ZipReader {
         var errorDescription: String? {
             switch self {
             case .notZip: return "That file isn’t a zip archive."
-            case .unsupported(let n): return "\(n) is compressed in a way Bearings can’t read. Try downloading the export again."
+            case .unsupported(let n): return "\(n) is compressed in a way Northfix can’t read. Try downloading the export again."
             case .corrupt(let n): return "\(n) in the zip looks damaged. Try downloading the export again."
             }
         }

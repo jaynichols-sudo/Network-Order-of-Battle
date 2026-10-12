@@ -104,7 +104,7 @@ struct SettingsView: View {
         } header: {
             Text("iPhone Contacts")
         } footer: {
-            Text("Matching connections to your Contacts, by email or name, gives Bearings their photo and a rough location for the Map. It all happens on this device. It runs again after each LinkedIn refresh.")
+            Text("Matching connections to your Contacts, by email or name, gives Northfix their photo and a rough location for the Map. It all happens on this device. It runs again after each LinkedIn refresh.")
         }
     }
 
@@ -133,7 +133,7 @@ struct SettingsView: View {
                             let ok = await ReminderSync.shared.requestAccess()
                             ReminderSync.shared.enabled = ok
                             remindersOn = ok
-                            if !ok { model.show("Allow Reminders for Bearings in Settings to turn this on") }
+                            if !ok { model.show("Allow Reminders for Northfix in Settings to turn this on") }
                         } else {
                             ReminderSync.shared.enabled = false
                             remindersOn = false
@@ -174,7 +174,7 @@ struct SettingsView: View {
         } header: {
             Text("Calendar")
         } footer: {
-            Text("Bearings reads your calendar on this device to brief you before meetings with people you know (what you talked about last time, on the Lock Screen and your watch), and to spot trips more than 75 miles from home. In Trip mode, a trip shows on your Lock Screen two days ahead with who you know nearby. With arrival alerts, landing in a city away from home tells you who you know there (choose “Always” for location when asked). With Reminders on, follow-ups go on a Bearings list in Apple Reminders, and checking one off there marks it done here. Nothing is uploaded.")
+            Text("Northfix reads your calendar on this device to brief you before meetings with people you know (what you talked about last time, on the Lock Screen and your watch), and to spot trips more than 75 miles from home. In Trip mode, a trip shows on your Lock Screen two days ahead with who you know nearby. With arrival alerts, landing in a city away from home tells you who you know there (choose “Always” for location when asked). With Reminders on, follow-ups go on a Northfix list in Apple Reminders, and checking one off there marks it done here. Nothing is uploaded.")
         }
     }
 
@@ -214,7 +214,7 @@ struct SettingsView: View {
         } header: {
             Text("Salesforce")
         } footer: {
-            Text("Sends contacts, follow-up tasks and notes from Bearings to Salesforce. You sign in with Salesforce directly; Bearings never sees your password, and there’s no Bearings server in between.")
+            Text("Sends contacts, follow-up tasks and notes from Northfix to Salesforce. You sign in with Salesforce directly; Northfix never sees your password, and there’s no Northfix server in between.")
         }
         .sheet(isPresented: $sfGuide) { SalesforceGuide().environment(AppModel.shared) }
         .sheet(item: Binding(get: { model.paywallFeature }, set: { model.paywallFeature = $0 })) { f in PaywallView(feature: f).environment(AppModel.shared) }
@@ -279,9 +279,9 @@ struct SettingsView: View {
             }
             if let product = Pro.shared.product {
                 if Pro.shared.owned {
-                    LabeledContent("Bearings Pro", value: "Unlocked. Thank you!")
+                    LabeledContent("Northfix Pro", value: "Unlocked. Thank you!")
                 } else {
-                    Button("Get Bearings Pro (\(product.displayPrice))") { Task { _ = await Pro.shared.buy() } }
+                    Button("Get Northfix Pro (\(product.displayPrice))") { Task { _ = await Pro.shared.buy() } }
                     Button("Restore purchase") { Task { await Pro.shared.restore() } }
                 }
             }
@@ -297,7 +297,7 @@ struct SettingsView: View {
         let device = UIDevice.current.model + " " + UIDevice.current.systemVersion
         let body = "\n\n—\nBearings \(v) (\(b)), \(device)\n" + Diagnostics.shared.summary(model: model)
         guard var c = URLComponents(string: "mailto:" + AppInfo.supportEmail) else { return }
-        c.queryItems = [URLQueryItem(name: "subject", value: "Bearings support"), URLQueryItem(name: "body", value: body)]
+        c.queryItems = [URLQueryItem(name: "subject", value: "Northfix support"), URLQueryItem(name: "body", value: body)]
         if let u = c.url { openURL(u) }
     }
 }
@@ -312,14 +312,14 @@ struct SalesforceGuide: View {
                 }
                 Section("In Salesforce Setup") {
                     step(1, "Open App Manager", "Setup, then App Manager, then New Connected App (or New External Client App).")
-                    step(2, "Name it", "Bearings. Add your email as the contact.")
+                    step(2, "Name it", "Northfix. Add your email as the contact.")
                     step(3, "Turn on OAuth", "Tick Enable OAuth Settings. Callback URL: bearings://oauth/salesforce")
                     step(4, "Pick scopes", "Manage user data via APIs (api), and Perform requests at any time (refresh_token, offline_access).")
                     step(5, "Security", "Tick Require Proof Key for Code Exchange (PKCE). Untick Require Secret for Web Server Flow.")
-                    step(6, "Copy the key", "Save, wait a few minutes, then copy the Consumer Key into Bearings.")
+                    step(6, "Copy the key", "Save, wait a few minutes, then copy the Consumer Key into Northfix.")
                 }
                 Section {
-                    Text("Bearings creates or updates a Contact (and its Account), a follow-up Task when you set one, and a Note with your notes. It only touches records it created or matched by email, or by name and company.")
+                    Text("Northfix creates or updates a Contact (and its Account), a follow-up Task when you set one, and a Note with your notes. It only touches records it created or matched by email, or by name and company.")
                         .font(.footnote).foregroundStyle(.secondary)
                 }
             }
@@ -341,7 +341,7 @@ struct SalesforceGuide: View {
 }
 
 
-/// Pick which calendars Bearings reads for meeting prep and trips.
+/// Pick which calendars Northfix reads for meeting prep and trips.
 struct CalendarPicker: View {
     @Environment(AppModel.self) private var model
     @State private var off = CalendarService.shared.hiddenCalendars
@@ -357,7 +357,7 @@ struct CalendarPicker: View {
     var body: some View {
         List {
             Section {
-                Text("Bearings reads these calendars on your iPhone to brief you before meetings and spot trips. To add a calendar like an iCloud “All Work” calendar, make sure it’s turned on in the Calendar app first.")
+                Text("Northfix reads these calendars on your iPhone to brief you before meetings and spot trips. To add a calendar like an iCloud “All Work” calendar, make sure it’s turned on in the Calendar app first.")
                     .font(.footnote).foregroundStyle(.secondary)
             }
             ForEach(groups, id: \.source) { g in

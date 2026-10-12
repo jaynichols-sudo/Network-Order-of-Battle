@@ -39,13 +39,13 @@ enum ExportReminder {
         center.removePendingNotificationRequests(withIdentifiers: ["export-1", "export-2"])
         let first = UNMutableNotificationContent()
         first.title = "Your LinkedIn data may be ready"
-        first.body = "Look for an email from LinkedIn, download the file, then share it to Bearings or choose it in Import."
+        first.body = "Look for an email from LinkedIn, download the file, then share it to Northfix or choose it in Import."
         first.sound = .default
         first.userInfo = ["refresh": true]
         try? await center.add(UNNotificationRequest(identifier: "export-1", content: first, trigger: UNTimeIntervalNotificationTrigger(timeInterval: 20 * 60, repeats: false)))
         let second = UNMutableNotificationContent()
         second.title = "Your full LinkedIn archive should be in"
-        second.body = "The full archive, with messages, takes up to a day. Open the email from LinkedIn and share the zip to Bearings to see who you talk to."
+        second.body = "The full archive, with messages, takes up to a day. Open the email from LinkedIn and share the zip to Northfix to see who you talk to."
         second.sound = .default
         second.userInfo = ["refresh": true]
         var at = Calendar.current.date(byAdding: .day, value: 1, to: Date()) ?? Date()
@@ -161,7 +161,7 @@ struct OnboardingView: View {
 
     private var purpose: some View {
         VStack(alignment: .leading, spacing: 18) {
-            header("What do you use your network for?", "Bearings sets itself up to match. You can change this later.")
+            header("What do you use your network for?", "Northfix sets itself up to match. You can change this later.")
             ScrollView {
                 VStack(spacing: 10) {
                     ForEach(UseCase.allCases) { u in
@@ -243,12 +243,12 @@ struct OnboardingView: View {
                 .transition(.opacity)
             }
             header(hasRealNetwork ? "Keep it fresh" : "Now get the full picture",
-                   hasRealNetwork ? "Every few weeks, grab a new LinkedIn export. Bearings spots job changes and new connections." : "LinkedIn adds everyone you’re connected to, who you message, and who changed jobs. Ask for your data now; it arrives by email.",
+                   hasRealNetwork ? "Every few weeks, grab a new LinkedIn export. Northfix spots job changes and new connections." : "LinkedIn adds everyone you’re connected to, who you message, and who changed jobs. Ask for your data now; it arrives by email.",
                    top: built == nil)
             VStack(alignment: .leading, spacing: 14) {
                 numbered(1, "Ask LinkedIn for your data", "Choose “Want something in particular?” and tick Connections, Messages and Invitations.")
                 numbered(2, "Wait for the email", "Usually about 10 minutes. We’ll remind you.")
-                numbered(3, "Share the file to Bearings", "Open it from Mail or Files and choose Bearings.")
+                numbered(3, "Share the file to Northfix", "Open it from Mail or Files and choose Northfix.")
             }
             .padding(.horizontal, 24)
             Spacer()

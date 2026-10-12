@@ -1,9 +1,9 @@
 import Foundation
 import Security
 
-/// Meeting notes shared into Bearings from other apps (Plaud, Apple Notes, reMarkable,
+/// Meeting notes shared into Northfix from other apps (Plaud, Apple Notes, reMarkable,
 /// Mail) through the share extension. They wait in the team keychain group, which the
-/// app and its extensions already share, until Bearings next opens and files them.
+/// app and its extensions already share, until Northfix next opens and files them.
 enum NotesInbox {
     private static let service = "com.jaynichols.networkoob.watch"
     private static let account = "notes-inbox"

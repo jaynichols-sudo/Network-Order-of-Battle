@@ -5,7 +5,7 @@ import UserNotifications
 import Observation
 
 /// Reads the iPhone calendar (on device only) to find upcoming meetings with
-/// people in your network, and trips away from home, so Bearings can brief you
+/// people in your network, and trips away from home, so Northfix can brief you
 /// before a meeting and show who's near where you're headed.
 @MainActor
 @Observable

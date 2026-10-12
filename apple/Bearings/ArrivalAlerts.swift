@@ -2,7 +2,7 @@ import Foundation
 import CoreLocation
 import UserNotifications
 
-/// Arrival alerts: land somewhere away from home and Bearings tells you who you know there.
+/// Arrival alerts: land somewhere away from home and Northfix tells you who you know there.
 /// Uses iOS's low-power significant-location changes (no GPS polling); the location is only
 /// compared on the device with where your people are, and never leaves it.
 @MainActor

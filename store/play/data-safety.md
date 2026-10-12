@@ -1,20 +1,20 @@
 # Data safety form (Play Console > Policy > App content > Data safety)
 
-Based on the Android code as of October 2026. Bearings has no server and no analytics, ads or crash-reporting SDKs.
+Based on the Android code as of October 2026. Northfix has no server and no analytics, ads or crash-reporting SDKs.
 
 ## Overview questions
 
 - **Does your app collect or share any of the required user data types?** No.
-  - Google counts data as "collected" only when it leaves the device and reaches you or a third party. Bearings reads the LinkedIn file, contacts and location on the phone only, and never sends them anywhere.
+  - Google counts data as "collected" only when it leaves the device and reaches you or a third party. Northfix reads the LinkedIn file, contacts and location on the phone only, and never sends them anywhere.
 - **Is all of the user data collected by your app encrypted in transit?** Not applicable, since nothing is collected. If the form insists, answer Yes: the only network requests are HTTPS map tiles.
-- **Do you provide a way for users to request that their data is deleted?** Yes. Everything lives on the phone and is deleted by uninstalling the app or by Android Settings > Apps > Bearings > Storage > Clear storage.
+- **Do you provide a way for users to request that their data is deleted?** Yes. Everything lives on the phone and is deleted by uninstalling the app or by Android Settings > Apps > Northfix > Storage > Clear storage.
 
 ## Network requests the app does make (for your reference)
 
 | Request | What is sent | Why it isn't "collection" |
 |---|---|---|
 | Map tiles from tile.openstreetmap.org | The map area being viewed (no personal data) | Standard tile fetch; no user data |
-| Opening linkedin.com links | Nothing sent by Bearings; the link opens in the browser or LinkedIn app | User-initiated navigation |
+| Opening linkedin.com links | Nothing sent by Northfix; the link opens in the browser or LinkedIn app | User-initiated navigation |
 
 ## Permissions to explain if asked
 

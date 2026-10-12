@@ -55,7 +55,7 @@ struct PersonQuery: EntityStringQuery {
 
 struct OpenPersonIntent: AppIntent {
     static var title: LocalizedStringResource = "Open a person"
-    static var description = IntentDescription("Opens someone’s profile in Bearings.")
+    static var description = IntentDescription("Opens someone’s profile in Northfix.")
     static var openAppWhenRun = true
     @Parameter(title: "Person") var person: PersonEntity
 
@@ -68,7 +68,7 @@ struct OpenPersonIntent: AppIntent {
     }
 }
 
-/// Sends text into Bearings to file against the people it mentions. Works from Shortcuts
+/// Sends text into Northfix to file against the people it mentions. Works from Shortcuts
 /// (including a "Show in Share Sheet" shortcut) for apps that only share plain text.
 struct AddMeetingNotesIntent: AppIntent {
     static var title: LocalizedStringResource = "Add meeting notes"
@@ -116,7 +116,7 @@ struct FollowUpsDueIntent: AppIntent {
 
 struct WhoIsNearbyIntent: AppIntent {
     static var title: LocalizedStringResource = "Who do I know nearby"
-    static var description = IntentDescription("Opens the Bearings map near where you are.")
+    static var description = IntentDescription("Opens the Northfix map near where you are.")
     static var openAppWhenRun = true
 
     @MainActor func perform() async throws -> some IntentResult {
@@ -141,7 +141,7 @@ struct BearingsShortcuts: AppShortcutsProvider {
         AppShortcut(intent: QuickLogIntent(), phrases: ["Log a conversation in \(.applicationName)", "Add a note in \(.applicationName)", "Tell \(.applicationName) about a meeting"],
                     shortTitle: "Log a conversation", systemImageName: "mic")
         AppShortcut(intent: AskBearingsIntent(), phrases: ["Ask \(.applicationName)", "Ask \(.applicationName) about my network"],
-                    shortTitle: "Ask Bearings", systemImageName: "sparkle.magnifyingglass")
+                    shortTitle: "Ask Northfix", systemImageName: "sparkle.magnifyingglass")
         AppShortcut(intent: OpenPersonIntent(), phrases: ["Open \(\.$person) in \(.applicationName)", "Show \(\.$person) in \(.applicationName)"],
                     shortTitle: "Open a person", systemImageName: "person.crop.circle")
     }

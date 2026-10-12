@@ -76,7 +76,7 @@ def setup():
     # 1. Distribution certificate from a fresh RSA key
     key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
     csr = (x509.CertificateSigningRequestBuilder()
-           .subject_name(x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, f"Bearings CI {run}"),
+           .subject_name(x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, f"Northfix CI {run}"),
                                     x509.NameAttribute(NameOID.EMAIL_ADDRESS, "ci@example.invalid")]))
            .sign(key, hashes.SHA256()))
     csr_pem = csr.public_bytes(serialization.Encoding.PEM).decode()
@@ -122,9 +122,9 @@ def setup():
             bundle = found[0]
         else:
             bundle = call("POST", "/bundleIds", {"data": {"type": "bundleIds", "attributes": {
-                "identifier": bid, "name": "Bearings " + role.title(), "platform": "IOS"}}})["data"]
+                "identifier": bid, "name": "Northfix " + role.title(), "platform": "IOS"}}})["data"]
             print("Registered bundle ID", bid)
-        name = f"Bearings CI {role} {run}"
+        name = f"Northfix CI {role} {run}"
         prof = call("POST", "/profiles", {"data": {"type": "profiles",
             "attributes": {"name": name, "profileType": os.environ.get("PROFILE_TYPE", "IOS_APP_STORE")},
             "relationships": {"bundleId": {"data": {"type": "bundleIds", "id": bundle["id"]}},
@@ -150,7 +150,7 @@ def installer(kc, kc_pass, tmp, run):
     """A Mac Installer Distribution certificate, for signing the Mac app's upload package."""
     key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
     csr = (x509.CertificateSigningRequestBuilder()
-           .subject_name(x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, f"Bearings CI installer {run}")]))
+           .subject_name(x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, f"Northfix CI installer {run}")]))
            .sign(key, hashes.SHA256()))
     cert = create_cert("MAC_INSTALLER_DISTRIBUTION", csr.public_bytes(serialization.Encoding.PEM).decode())
     env_out(OOB_INSTALLER_CERT_ID=cert["id"])
@@ -228,7 +228,7 @@ def call_soft(method, path, body=None):
 def rename():
     """Sets the App Store name (first available of NAMES) and subtitle. Safe to run every build."""
     bid = os.environ.get("APP_BUNDLE_ID", "com.jaynichols.networkoob")
-    names = [n.strip() for n in os.environ.get("NAMES", "Bearings").split("|") if n.strip()]
+    names = [n.strip() for n in os.environ.get("NAMES", "Northfix").split("|") if n.strip()]
     subtitle = os.environ.get("SUBTITLE", "")
     app = call("GET", f"/apps?filter[bundleId]={bid}")["data"][0]
     infos = call("GET", f"/apps/{app['id']}/appInfos")["data"]

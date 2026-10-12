@@ -1,4 +1,4 @@
-name: Bearings Mac → TestFlight
+name: Northfix Mac → TestFlight
 
 on:
   # run by hand from the Actions tab: Mac runners use build minutes ten times faster
