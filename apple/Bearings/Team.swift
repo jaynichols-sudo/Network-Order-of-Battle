@@ -62,13 +62,13 @@ struct TeamView: View {
     @State private var confirmDelete = false
     @State private var confirmLeave = false
     @State private var error: String?
+    @State private var width: CGFloat = 0
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 14) {
+            AdaptiveColumns(width: width, ratio: 0.5, spacing: 14) {
                 if team.joined { header; membersCard; if team.isAdmin { invitesCard } }
                 else { pitch }
-                if let o = overview, !o.members.isEmpty { TeamOverviewCards(overview: o) }
                 if model.info.isSample && !team.joined {
                     Button { Task { await team.startDemo(model: model) } } label: {
                         Label("Preview with a sample team", systemImage: "sparkles").frame(maxWidth: .infinity, minHeight: 44)
@@ -80,6 +80,8 @@ struct TeamView: View {
                         .font(Theme.geist(.footnote)).foregroundStyle(Theme.text2)
                     Button("End the preview") { Task { await team.endDemo(model: model) } }.buttonStyle(PillButtonStyle(kind: .soft))
                 }
+            } secondary: {
+                if let o = overview, !o.members.isEmpty { TeamOverviewCards(overview: o) }
                 if team.joined && !team.demo { leaveCard }
                 DisclosureGroup {
                     PackShareSection()
@@ -89,9 +91,10 @@ struct TeamView: View {
                 .padding(16).card()
             }
             .padding(16)
-            .frame(maxWidth: 680)
+            .frame(maxWidth: Wide.pageWidth(width))
             .frame(maxWidth: .infinity)
         }
+        .readWidth($width)
         .background(Theme.bg)
         .navigationTitle("Team")
         .refreshable { await team.sync(model: model) }

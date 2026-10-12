@@ -281,12 +281,14 @@ struct EventsList: View {
 struct YouView: View {
     @Environment(AppModel.self) private var model
     @State private var importingEnrichment = false
+    @State private var width: CGFloat = 0
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
                 Text("You").font(Theme.serif(.largeTitle)).padding(.horizontal, 6).padding(.top, 8)
 
+                AdaptiveColumns(width: width, ratio: 0.5) {
                 VStack(spacing: 14) {
                     MyPhotoRow()
                     Button {
@@ -321,7 +323,7 @@ struct YouView: View {
                         row(s.name, icon: "pin") { model.apply(s) }
                     }
                 }
-
+                } secondary: {
                 group("Your data") {
                     row(model.info.isSample ? "Import your connections" : "Refresh connections", icon: "square.and.arrow.down",
                         detail: model.info.lastImport.isEmpty ? nil : Day.nice(model.info.lastImport)) { model.showImport = true }
@@ -346,12 +348,14 @@ struct YouView: View {
                     .font(Theme.geist(.footnote))
                     .foregroundStyle(Theme.text2)
                     .padding(.horizontal, 6)
+                }
             }
             .padding(.horizontal, 16)
             .padding(.bottom, 24)
-            .frame(maxWidth: 680)
+            .frame(maxWidth: Wide.pageWidth(width))
             .frame(maxWidth: .infinity)
         }
+        .readWidth($width)
         .background(Theme.bg)
         .navigationTitle("You")
         .toolbar(.hidden, for: .navigationBar)

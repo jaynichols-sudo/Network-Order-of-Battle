@@ -12,6 +12,8 @@ struct BearingsApp: App {
     var body: some Scene {
         WindowGroup {
             RootView()
+                .macTextSize()
+                .onAppear { MacWindow.configure() }
                 .environment(model)
                 .font(Theme.geist(.body))
                 .tint(Theme.primary)
@@ -123,5 +125,16 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         WatchLink.shared.start()
         ArrivalAlerts.shared.resume()
         return true
+    }
+}
+
+/// The Mac window: big enough that Today, You, profiles and Team show two columns.
+enum MacWindow {
+    static func configure() {
+        #if targetEnvironment(macCatalyst)
+        for case let scene as UIWindowScene in UIApplication.shared.connectedScenes {
+            scene.sizeRestrictions?.minimumSize = CGSize(width: 1120, height: 720)
+        }
+        #endif
     }
 }

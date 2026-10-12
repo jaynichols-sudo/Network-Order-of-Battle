@@ -8,30 +8,34 @@ struct ProfileView: View {
     @State private var addingNotes = false
     @State private var settingRoleStart = false
     @State private var photoItem: PhotosPickerItem?
+    @State private var width: CGFloat = 0
 
     var body: some View {
         if let p = model.person(k) {
             ScrollView {
-                VStack(spacing: 12) {
-                    header(p).cascade(0, distance: 10)
-                    MemoryCard(person: p).cascade(1)
-                    briefCard(p).cascade(1).edgeSettle()
-                    TimelineCard(person: p).cascade(2).edgeSettle()
-                    NavigationLink(value: Route.about(p.k)) {
-                        HStack {
-                            Text("Details, location and notes").font(Theme.geist(.subheadline, .medium)).foregroundStyle(.primary)
-                            Spacer()
-                            Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(Theme.text3)
+                Group {
+                    if width >= Wide.threshold {
+                        AdaptiveColumns(width: width, ratio: 0.42) {
+                            header(p).cascade(0, distance: 10)
+                            detailsLink(p).cascade(1)
+                        } secondary: {
+                            MemoryCard(person: p).cascade(1)
+                            briefCard(p).cascade(1)
+                            TimelineCard(person: p).cascade(2)
                         }
-                        .padding(.horizontal, 16).padding(.vertical, 15)
-                        .card()
+                    } else {
+                        VStack(spacing: 12) {
+                            header(p).cascade(0, distance: 10)
+                            MemoryCard(person: p).cascade(1)
+                            briefCard(p).cascade(1).edgeSettle()
+                            TimelineCard(person: p).cascade(2).edgeSettle()
+                            detailsLink(p).cascade(3).edgeSettle()
+                        }
                     }
-                    .buttonStyle(.pressable)
-                    .cascade(3).edgeSettle()
                 }
                 .padding(.horizontal, 16)
                 .padding(.bottom, 24)
-            .frame(maxWidth: 680)
+            .frame(maxWidth: Wide.pageWidth(width))
             .frame(maxWidth: .infinity)
             .background(alignment: .top) {
                 // a glow in the color of their sector, behind the header
@@ -44,6 +48,7 @@ struct ProfileView: View {
                     .allowsHitTesting(false)
             }
             }
+            .readWidth($width)
             .background(Theme.bg)
             .sheet(isPresented: $writing) { MessageSheet(k: p.k).environment(AppModel.shared) }
             .navigationTitle(p.f)
@@ -67,6 +72,19 @@ struct ProfileView: View {
         } else {
             ContentUnavailableView("Not found", systemImage: "person.crop.circle.badge.xmark", description: Text("This person isn’t in your network anymore."))
         }
+    }
+
+    private func detailsLink(_ p: Person) -> some View {
+        NavigationLink(value: Route.about(p.k)) {
+            HStack {
+                Text("Details, location and notes").font(Theme.geist(.subheadline, .medium)).foregroundStyle(.primary)
+                Spacer()
+                Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(Theme.text3)
+            }
+            .padding(.horizontal, 16).padding(.vertical, 15)
+            .card()
+        }
+        .buttonStyle(.pressable)
     }
 
     private func header(_ p: Person) -> some View {

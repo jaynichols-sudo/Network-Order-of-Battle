@@ -6,40 +6,17 @@ struct HomeView: View {
     @Environment(\.colorScheme) private var scheme
     @State private var picks: [WeeklyPick] = []
     @State private var picksLoaded = false
+    @State private var width: CGFloat = 0
 
     var body: some View {
         ScrollViewReader { proxy in
         ScrollView {
-            VStack(alignment: .leading, spacing: 12) {
-                header.cascade(0, distance: 10)
-                if !picks.isEmpty {
-                    ProgressStrip(done: picks.count - openCount, total: picks.count)
-                        .padding(.horizontal, 6).padding(.bottom, 2)
-                        .cascade(1, distance: 10)
-                }
-                DailyFiveCard(picks: picks).cascade(2).edgeSettle()
-                banner.cascade(3).edgeSettle()
-                TodayCompassCard().id("compass").cascade(3).edgeSettle()
-                TodayChips().cascade(4, distance: 10)
-                WatchlistCard().cascade(5).edgeSettle()
-                ComingUp().cascade(5).edgeSettle()
-                BirthdaysCard().cascade(6).edgeSettle()
-                if !model.home.cards.isEmpty {
-                    VStack(alignment: .leading, spacing: 0) {
-                        Text("Worth your time").font(Theme.geist(.headline, .bold)).padding(.top, 14).padding(.bottom, 4)
-                        ForEach(Array(model.home.cards.enumerated()), id: \.element.id) { i, card in
-                            if i > 0 { Theme.line.frame(height: 1) }
-                            HomeCardView(card: card)
-                        }
-                    }
-                    .padding(.horizontal, 16)
-                    .card()
-                    .cascade(7).edgeSettle()
-                }
+            Group {
+                if width >= Wide.threshold { wideLayout } else { narrowLayout }
             }
             .padding(.horizontal, 16)
             .padding(.bottom, 24)
-            .frame(maxWidth: 680)
+            .frame(maxWidth: Wide.pageWidth(width))
             .frame(maxWidth: .infinity)
             .background(alignment: .top) {
                 // the drifting light behind the headline, at night only: by day the page is white
@@ -59,6 +36,7 @@ struct HomeView: View {
             withAnimation { proxy.scrollTo("compass", anchor: .top) }
         }
         }
+        .readWidth($width)
         .background(Theme.bg)
         .navigationTitle("Today")
         .toolbar(.hidden, for: .navigationBar)
@@ -73,6 +51,64 @@ struct HomeView: View {
             }
             picks = got
             picksLoaded = true
+        }
+    }
+
+    /// The phone: one column, in the order the day is worked through.
+    private var narrowLayout: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            header.cascade(0, distance: 10)
+            progress
+            DailyFiveCard(picks: picks).cascade(2).edgeSettle()
+            banner.cascade(3).edgeSettle()
+            TodayCompassCard().id("compass").cascade(3).edgeSettle()
+            TodayChips().cascade(4, distance: 10)
+            WatchlistCard().cascade(5).edgeSettle()
+            ComingUp().cascade(5).edgeSettle()
+            BirthdaysCard().cascade(6).edgeSettle()
+            worthYourTime
+        }
+    }
+
+    /// A big window: the work on the left, the network at a glance on the right.
+    private var wideLayout: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            header.cascade(0, distance: 10)
+            AdaptiveColumns(width: width, ratio: 0.54, spacing: 14) {
+                progress
+                DailyFiveCard(picks: picks).cascade(2)
+                banner.cascade(3)
+                TodayChips().cascade(4, distance: 10)
+                ComingUp().cascade(5)
+                BirthdaysCard().cascade(6)
+                worthYourTime
+            } secondary: {
+                TodayCompassCard().id("compass").cascade(2)
+                WatchlistCard().cascade(4)
+            }
+        }
+    }
+
+    @ViewBuilder private var progress: some View {
+        if !picks.isEmpty {
+            ProgressStrip(done: picks.count - openCount, total: picks.count)
+                .padding(.horizontal, 6).padding(.bottom, 2)
+                .cascade(1, distance: 10)
+        }
+    }
+
+    @ViewBuilder private var worthYourTime: some View {
+        if !model.home.cards.isEmpty {
+            VStack(alignment: .leading, spacing: 0) {
+                Text("Worth your time").font(Theme.geist(.headline, .bold)).padding(.top, 14).padding(.bottom, 4)
+                ForEach(Array(model.home.cards.enumerated()), id: \.element.id) { i, card in
+                    if i > 0 { Theme.line.frame(height: 1) }
+                    HomeCardView(card: card)
+                }
+            }
+            .padding(.horizontal, 16)
+            .card()
+            .cascade(7).edgeSettle()
         }
     }
 
