@@ -1,0 +1,9 @@
+name = "bearings-team"
+main = "worker.js"
+compatibility_date = "2026-10-01"
+workers_dev = true
+
+[[d1_databases]]
+binding = "DB"
+database_name = "bearings-team"
+database_id = "2d9e34e4-2a1d-46f1-818e-8104227fe3d2"

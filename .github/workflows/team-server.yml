@@ -1,0 +1,73 @@
+name: Team server
+
+on:
+  push:
+    branches: [main]
+    paths: ['server/team/**', '.github/workflows/team-server.yml']
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: server/team
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: server/team/package-lock.json
+      - run: npm ci
+      - run: npm test
+
+  # Deploys only when run by hand: Actions > Team server > Run workflow.
+  deploy:
+    if: github.event_name == 'workflow_dispatch'
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      # Applies the schema (safe to repeat), then deploys the worker.
+      - id: deploy
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: server/team
+          preCommands: npx wrangler d1 execute bearings-team --remote --file schema.sql --yes
+          command: deploy
+
+      # Billing secrets are optional. wrangler-action's `secrets:` input fails on an empty
+      # value, so set only the ones that exist.
+      - name: Set billing secrets
+        working-directory: server/team
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
+          STRIPE_PRICE_ID: ${{ secrets.STRIPE_PRICE_ID }}
+          STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
+        run: |
+          for name in STRIPE_SECRET_KEY STRIPE_PRICE_ID STRIPE_WEBHOOK_SECRET; do
+            if [ -n "${!name}" ]; then
+              printf '%s' "${!name}" | npx wrangler secret put "$name"
+            else
+              echo "$name isn't set. Skipping it (billing stays off until all three are set)."
+            fi
+          done
+
+      - name: Show the address
+        env:
+          URL: ${{ steps.deploy.outputs.deployment-url }}
+        run: |
+          if [ -n "$URL" ]; then
+            echo "Team server: $URL"
+            echo "::notice title=Team server deployed::$URL (set the repository variable TEAM_URL to this address)"
+          else
+            echo "::notice title=Team server deployed::Find the workers.dev address in the deploy step's log above."
+          fi

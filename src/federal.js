@@ -209,7 +209,9 @@ const esc = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 /** Compiled matchers, built once. */
 export function compileFederal(){
   return FEDERAL.map(([dept, name, short, aliases, tags], i) => {
-    const caps = aliases.filter(isAcronym), words = aliases.filter(a => !isAcronym(a));
+    // the display name always counts, so "DoD Chief Information Officer" as an employer matches
+    const all = aliases.includes(name) ? aliases : aliases.concat(isAcronym(name) ? [] : [name]);
+    const caps = all.filter(isAcronym), words = all.filter(a => !isAcronym(a));
     const rxCaps = caps.length ? new RegExp(`(^|[^A-Za-z0-9])(${caps.map(esc).join('|')})(?![A-Za-z0-9])`) : null;
     const rxWords = words.length ? new RegExp(`\\b(${words.map(esc).join('|')})\\b`, 'i') : null;
     return {id: 'f' + i, dept, name, short, tags, test: s => (!!rxCaps && rxCaps.test(s)) || (!!rxWords && rxWords.test(s))};

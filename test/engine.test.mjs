@@ -553,3 +553,66 @@ test('the federal map shows where you are connected and where you are not', () =
   assert.ok(m.depts.find(d => d.name === 'Energy').thin >= 1);
   assert.equal(m.totals.covered + m.totals.thin + m.totals.none, m.totals.agencies);
 });
+
+test('team shares: people, pursuits and watchlist, never notes', () => {
+  const k = people().find(p => p.c)?.k;
+  call('setEdit', k, { note: 'secret note', tags: ['vip'] });
+  const id = call('addPursuit', { name: 'DISA pilot', agency: 'DISA' }).id;
+  call('assignRole', id, 'Contracting officer', k, true);
+  const share = JSON.parse(call('teamShare', 'Jay'));
+  assert.equal(share.kind, 'bearings-team-share');
+  assert.equal(share.v, 2);
+  assert.equal(share.pursuits.length, 1);
+  assert.equal(share.pursuits[0].roles[0].role, 'Contracting officer');
+  assert.ok(share.targets.includes('DISA'));
+  const text = JSON.stringify(share);
+  assert.ok(!text.includes('secret note') && !text.includes('vip'), 'notes and tags never leave the device');
+  assert.deepEqual(Object.keys(share.people[0]).sort(), ['b', 'c', 'f', 'l', 'p', 'u']);
+});
+
+test('team server shares replace each other; hand-added packs stay', () => {
+  call('addTeamPack', JSON.stringify({ kind: 'bearings-team-pack', v: 1, owner: 'Jim', people: [{ f: 'A', l: 'B', c: 'NAVFAC', b: 'warm' }] }));
+  const shares = call('demoTeamShares');
+  assert.equal(shares.length, 3);
+  let list = call('setTeamShares', shares);
+  assert.equal(list.length, 4);
+  assert.equal(list.filter(t => t.id).length, 3);
+  list = call('setTeamShares', shares.slice(0, 1).concat([{ id: 'bad', text: 'not json' }]));
+  assert.deepEqual(list.map(t => t.owner).sort(), ['Jim', 'Pat Morgan']);
+  assert.equal(call('removeTeamPack', 'Pat Morgan').length, 2, 'server shares are removed by leaving, not by hand');
+});
+
+test('the federal map counts the team, and keeps your own status', () => {
+  const alone = call('agencyCoverage', false);
+  call('setTeamShares', call('demoTeamShares'));
+  const team = call('agencyCoverage', true);
+  assert.equal(team.totals.agencies, alone.totals.agencies);
+  assert.ok(team.totals.none < alone.totals.none, 'teammates fill gaps');
+  assert.deepEqual(team.mine, { covered: alone.totals.covered, thin: alone.totals.thin, none: alone.totals.none });
+  const filled = team.rows.find(r => r.mine === 'none' && r.status !== 'none');
+  assert.ok(filled && filled.teamKnown > 0 && filled.teamBest.length > 0);
+  assert.equal(call('agencyCoverage', false).totals.none, alone.totals.none, 'without the team, only your people count');
+});
+
+test('agency display names match as employers', () => {
+  call('setTeamShares', [{ id: 'x', text: JSON.stringify({ kind: 'bearings-team-share', v: 2, owner: 'Pat',
+    people: [{ f: 'Dana', l: 'Ruiz', c: 'DoD Chief Information Officer', p: 'Deputy CIO', b: 'strong' }], targets: ['DoD CIO'] }) }]);
+  const row = call('agencyCoverage', true).rows.find(r => r.short === 'DoD CIO');
+  assert.equal(row.teamKnown, 1);
+  const o = call('teamOverview');
+  const t = o.targets.find(x => x.name === 'DoD CIO');
+  assert.equal(t.team, 1);
+  assert.deepEqual(t.owners, ['Pat']);
+});
+
+test('team overview: members, combined reach, pursuits and watchlist', () => {
+  call('addPursuit', { name: 'Mine', agency: 'NAVFAC', due: '2026-12-01' });
+  call('setTeamShares', call('demoTeamShares'));
+  const o = call('teamOverview');
+  assert.equal(o.members.length, 3);
+  assert.ok(o.agencies.team > o.agencies.mine);
+  assert.ok(o.people > o.me.count);
+  assert.equal(o.pursuits.filter(p => p.mine).length, 1);
+  assert.equal(o.pursuits.filter(p => !p.mine).length, 3);
+  assert.ok(o.targets.some(t => t.owners.includes('You') && t.owners.length > 1), 'a shared watchlist account shows who watches it');
+});

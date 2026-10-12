@@ -1100,30 +1100,46 @@ function socials(){
 // Every department, agency and major command, with where you are connected and where
 // you are not. "Covered" means someone senior and someone warm; "thin" means you know
 // someone there, but not both.
-function agencyCoverage(){
+// Which federal agencies a person's employer, agency label or title points to.
+function fedHits(F, c, agency, p){
+  const co = `${c || ''} ${agency || ''}`;
+  let hits = F.filter(a => a.test(co));
+  if (!hits.length && p && !/\b(former|retired|ex-)\b/i.test(p)) hits = F.filter(a => a.test(p));
+  return hits;
+}
+// Teammates' people are classified on demand (cached), the same way your own are.
+const teamCl = new WeakMap();
+const clOfShared = p => { let v = teamCl.get(p); if (!v){ v = classify({f: p.f, l: p.l, c: p.c, p: p.p}); teamCl.set(p, v); } return v; };
+const lvOfShared = p => clOfShared(p).lv || 5;
+/** The federal map. With `withTeam`, teammates' people count too, and status reflects the whole team. */
+function agencyCoverage(withTeam){
   const F = S._fed || (S._fed = compileFederal());
   const by = new Map(F.map(a => [a.id, []]));
-  for (const r of live()){
-    const co = `${r.c || ''} ${r.cl.agency || ''}`;
-    let hits = F.filter(a => a.test(co));
-    if (!hits.length && r.p && !/\b(former|retired|ex-)\b/i.test(r.p)) hits = F.filter(a => a.test(r.p));
-    for (const a of hits) by.get(a.id).push(r);
-  }
+  for (const r of live()) for (const a of fedHits(F, r.c, r.cl.agency, r.p)) by.get(a.id).push(r);
+  const tby = new Map(F.map(a => [a.id, []]));
+  for (const t of S.team) for (const p of t.people) for (const a of fedHits(F, p.c, '', p.p)) tby.get(a.id).push({owner: t.owner, p});
+  const statusOf = (n, senior, warm) => !n ? 'none' : senior && warm ? 'covered' : 'thin';
+  const gapOf = (n, senior, warm) => !n ? 'No one yet' : !senior ? 'No one senior' : !warm ? 'No warm relationship' : '';
   const rows = F.map(a => {
-    const ps = by.get(a.id);
+    const ps = by.get(a.id), tp = tby.get(a.id);
     const senior = ps.filter(r => r.cl.lv <= 2).length, warm = ps.filter(r => r.wm.band === 'strong' || r.wm.band === 'warm').length;
-    const status = !ps.length ? 'none' : senior && warm ? 'covered' : 'thin';
+    const teamSenior = tp.filter(x => lvOfShared(x.p) <= 2).length, teamWarm = tp.filter(x => x.p.b === 'strong' || x.p.b === 'warm').length;
+    const mine = statusOf(ps.length, senior, warm);
+    const n = withTeam ? ps.length + tp.length : ps.length, sn = withTeam ? senior + teamSenior : senior, wn = withTeam ? warm + teamWarm : warm;
     const best = ps.slice().sort((x, y) => y.wm.score - x.wm.score || bySenior(x, y)).slice(0, 3).map(r => r.k);
-    const gap = !ps.length ? 'No one yet' : !senior ? 'No one senior' : !warm ? 'No warm relationship' : '';
-    return {id: a.id, dept: a.dept, name: a.name, short: a.short, tags: a.tags, known: ps.length, senior, warm, status, gap, best,
+    const teamBest = tp.slice().sort((x, y) => BAND_RANK[y.p.b] - BAND_RANK[x.p.b] || lvOfShared(x.p) - lvOfShared(y.p)).slice(0, 3)
+      .map(x => ({owner: x.owner, name: `${x.p.f} ${x.p.l}`.trim(), p: x.p.p, b: x.p.b}));
+    return {id: a.id, dept: a.dept, name: a.name, short: a.short, tags: a.tags, known: ps.length, senior, warm, status: statusOf(n, sn, wn), mine, gap: gapOf(n, sn, wn), best,
+      teamKnown: tp.length, teamSenior, teamWarm, teamOwners: new Set(tp.map(x => x.owner)).size, teamBest,
       watched: S.targets.some(t => t.name === a.short || t.name === a.name)};
   });
   const depts = [...new Set(F.map(a => a.dept))].map(d => {
     const rs = rows.filter(r => r.dept === d);
     return {name: d, agencies: rs.length, covered: rs.filter(r => r.status === 'covered').length, thin: rs.filter(r => r.status === 'thin').length, none: rs.filter(r => r.status === 'none').length};
   });
-  const count = st => rows.filter(r => r.status === st).length;
-  return {rows, depts, totals: {agencies: rows.length, covered: count('covered'), thin: count('thin'), none: count('none')}};
+  const count = (st, f = 'status') => rows.filter(r => r[f] === st).length;
+  return {rows, depts, totals: {agencies: rows.length, covered: count('covered'), thin: count('thin'), none: count('none')},
+    mine: {covered: count('covered', 'mine'), thin: count('thin', 'mine'), none: count('none', 'mine')}, withTeam: !!withTeam, hasTeam: S.team.length > 0};
 }
 
 /* ---------- intro finder ---------- */
@@ -1173,29 +1189,111 @@ function importTexts(t, device){
   return {stats: plan.stats, wasSample: S.mode === 'sample', wasStarter};
 }
 
-/* ---------- team packs ---------- */
-// A teammate shares a pack: who they know, at which company, and how well. No notes, emails,
-// messages or tags. Packs stay on your device and only feed "Ways in".
+/* ---------- team ---------- */
+// A teammate shares who they know, at which company, and how well, plus their pursuits and
+// watchlist. No notes, emails, messages or tags. Shares from the team server arrive already
+// decrypted on the device; team pack files added by hand work the same way.
 const BAND_RANK = {strong: 3, warm: 2, light: 1, none: 0};
+const clip = (v, n) => String(v == null ? '' : v).slice(0, n);
+function sharePeople(){ return live().map(r => ({f: r.f, l: r.l, c: r.c || '', p: r.p || '', u: r.u || '', b: r.wm ? r.wm.band : 'none'})); }
 function teamPack(owner){
-  const people = live().map(r => ({f: r.f, l: r.l, c: r.c || '', p: r.p || '', u: r.u || '', b: r.wm ? r.wm.band : 'none'}));
-  return JSON.stringify({kind: 'bearings-team-pack', v: 1, owner: String(owner || 'A teammate').slice(0, 80), made: TODAY, people});
+  return JSON.stringify({kind: 'bearings-team-pack', v: 1, owner: clip(owner || 'A teammate', 80), made: TODAY, people: sharePeople()});
+}
+/** Your share for the team server: people, pursuits (with who fills each seat) and watchlist. */
+function teamShare(owner){
+  const pursuits = S.pursuits.map(p => ({name: p.name, agency: p.agency, stage: p.stage, due: p.due, value: p.value,
+    roles: Object.entries(p.roles).flatMap(([role, ks]) => ks.map(k => S.byK.get(k)).filter(Boolean).map(r => ({role, name: fullName(r), p: r.p || '', b: r.wm.band})))}));
+  return JSON.stringify({kind: 'bearings-team-share', v: 2, owner: clip(owner || 'A teammate', 80), made: TODAY, people: sharePeople(), pursuits, targets: S.targets.map(t => t.name)});
+}
+function parseShare(text){
+  let d; try { d = typeof text === 'string' ? JSON.parse(text) : text; } catch { d = null; }
+  if (!d || (d.kind !== 'bearings-team-pack' && d.kind !== 'bearings-team-share') || !Array.isArray(d.people)) throw new Error('That isn’t a Bearings team pack.');
+  const band = b => BAND_RANK[b] != null ? b : 'none';
+  const people = d.people.slice(0, 50000).filter(p => p && (p.f || p.l)).map(p => ({f: clip(p.f, 80), l: clip(p.l, 80), c: clip(p.c, 160), p: clip(p.p, 240), u: clip(p.u, 300), b: band(p.b)}));
+  const pursuits = (Array.isArray(d.pursuits) ? d.pursuits : []).slice(0, 200).filter(p => p && p.name).map(p => ({name: clip(p.name, 160), agency: clip(p.agency, 160),
+    stage: STAGES.includes(p.stage) ? p.stage : 'Tracking', due: clip(p.due, 10), value: clip(p.value, 40),
+    roles: (Array.isArray(p.roles) ? p.roles : []).slice(0, 60).filter(x => x && x.role && x.name).map(x => ({role: clip(x.role, 60), name: clip(x.name, 160), p: clip(x.p, 240), b: band(x.b)}))}));
+  const targets = (Array.isArray(d.targets) ? d.targets : []).slice(0, 500).map(t => clip(t, 160)).filter(Boolean);
+  return {owner: clip(d.owner || 'A teammate', 80), made: clip(d.made || TODAY, 10), people, pursuits, targets};
 }
 function addTeamPack(text){
-  let d; try { d = JSON.parse(text); } catch { d = null; }
-  if (!d || d.kind !== 'bearings-team-pack' || !Array.isArray(d.people)) throw new Error('That isn’t a Bearings team pack.');
-  const owner = String(d.owner || 'A teammate').slice(0, 80);
-  const people = d.people.slice(0, 50000).filter(p => p && (p.f || p.l)).map(p => ({f: String(p.f || '').slice(0, 80), l: String(p.l || '').slice(0, 80),
-    c: String(p.c || '').slice(0, 160), p: String(p.p || '').slice(0, 240), u: String(p.u || '').slice(0, 300), b: BAND_RANK[p.b] != null ? p.b : 'none'}));
-  S.team = S.team.filter(t => t.owner !== owner).concat([{owner, made: String(d.made || TODAY).slice(0, 10), people}]);
-  return {owner, count: people.length, packs: teamList()};
+  const t = parseShare(text);
+  S.team = S.team.filter(x => x.owner !== t.owner || x.id).concat([t]);
+  return {owner: t.owner, count: t.people.length, packs: teamList()};
 }
-function removeTeamPack(owner){ S.team = S.team.filter(t => t.owner !== owner); return teamList(); }
-function teamList(){ return S.team.map(t => ({owner: t.owner, made: t.made, count: t.people.length})); }
+/** Replaces every share that came from the team server. Packs added by hand stay. */
+function setTeamShares(list){
+  const kept = S.team.filter(t => !t.id), fresh = [];
+  for (const x of Array.isArray(list) ? list : []){
+    try { fresh.push(Object.assign(parseShare(x.text), {id: clip(x.id, 64)})); } catch { /* skip a share we can't read */ }
+  }
+  const ids = new Set(fresh.map(t => t.owner));
+  S.team = kept.filter(t => !ids.has(t.owner)).concat(fresh);
+  return teamList();
+}
+function removeTeamPack(owner){ S.team = S.team.filter(t => t.owner !== owner || t.id); return teamList(); }
+function teamList(){ return S.team.map(t => ({owner: t.owner, made: t.made, count: t.people.length, id: t.id || '', pursuits: (t.pursuits || []).length, targets: (t.targets || []).length})); }
+/** The team at a glance: who's on it, combined federal coverage, every pursuit and the team watchlist. */
+function teamOverview(){
+  const F = S._fed || (S._fed = compileFederal());
+  const agenciesOf = ps => { const set = new Set(); for (const p of ps) for (const a of fedHits(F, p.c, p.agency || '', p.p)) set.add(a.id); return set; };
+  const mine = agenciesOf(live().map(r => ({c: r.c, agency: r.cl.agency, p: r.p})));
+  const members = S.team.map(t => ({owner: t.owner, id: t.id || '', made: t.made, count: t.people.length,
+    strong: t.people.filter(p => p.b === 'strong').length, warm: t.people.filter(p => p.b === 'warm').length,
+    agencies: agenciesOf(t.people).size, pursuits: (t.pursuits || []).length}));
+  const all = new Set(mine);
+  for (const t of S.team) for (const id of agenciesOf(t.people)) all.add(id);
+  const key = p => `${String(p.f || '').toLowerCase()} ${String(p.l || '').toLowerCase()}|${coKey(p.c)}`;
+  const uniq = new Set(live().map(key));
+  for (const t of S.team) for (const p of t.people) uniq.add(key(p));
+  const cov = agencyCoverage(true);
+  const pursuitsOut = [];
+  for (const p of S.pursuits){ const sum = pursuitSummary(p); pursuitsOut.push({owner: 'You', mine: true, id: p.id, name: p.name, agency: p.agency, stage: p.stage, due: p.due, days: sum.days, value: p.value, filled: sum.filled, roles: PURSUIT_ROLES.length, people: []}); }
+  for (const t of S.team) for (const p of t.pursuits || []) pursuitsOut.push({owner: t.owner, mine: false, id: '', name: p.name, agency: p.agency, stage: p.stage, due: p.due,
+    days: p.due ? -daysSince(p.due) : null, value: p.value, filled: new Set(p.roles.map(x => x.role)).size, roles: PURSUIT_ROLES.length, people: p.roles});
+  pursuitsOut.sort((a, b) => (STAGES.indexOf(a.stage) > 3) - (STAGES.indexOf(b.stage) > 3) || ((a.due || '9') < (b.due || '9') ? -1 : 1));
+  const names = new Map();
+  for (const t of S.targets) names.set(t.name.toLowerCase(), {name: t.name, owners: ['You']});
+  for (const t of S.team) for (const n of t.targets || []){ const k = n.toLowerCase(); if (!names.has(k)) names.set(k, {name: n, owners: []}); const e = names.get(k); if (!e.owners.includes(t.owner)) e.owners.push(t.owner); }
+  const targets = [...names.values()].map(e => {
+    // a watchlist name can be a company or an agency's short name (DISA, DoD CIO)
+    const byName = coHit(e.name), fed = F.find(a => a.short === e.name || a.name === e.name);
+    const hit = c => byName(c) || (!!fed && !!c && fed.test(c));
+    const me = live().filter(r => hit(r.c) || hit(r.cl.agency)).map(r => ({owner: 'You', k: r.k, name: fullName(r), p: r.p || '', b: r.wm.band}));
+    const th = teamPaths(hit).map(x => ({owner: x.owner, name: x.name, p: x.p, b: x.b}));
+    const best = me.concat(th).sort((a, b) => BAND_RANK[b.b] - BAND_RANK[a.b]).slice(0, 3);
+    return {name: e.name, owners: e.owners, people: me.length + th.length, mine: me.length, team: th.length, best};
+  }).sort((a, b) => b.owners.length - a.owners.length || a.people - b.people);
+  return {members, me: {count: live().length, agencies: mine.size}, people: uniq.size, agencies: {mine: mine.size, team: all.size, total: F.length},
+    coverage: {team: cov.totals, mine: cov.mine}, pursuits: pursuitsOut, targets};
+}
+/** Made-up teammates for the sample network and screenshots: they know people where you don't. */
+function demoTeamShares(){
+  const F = S._fed || (S._fed = compileFederal());
+  const cov = agencyCoverage(false);
+  const gaps = cov.rows.filter(r => r.status !== 'covered');
+  const A = live(), firsts = [...new Set(A.map(r => r.f))], lasts = [...new Set(A.map(r => r.l))];
+  const titles = ['Program Manager', 'Director, Acquisition', 'Deputy Director', 'Contracting Officer', 'Chief Information Security Officer', 'Branch Chief', 'Senior Engineer', 'Division Chief'];
+  const bands = ['strong', 'warm', 'warm', 'light', 'light', 'none'];
+  let seed = 11; const rnd = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; };
+  const pick = a => a[Math.floor(rnd() * a.length)];
+  const mates = [['Pat Morgan', 0], ['Alex Reyes', 1], ['Sam Okafor', 2]];
+  return mates.map(([owner, i]) => {
+    const people = A.filter((r, j) => j % 7 === i).slice(0, 90).map(r => ({f: r.f, l: r.l, c: r.c || '', p: r.p || '', u: '', b: pick(bands)}));
+    for (const g of gaps.filter((r, j) => j % 3 === i).slice(0, 22)) for (let n = 0; n < 1 + Math.floor(rnd() * 3); n++)
+      people.push({f: pick(firsts), l: pick(lasts), c: g.name, p: pick(titles), u: '', b: pick(bands)});
+    const ag = gaps.filter((r, j) => j % 3 === i)[0];
+    const pursuits = [{name: `${ag ? ag.short : 'CISA'} ${['OT visibility pilot', 'zero trust gateway', 'grid resilience study'][i]}`, agency: ag ? ag.short : 'CISA', stage: ['Pursuing', 'Proposal', 'Tracking'][i],
+      due: isoDay(Date.parse(TODAY) + (20 + 25 * i) * 864e5), value: ['$1.2M', '$3.8M', '$650K'][i],
+      roles: people.filter(p => ag && p.c === ag.name).slice(0, 2).map((p, j) => ({role: ['Program manager', 'Contracting officer'][j], name: `${p.f} ${p.l}`, p: p.p, b: p.b}))}];
+    const targets = [ag ? ag.short : 'CISA', pick(['DOE', 'TVA', 'CISA', 'USACE', 'NAVFAC'])];
+    return {id: `demo-${i}`, text: JSON.stringify({kind: 'bearings-team-share', v: 2, owner, made: TODAY, people, pursuits, targets})};
+  });
+}
 /** Teammates' people at a company, best first, plus who on the team covers it. */
 function teamPaths(hit){
   const out = [];
-  for (const t of S.team) for (const p of t.people) if (hit(p.c)) out.push({owner: t.owner, name: `${p.f} ${p.l}`.trim(), c: p.c, p: p.p, u: p.u, b: p.b});
+  for (const t of S.team) for (const p of t.people) if (hit(p.c) || hit(clOfShared(p).agency)) out.push({owner: t.owner, name: `${p.f} ${p.l}`.trim(), c: p.c, p: p.p, u: p.u, b: p.b});
   out.sort((a, b) => BAND_RANK[b.b] - BAND_RANK[a.b] || a.name.localeCompare(b.name));
   return out.slice(0, 40);
 }
@@ -1631,7 +1729,7 @@ function constants(){
 
 const api = {load, loadSample, loadFiles, clearNotes, clusters, placeClues, setCompanyLocation, companyPlaces, messages, matchAttendees, alsoAt, setLens, info, people, person, search, facets, home, payoff, targets, unit, addTargetCandidates, toggleTarget, setTargetNote, orgs,
   industries, industry, setCompanyIndustry, setCompanyLink, ranks, deck, deckCount, reviewed, radar, compass, startFromContacts, introPaths, weekly, touch, setCircle, setEdit, followUp, markReplied, addNote,
-  importTexts, importSnapshot, yearInReview, teamPack, addTeamPack, removeTeamPack, teamList, matchEnrichment, readNotes, memory, applyMail, clearMail, addProspects, clearProspects, addPursuit, updatePursuit, removePursuit, assignRole, pursuits, pursuit, moves, setRoleSince, quickLog, addIntro, setIntro, intros, trend, snapshot, targetChanges, ask, importSocial, clearSocial, socials, agencyCoverage, orgChart, structureFor, setReportsTo, backup, restore, exportCSV, reminders, watch, constants};
+  importTexts, importSnapshot, yearInReview, teamPack, teamShare, addTeamPack, setTeamShares, removeTeamPack, teamList, teamOverview, demoTeamShares, matchEnrichment, readNotes, memory, applyMail, clearMail, addProspects, clearProspects, addPursuit, updatePursuit, removePursuit, assignRole, pursuits, pursuit, moves, setRoleSince, quickLog, addIntro, setIntro, intros, trend, snapshot, targetChanges, ask, importSocial, clearSocial, socials, agencyCoverage, orgChart, structureFor, setReportsTo, backup, restore, exportCSV, reminders, watch, constants};
 // Every call goes through here: JSON string in, JSON string out, errors as {error}.
 globalThis.Bearings = {
   call(name, argsJSON){
