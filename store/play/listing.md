@@ -47,7 +47,7 @@ To start, request your data from LinkedIn (Settings, Data privacy, Get a copy of
 
 - Category: Business
 - Tags: Networking, Productivity
-- Email: jay@jaynichols.net
+- Email: hello@northfix.app
 - Website: https://northfix.app/
 - Privacy policy: https://northfix.app/privacy.html
 

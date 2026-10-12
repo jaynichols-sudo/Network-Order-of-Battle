@@ -160,7 +160,7 @@ export function openSettings(){
       backup: () => backup(),
       async restore(){ const f = await pickFile('.json,application/json'); if (f) restore(f); },
       tour(){ closeSheet(); setTimeout(() => openOnboarding(0), 300); },
-      feedback: () => openURL('mailto:jay@jaynichols.net?subject=' + encodeURIComponent('Northfix for Android')),
+      feedback: () => openURL('mailto:hello@northfix.app?subject=' + encodeURIComponent('Northfix for Android')),
     },
   });
 }

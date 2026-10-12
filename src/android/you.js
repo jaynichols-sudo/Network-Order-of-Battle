@@ -103,6 +103,6 @@ export const YouView = {
     pro: () => open('paywall'),
     enrichFile: () => open('enrichFile'),
     notes: () => { fx.tap(); open('notes'); },
-    help: () => openURL('mailto:jay@jaynichols.net?subject=' + encodeURIComponent('Northfix for Android: help')),
+    help: () => openURL('mailto:hello@northfix.app?subject=' + encodeURIComponent('Northfix for Android: help')),
   },
 };
