@@ -94,10 +94,13 @@ jobs:
           mshot 05-intros -startTab you -demoOpen intros
           mshot 06-moves -startTab you -demoOpen moves
           mshot 07-unit -startTab companies -demoOpen unit
+          mshot 08-profile -startTab people -demoOpen person
+          mshot 09-you -startTab you
+          mshot 10-team -startTab you -demoOpen team
           pkill -x Bearings >/dev/null 2>&1 || true
           ls -la shots | grep mac- || true
       - name: UI tests
-        if: ${{ !inputs.quick }}
+        if: ${{ !inputs.quick && inputs.only == '' }}
         continue-on-error: true
         run: |
           UDID=$(xcrun simctl list devices available -j | python3 -c "
