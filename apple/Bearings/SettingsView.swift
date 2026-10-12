@@ -131,6 +131,11 @@ struct SettingsView: View {
                         Task { await CalendarService.shared.scan(model: model, force: true) }
                     }))
             }
+            NavigationLink {
+                TripFeedSettings()
+            } label: {
+                LabeledContent(CalendarService.shared.hasFeed ? "TripIt feed" : "Add a TripIt feed", value: CalendarService.shared.hasFeed ? "On" : "")
+            }
             Toggle("Follow-ups in Apple Reminders", isOn: Binding(
                 get: { remindersOn },
                 set: { on in
