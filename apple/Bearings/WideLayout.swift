@@ -71,7 +71,10 @@ struct TwoColumns: Layout {
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
         let total = proposal.width ?? Wide.page
         let (l, r) = widths(total)
-        let h = zip(subviews, [l, r]).map { $0.sizeThatFits(ProposedViewSize(width: $1, height: nil)).height }.max() ?? 0
+        var h: CGFloat = 0
+        for (view, w) in zip(subviews, [l, r]) {
+            h = max(h, view.sizeThatFits(ProposedViewSize(width: w, height: nil)).height)
+        }
         return CGSize(width: total, height: h)
     }
 
