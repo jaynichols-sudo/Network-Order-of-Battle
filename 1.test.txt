@@ -1,0 +1,80 @@
+CLIP|today|end|1791839992.306
+2026-10-12 21:19:53.487 xcodebuild[58441:161961] [MT] IDESchemeActionSDKRecord: operatingSystemBuild = <DVTBuildVersion 24A94403>, error = invalidDigitCount(94403).
+2026-10-12 21:19:53.488 xcodebuild[58441:161961] [MT] IDESchemeActionSDKRecord: operatingSystemBuild = <DVTBuildVersion 24A94403>, error = invalidDigitCount(94403).
+2026-10-12 21:19:53.560 xcodebuild[58441:161961] [MT] IDESchemeActionSDKRecord: operatingSystemBuild = <DVTBuildVersion 24A94403>, error = invalidDigitCount(94403).
+2026-10-12 21:19:53.918 xcodebuild[58441:161961] [MT] IDESchemeActionSDKRecord: operatingSystemBuild = <DVTBuildVersion 24A94403>, error = invalidDigitCount(94403).
+CLIP|radar|start|1791840002.217
+CLIP|radar|end|1791840010.221
+2026-10-12 21:20:10.896 xcodebuild[58441:161961] [MT] IDESchemeActionSDKRecord: operatingSystemBuild = <DVTBuildVersion 24A94403>, error = invalidDigitCount(94403).
+2026-10-12 21:20:10.897 xcodebuild[58441:161961] [MT] IDESchemeActionSDKRecord: operatingSystemBuild = <DVTBuildVersion 24A94403>, error = invalidDigitCount(94403).
+2026-10-12 21:20:10.898 xcodebuild[58441:161961] [MT] IDESchemeActionSDKRecord: operatingSystemBuild = <DVTBuildVersion 24A94403>, error = invalidDigitCount(94403).
+2026-10-12 21:20:11.717 xcodebuild[58441:161961] [MT] IDESchemeActionSDKRecord: operatingSystemBuild = <DVTBuildVersion 24A94403>, error = invalidDigitCount(94403).
+CLIP|profile|start|1791840020.083
+CLIP|profile|end|1791840032.546
+2026-10-12 21:20:33.173 xcodebuild[58441:161961] [MT] IDESchemeActionSDKRecord: operatingSystemBuild = <DVTBuildVersion 24A94403>, error = invalidDigitCount(94403).
+2026-10-12 21:20:33.173 xcodebuild[58441:161961] [MT] IDESchemeActionSDKRecord: operatingSystemBuild = <DVTBuildVersion 24A94403>, error = invalidDigitCount(94403).
+2026-10-12 21:20:33.177 xcodebuild[58441:161961] [MT] IDESchemeActionSDKRecord: operatingSystemBuild = <DVTBuildVersion 24A94403>, error = invalidDigitCount(94403).
+2026-10-12 21:20:34.094 xcodebuild[58441:161961] [MT] IDESchemeActionSDKRecord: operatingSystemBuild = <DVTBuildVersion 24A94403>, error = invalidDigitCount(94403).
+CLIP|ask|start|1791840042.045
+CLIP|ask|end|1791840057.868
+2026-10-12 21:20:58.770 xcodebuild[58441:161961] [MT] IDESchemeActionSDKRecord: operatingSystemBuild = <DVTBuildVersion 24A94403>, error = invalidDigitCount(94403).
+2026-10-12 21:20:59.066 xcodebuild[58441:161961] [MT] IDESchemeActionSDKRecord: operatingSystemBuild = <DVTBuildVersion 24A94403>, error = invalidDigitCount(94403).
+2026-10-12 21:20:59.066 xcodebuild[58441:161961] [MT] IDESchemeActionSDKRecord: operatingSystemBuild = <DVTBuildVersion 24A94403>, error = invalidDigitCount(94403).
+2026-10-12 21:21:00.339 xcodebuild[58441:161961] [MT] IDESchemeActionSDKRecord: operatingSystemBuild = <DVTBuildVersion 24A94403>, error = invalidDigitCount(94403).
+CLIP|quicknote|start|1791840068.057
+CLIP|quicknote|end|1791840078.341
+2026-10-12 21:21:18.853 xcodebuild[58441:161961] [MT] IDESchemeActionSDKRecord: operatingSystemBuild = <DVTBuildVersion 24A94403>, error = invalidDigitCount(94403).
+2026-10-12 21:21:18.853 xcodebuild[58441:161961] [MT] IDESchemeActionSDKRecord: operatingSystemBuild = <DVTBuildVersion 24A94403>, error = invalidDigitCount(94403).
+2026-10-12 21:21:18.921 xcodebuild[58441:161961] [MT] IDESchemeActionSDKRecord: operatingSystemBuild = <DVTBuildVersion 24A94403>, error = invalidDigitCount(94403).
+2026-10-12 21:21:19.872 xcodebuild[58441:161961] [MT] IDESchemeActionSDKRecord: operatingSystemBuild = <DVTBuildVersion 24A94403>, error = invalidDigitCount(94403).
+CLIP|federal|start|1791840087.976
+CLIP|federal|end|1791840105.970
+2026-10-12 21:21:46.843 xcodebuild[58441:161961] [MT] IDESchemeActionSDKRecord: operatingSystemBuild = <DVTBuildVersion 24A94403>, error = invalidDigitCount(94403).
+2026-10-12 21:21:46.843 xcodebuild[58441:161961] [MT] IDESchemeActionSDKRecord: operatingSystemBuild = <DVTBuildVersion 24A94403>, error = invalidDigitCount(94403).
+2026-10-12 21:21:46.843 xcodebuild[58441:161961] [MT] IDESchemeActionSDKRecord: operatingSystemBuild = <DVTBuildVersion 24A94403>, error = invalidDigitCount(94403).
+2026-10-12 21:21:50.109 xcodebuild[58441:161961] [MT] IDESchemeActionSDKRecord: operatingSystemBuild = <DVTBuildVersion 24A94403>, error = invalidDigitCount(94403).
+CLIP|org|start|1791840124.940
+CLIP|org|end|1791840146.404
+2026-10-12 21:22:29.060 xcodebuild[58441:161961] [MT] IDESchemeActionSDKRecord: operatingSystemBuild = <DVTBuildVersion 24A94403>, error = invalidDigitCount(94403).
+2026-10-12 21:22:29.060 xcodebuild[58441:161961] [MT] IDESchemeActionSDKRecord: operatingSystemBuild = <DVTBuildVersion 24A94403>, error = invalidDigitCount(94403).
+2026-10-12 21:22:29.061 xcodebuild[58441:161961] [MT] IDESchemeActionSDKRecord: operatingSystemBuild = <DVTBuildVersion 24A94403>, error = invalidDigitCount(94403).
+2026-10-12 21:22:59.900 xcodebuild[58441:161961] [MT] IDESchemeActionSDKRecord: operatingSystemBuild = <DVTBuildVersion 24A94403>, error = invalidDigitCount(94403).
+CLIP|pursuit|start|1791840189.554
+CLIP|pursuit|end|1791840200.836
+2026-10-12 21:23:21.260 xcodebuild[58441:161961] [MT] IDESchemeActionSDKRecord: operatingSystemBuild = <DVTBuildVersion 24A94403>, error = invalidDigitCount(94403).
+2026-10-12 21:23:21.260 xcodebuild[58441:161961] [MT] IDESchemeActionSDKRecord: operatingSystemBuild = <DVTBuildVersion 24A94403>, error = invalidDigitCount(94403).
+2026-10-12 21:23:21.260 xcodebuild[58441:161961] [MT] IDESchemeActionSDKRecord: operatingSystemBuild = <DVTBuildVersion 24A94403>, error = invalidDigitCount(94403).
+2026-10-12 21:23:22.299 xcodebuild[58441:161961] [MT] IDESchemeActionSDKRecord: operatingSystemBuild = <DVTBuildVersion 24A94403>, error = invalidDigitCount(94403).
+CLIP|socials|start|1791840212.459
+CLIP|socials|end|1791840220.128
+2026-10-12 21:23:40.547 xcodebuild[58441:161961] [MT] IDESchemeActionSDKRecord: operatingSystemBuild = <DVTBuildVersion 24A94403>, error = invalidDigitCount(94403).
+2026-10-12 21:23:40.548 xcodebuild[58441:161961] [MT] IDESchemeActionSDKRecord: operatingSystemBuild = <DVTBuildVersion 24A94403>, error = invalidDigitCount(94403).
+2026-10-12 21:23:40.548 xcodebuild[58441:161961] [MT] IDESchemeActionSDKRecord: operatingSystemBuild = <DVTBuildVersion 24A94403>, error = invalidDigitCount(94403).
+2026-10-12 21:23:41.624 xcodebuild[58441:161961] [MT] IDESchemeActionSDKRecord: operatingSystemBuild = <DVTBuildVersion 24A94403>, error = invalidDigitCount(94403).
+CLIP|intro|start|1791840230.134
+CLIP|intro|end|1791840237.662
+2026-10-12 21:23:58.113 xcodebuild[58441:161961] [MT] IDESchemeActionSDKRecord: operatingSystemBuild = <DVTBuildVersion 24A94403>, error = invalidDigitCount(94403).
+2026-10-12 21:23:58.114 xcodebuild[58441:161961] [MT] IDESchemeActionSDKRecord: operatingSystemBuild = <DVTBuildVersion 24A94403>, error = invalidDigitCount(94403).
+2026-10-12 21:23:58.115 xcodebuild[58441:161961] [MT] IDESchemeActionSDKRecord: operatingSystemBuild = <DVTBuildVersion 24A94403>, error = invalidDigitCount(94403).
+2026-10-12 21:23:59.152 xcodebuild[58441:161961] [MT] IDESchemeActionSDKRecord: operatingSystemBuild = <DVTBuildVersion 24A94403>, error = invalidDigitCount(94403).
+CLIP|event|start|1791840247.611
+CLIP|event|end|1791840254.962
+2026-10-12 21:24:15.449 xcodebuild[58441:161961] [MT] IDESchemeActionSDKRecord: operatingSystemBuild = <DVTBuildVersion 24A94403>, error = invalidDigitCount(94403).
+2026-10-12 21:24:15.449 xcodebuild[58441:161961] [MT] IDESchemeActionSDKRecord: operatingSystemBuild = <DVTBuildVersion 24A94403>, error = invalidDigitCount(94403).
+2026-10-12 21:24:15.450 xcodebuild[58441:161961] [MT] IDESchemeActionSDKRecord: operatingSystemBuild = <DVTBuildVersion 24A94403>, error = invalidDigitCount(94403).
+2026-10-12 21:24:16.417 xcodebuild[58441:161961] [MT] IDESchemeActionSDKRecord: operatingSystemBuild = <DVTBuildVersion 24A94403>, error = invalidDigitCount(94403).
+CLIP|moves|start|1791840264.643
+CLIP|moves|end|1791840271.873
+2026-10-12 21:24:32.332 xcodebuild[58441:161961] [MT] IDESchemeActionSDKRecord: operatingSystemBuild = <DVTBuildVersion 24A94403>, error = invalidDigitCount(94403).
+2026-10-12 21:24:32.333 xcodebuild[58441:161961] [MT] IDESchemeActionSDKRecord: operatingSystemBuild = <DVTBuildVersion 24A94403>, error = invalidDigitCount(94403).
+2026-10-12 21:24:32.333 xcodebuild[58441:161961] [MT] IDESchemeActionSDKRecord: operatingSystemBuild = <DVTBuildVersion 24A94403>, error = invalidDigitCount(94403).
+2026-10-12 21:24:33.568 xcodebuild[58441:161961] [MT] IDESchemeActionSDKRecord: operatingSystemBuild = <DVTBuildVersion 24A94403>, error = invalidDigitCount(94403).
+CLIP|year|start|1791840281.217
+CLIP|year|end|1791840289.410
+Test Case '-[BearingsUITests.SiteClips testClips]' passed (330.037 seconds).
+2026-10-12 21:24:53.183 xcodebuild[58441:161961] [MT] IDESchemeActionSDKRecord: operatingSystemBuild = <DVTBuildVersion 24A94403>, error = invalidDigitCount(94403).
+2026-10-12 21:24:53.186 xcodebuild[58441:161961] [MT] IDESchemeActionSDKRecord: operatingSystemBuild = <DVTBuildVersion 24A94403>, error = invalidDigitCount(94403).
+2026-10-12 21:24:53.190 xcodebuild[58441:161961] [MT] IDESchemeActionSDKRecord: operatingSystemBuild = <DVTBuildVersion 24A94403>, error = invalidDigitCount(94403).
+2026-10-12 21:24:53.971 xcodebuild[58441:161961] [MT] IDESchemeActionSDKRecord: operatingSystemBuild = <DVTBuildVersion 24A94403>, error = invalidDigitCount(94403).
+2026-10-12 21:24:53.972 xcodebuild[58441:161961] [MT] IDESchemeActionSDKRecord: operatingSystemBuild = <DVTBuildVersion 24A94403>, error = invalidDigitCount(94403).
+2026-10-12 21:24:54.134 xcodebuild[58441:161961] [MT] IDESchemeActionSDKRecord: operatingSystemBuild = <DVTBuildVersion 24A94403>, error = invalidDigitCount(94403).
