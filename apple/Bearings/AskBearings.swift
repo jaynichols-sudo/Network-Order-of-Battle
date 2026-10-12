@@ -71,7 +71,7 @@ struct QuickLogSheet: View {
         NavigationStack {
             VStack(alignment: .leading, spacing: 14) {
                 Text("What happened?").font(Theme.serif(.title2, .semibold))
-                TextField("Just met Dan Sitkins at the expo. He wants pricing for two sites by Friday.", text: $text, axis: .vertical)
+                TextField("Just met Dana Whitfield at the expo. He wants pricing for two sites by Friday.", text: $text, axis: .vertical)
                     .lineLimit(4...10)
                     .focused($focused)
                     .padding(14)

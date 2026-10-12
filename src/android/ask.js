@@ -35,7 +35,7 @@ export function openQuickNote(){
     mount(body, s){
       sheet = s;
       body.innerHTML = `<div class="ql"><h2 class="serif ql-h">What happened?</h2>
-        <div class="card ql-box"><textarea class="field" rows="5" data-in="text" placeholder="Just met Dan Sitkins at the expo. He wants pricing for two sites by Friday." aria-label="What happened?"></textarea></div>
+        <div class="card ql-box"><textarea class="field" rows="5" data-in="text" placeholder="Just met Dana Whitfield at the expo. He wants pricing for two sites by Friday." aria-label="What happened?"></textarea></div>
         <p class="ql-mic muted small">${icon('mic')}Tap the microphone on the keyboard to say it instead.</p>
         <div class="ql-preview" aria-live="polite"></div></div>`;
       sync();

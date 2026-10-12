@@ -157,7 +157,7 @@ export const TOOLS = [
     description: 'Find people in the user’s own LinkedIn network with a plain-English question or keywords, for example “colonels at Fort Liberty”, “who do I know at Duke Energy”, “contracting officers at NAVFAC”, “who used to be at Leidos”. Returns up to 25 matching people with title, company and how close the user is to each.',
     inputSchema: {type: 'object', properties: {query: str('What to look for, in plain English or keywords.'), limit: {type: 'integer', minimum: 1, maximum: 25, description: 'How many people to return (default 12).'}}, required: ['query']}},
   {name: 'person', title: 'One person’s profile',
-    description: 'A profile summary for one person in the user’s network: current role, where they worked before, how close the user is to them, the last message, the user’s own notes and follow-ups. Pass a name (“Dan Sitkins”) or a key returned by another tool.',
+    description: 'A profile summary for one person in the user’s network: current role, where they worked before, how close the user is to them, the last message, the user’s own notes and follow-ups. Pass a name (“Dana Whitfield”) or a key returned by another tool.',
     inputSchema: {type: 'object', properties: {name_or_key: str('A person’s name, or the key from another tool’s result.')}, required: ['name_or_key']}},
   {name: 'ways_in', title: 'Ways in',
     description: 'The user’s best paths into a company, agency or command: who works there now, who used to, and close contacts in the same sector who likely know people there, ranked warmest first. Includes teammates’ contacts when the user is on a Northfix Team.',

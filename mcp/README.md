@@ -10,7 +10,7 @@ Ask things like:
 - "Who changed jobs in the last 30 days?"
 - "How well am I covered at the Department of Energy?"
 - "Where do we stand on the NAVFAC pursuit? Which seats are empty?"
-- "Tell me about Dan Sitkins before my call."
+- "Tell me about Dana Whitfield before my call."
 
 ## Tools
 

@@ -835,7 +835,7 @@ function moves(){
 const setRoleSince = (k, ym) => setEdit(k, {rs: ym || ''});
 
 /* ---------- quick log (voice) ---------- */
-// "Just met Dan Sitkins, he wants pricing by Friday" → a note on Dan, a touch, a follow-up.
+// "Just met Dana Whitfield, he wants pricing by Friday" → a note on Dan, a touch, a follow-up.
 const WEEKDAYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
 function dueIn(text){
   const t = String(text || '').toLowerCase();
