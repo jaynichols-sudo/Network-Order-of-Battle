@@ -276,10 +276,10 @@ final class AppModel {
         case "paywall": showPaywall = true
         case "year": showYear = true
         case "team":
-            let mate = """
-            {"kind":"bearings-team-pack","v":1,"owner":"Jim Loughlin","made":"\(Day.today)","people":[{"f":"Pat","l":"Morgan","c":"NAVFAC Southeast","p":"Contracting Officer","b":"strong"}]}
-            """
-            Task { _ = try? await engine.call("addTeamPack", [mate], as: TeamAdded.self); paths[.you] = [.team] }
+            Task { await TeamSync.shared.startDemo(model: self); paths[.you] = [.team] }
+        case "teamfed":
+            // the sample team on the federal map, for screenshots
+            Task { await TeamSync.shared.startDemo(model: self) }
         case "event":
             let known = people.filter { $0.x == nil }.sorted { $0.score > $1.score }
             var e = NetEvent(name: "AFCEA TechNet Augusta", place: "Augusta, GA", start: Date().addingTimeInterval(-2 * 86400), end: Date().addingTimeInterval(-86400))
@@ -962,6 +962,12 @@ final class AppModel {
             go("explore")
         case "event":
             if let id = parts.first?.removingPercentEncoding { tab = .home; paths[.home] = [.event(id)] }
+        case "team":
+            // bearings://team/join?code=…&k=…, handed over by the invite page
+            let q = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
+            if let code = q.first(where: { $0.name == "code" })?.value, let k = q.first(where: { $0.name == "k" })?.value { TeamSync.shared.pendingJoin = (code, k) }
+            tab = .you
+            paths[.you] = [.team]
         case "pursuit":
             tab = .you
             var route: [Route] = [.pursuits]

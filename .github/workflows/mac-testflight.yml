@@ -76,6 +76,7 @@ jobs:
             OTHER_CODE_SIGN_FLAGS="--keychain $OOB_KEYCHAIN" \
             CURRENT_PROJECT_VERSION="${{ github.run_number }}" \
             CONNECT_URL="${{ vars.CONNECT_URL }}" \
+            TEAM_URL="${{ vars.TEAM_URL }}" \
             MS_CLIENT_ID="${{ vars.MS_CLIENT_ID }}" \
             GOOGLE_CLIENT_ID="${{ vars.GOOGLE_CLIENT_ID }}" \
             archive > "$RUNNER_TEMP/archive.log" 2>&1 || true

@@ -25,6 +25,7 @@ struct BearingsApp: App {
                     await model.drainNotesInbox()
                     await ReminderSync.shared.pullCompleted(model: model)
                     await MailSync.shared.sync(model: model)
+                    await TeamSync.shared.autoSync(model: model)
                 }
                 .onOpenURL { url in
                     if url.scheme == "bearings" {
@@ -60,6 +61,7 @@ struct BearingsApp: App {
                     await MeetingMode.refresh(model: model)
                             model.checkDownloads()
                             await model.drainNotesInbox()
+                            await TeamSync.shared.autoSync(model: model)
                             await ReminderSync.shared.pullCompleted(model: model)
                     await MailSync.shared.sync(model: model)
                         }

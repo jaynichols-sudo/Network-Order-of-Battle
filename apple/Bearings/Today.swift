@@ -315,7 +315,7 @@ struct YouView: View {
                     row("Events", icon: "ticket", detail: model.events.isEmpty ? nil : model.events.count.formatted()) { model.open(.events) }
                     row("Trips", icon: "airplane") { model.open(.trips) }
                     row("Find a way into a company", icon: "point.3.connected.trianglepath.dotted") { model.introQuery = "" }
-                    row("Team packs", icon: "person.3") { model.open(.team) }
+                    row(TeamSync.shared.joined ? TeamSync.shared.teamName.isEmpty ? "Team" : TeamSync.shared.teamName : "Team", icon: "person.3") { model.open(.team) }
                     row("Your year in review", icon: "calendar.badge.checkmark") { model.showYear = true }
                     ForEach(model.savedSearches) { s in
                         row(s.name, icon: "pin") { model.apply(s) }

@@ -17,16 +17,23 @@ struct AgencyMap: Decodable {
         var gap: String
         var best: [String]
         var watched: Bool
+        var mine: String?
+        var teamKnown: Int?
+        var teamBest: [TeamOverview.Path]?
     }
     struct Dept: Decodable, Hashable, Identifiable { var name: String; var agencies: Int; var covered: Int; var thin: Int; var none: Int; var id: String { name } }
     struct Totals: Decodable { var agencies: Int; var covered: Int; var thin: Int; var none: Int }
+    struct Mine: Decodable { var covered: Int; var thin: Int; var none: Int }
     var rows: [Row]
     var depts: [Dept]
     var totals: Totals
+    var mine: Mine?
+    var withTeam: Bool?
+    var hasTeam: Bool?
 }
 
 extension AppModel {
-    func agencyMap() async -> AgencyMap? { try? await engine.call("agencyCoverage", as: AgencyMap?.self) }
+    func agencyMap(withTeam: Bool = false) async -> AgencyMap? { try? await engine.call("agencyCoverage", [withTeam], as: AgencyMap?.self) }
 }
 
 struct AgencyMapList: View {
@@ -35,6 +42,7 @@ struct AgencyMapList: View {
     @AppStorage("agencyFilter") private var filter = "gaps"
     @AppStorage("agencyFocus") private var focus = "all"
     @State private var dept = "All departments"
+    @AppStorage("agencyWithTeam") private var withTeam = true
 
     private static let focuses: [(String, String)] = [("all", "Everything"), ("energy", "Energy"), ("water", "Water"), ("defense", "Defense"),
                                                        ("cyber", "Cyber"), ("transport", "Transportation"), ("infrastructure", "Infrastructure"), ("intel", "Intelligence")]
@@ -43,7 +51,13 @@ struct AgencyMapList: View {
         List {
             CompaniesModePicker()
             if let m = map {
-                Section { header(m) }
+                Section {
+                    header(m)
+                    if m.hasTeam == true {
+                        Toggle(isOn: $withTeam) { Label("Include my team", systemImage: "person.3") }
+                            .font(Theme.geist(.subheadline, .semibold))
+                    }
+                }
                 Section {
                     Picker("Show", selection: $filter) {
                         Text("Gaps").tag("gaps")
@@ -84,7 +98,7 @@ struct AgencyMapList: View {
                 ProgressView().frame(maxWidth: .infinity)
             }
         }
-        .task(id: "\(model.info.rev)-\(model.info.edits)-\(model.targets.count)") { map = await model.agencyMap() }
+        .task(id: "\(model.info.rev)-\(model.info.edits)-\(model.targets.count)-\(TeamSync.shared.rev)-\(withTeam)") { map = await model.agencyMap(withTeam: withTeam) }
     }
 
     private func header(_ m: AgencyMap) -> some View {
@@ -92,7 +106,10 @@ struct AgencyMapList: View {
             Text("THE FEDERAL MAP").font(Theme.eyebrow).tracking(1.1).foregroundStyle(Theme.text2)
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text("\(m.totals.agencies - m.totals.none)").font(Theme.serif(.largeTitle, .semibold))
-                Text("of \(m.totals.agencies) agencies and commands where you know someone").font(Theme.geist(.subheadline)).foregroundStyle(.secondary)
+                Text("of \(m.totals.agencies) agencies and commands where \(m.withTeam == true ? "your team knows" : "you know") someone").font(Theme.geist(.subheadline)).foregroundStyle(.secondary)
+            }
+            if m.withTeam == true, let mine = m.mine {
+                Text("You alone: \(m.totals.agencies - mine.none)").font(Theme.geist(.footnote)).foregroundStyle(Theme.text2)
             }
             GeometryReader { g in
                 let t = max(1, m.totals.agencies)
@@ -148,8 +165,12 @@ struct AgencyMapList: View {
                         }
                         Text(r.name).font(Theme.geist(.subheadline, .semibold)).lineLimit(2)
                     }
-                    Text(r.known == 0 ? "No one yet" : "\(r.known) you know\(r.senior > 0 ? " · \(r.senior) senior" : "")\(r.gap.isEmpty ? "" : " · \(r.gap.lowercased())")")
+                    Text(rowLine(r))
                         .font(Theme.geist(.caption)).foregroundStyle(r.status == "none" ? Theme.text3 : .secondary)
+                    if let tb = r.teamBest, !tb.isEmpty, withTeam {
+                        Text(tb.prefix(2).map { "\($0.name) (\($0.owner))" }.joined(separator: ", "))
+                            .font(Theme.geist(.caption)).foregroundStyle(Theme.text3).lineLimit(1)
+                    }
                     if !r.best.isEmpty {
                         HStack(spacing: -6) {
                             ForEach(r.best, id: \.self) { k in if let p = model.person(k) { Avatar(person: p, size: 22).background(Circle().fill(Theme.card).padding(-1.5)) } }
@@ -164,14 +185,25 @@ struct AgencyMapList: View {
         .swipeActions {
             Button { model.introQuery = r.short } label: { Label("Ways in", systemImage: "point.3.connected.trianglepath.dotted") }.tint(Theme.info)
             if !r.watched {
-                Button { Task { await model.toggleTarget(r.short); map = await model.agencyMap() } } label: { Label("Watch", systemImage: "star") }.tint(Theme.accent)
+                Button { Task { await model.toggleTarget(r.short); map = await model.agencyMap(withTeam: withTeam) } } label: { Label("Watch", systemImage: "star") }.tint(Theme.accent)
             }
         }
         .contextMenu {
             Button { model.introQuery = r.short } label: { Label("Find a way in", systemImage: "point.3.connected.trianglepath.dotted") }
             NavigationLink(value: Route.org(r.short)) { Label("Org chart", systemImage: "rectangle.3.group") }
-            if !r.watched { Button { Task { await model.toggleTarget(r.short); map = await model.agencyMap() } } label: { Label("Add to watchlist", systemImage: "star") } }
+            if !r.watched { Button { Task { await model.toggleTarget(r.short); map = await model.agencyMap(withTeam: withTeam) } } label: { Label("Add to watchlist", systemImage: "star") } }
         }
+    }
+
+    private func rowLine(_ r: AgencyMap.Row) -> String {
+        let team = withTeam ? (r.teamKnown ?? 0) : 0
+        if r.known == 0 && team == 0 { return "No one yet" }
+        var parts: [String] = []
+        if r.known > 0 { parts.append("\(r.known) you know") }
+        if team > 0 { parts.append("\(team) through your team") }
+        if r.senior > 0 { parts.append("\(r.senior) senior") }
+        if !r.gap.isEmpty { parts.append(r.gap.lowercased()) }
+        return parts.joined(separator: " · ")
     }
 
     /// The name the unit page knows these people by: their agency label or employer.

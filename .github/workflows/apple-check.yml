@@ -187,6 +187,8 @@ jobs:
             shoot $dev $p-37-unit-trend -startTab companies -demoOpen unit
             shoot $dev $p-38-socials -startTab you -demoOpen socials
             shoot $dev $p-39-federal -startTab companies -startCompanies agencies
+            shoot $dev $p-40-team -startTab you -demoOpen team
+            shoot $dev $p-41-federal-team -startTab companies -startCompanies agencies -demoOpen teamfed
             xcrun simctl ui $dev content_size accessibility-large
             shoot $dev $p-21-home-xl
             shoot $dev $p-22-profile-xl -startTab people -demoOpen person

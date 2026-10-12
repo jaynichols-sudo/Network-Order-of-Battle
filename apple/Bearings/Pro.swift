@@ -29,7 +29,7 @@ final class Pro {
             switch self {
             case .events: return "Event mode"
             case .waysIn: return "Ways in"
-            case .team: return "Team packs"
+            case .team: return "Team"
             case .arrivals: return "Arrival alerts"
             case .accountMap: return "Account map PDF"
             case .salesforce: return "Salesforce"
@@ -112,7 +112,7 @@ final class Pro {
 extension AppModel {
     /// True when the feature can be used; otherwise shows the paywall for it.
     func allow(_ f: Pro.Feature) -> Bool {
-        if Pro.shared.unlocked { return true }
+        if Pro.shared.unlocked || TeamSync.shared.grantsPro { return true }
         paywallFeature = f
         return false
     }
