@@ -8,5 +8,5 @@ binding = "DB"
 database_name = "bearings-team"
 database_id = "2d9e34e4-2a1d-46f1-818e-8104227fe3d2"
 
-# When the website domain is on Cloudflare, give the team server its own address:
-# routes = [{ pattern = "team.example.com", custom_domain = true }]
+# The team server's own address, so invite links carry the Northfix name.
+routes = [{ pattern = "team.northfix.app", custom_domain = true }]
