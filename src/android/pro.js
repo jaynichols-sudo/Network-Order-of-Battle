@@ -95,7 +95,7 @@ export function openPaywall(feature = ''){
         if (P.store) { try { await P.store.restorePurchases(); } catch {} refresh(); }
         if (P.owned){ closeSheet(); show('Pro restored'); } else { note = 'No Pro purchase found on this Google account.'; render(t.closest('.sheet-body')); }
       },
-      privacy: () => openURL('https://www.jaynichols.net/bearings/privacy.html'),
+      privacy: () => openURL('https://northfix.app/privacy.html'),
     },
   });
 }

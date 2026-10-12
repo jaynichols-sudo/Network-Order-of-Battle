@@ -80,7 +80,7 @@ struct PaywallView: View {
                         Spacer()
                         Button("Terms") { if let u = URL(string: "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/") { openURL(u) } }
                         Text("·").foregroundStyle(Theme.text3).accessibilityHidden(true)
-                        Button("Privacy") { if let u = URL(string: "https://www.jaynichols.net/bearings/privacy.html") { openURL(u) } }
+                        Button("Privacy") { if let u = URL(string: "https://northfix.app/privacy.html") { openURL(u) } }
                     }
                     .font(Theme.geist(.footnote, .medium))
                     .foregroundStyle(Theme.primary)

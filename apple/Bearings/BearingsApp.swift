@@ -112,8 +112,8 @@ struct BearingsCommands: Commands {
                 .keyboardShortcut("w", modifiers: [.command, .shift])
         }
         CommandGroup(replacing: .help) {
-            Button("Northfix Support") { if let u = URL(string: "https://www.jaynichols.net/bearings/support.html") { UIApplication.shared.open(u) } }
-            Button("Privacy Policy") { if let u = URL(string: "https://www.jaynichols.net/bearings/privacy.html") { UIApplication.shared.open(u) } }
+            Button("Northfix Support") { if let u = URL(string: "https://northfix.app/support.html") { UIApplication.shared.open(u) } }
+            Button("Privacy Policy") { if let u = URL(string: "https://northfix.app/privacy.html") { UIApplication.shared.open(u) } }
         }
     }
 }

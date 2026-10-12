@@ -340,7 +340,7 @@ struct YouView: View {
                     row("Send feedback", icon: "bubble.left.and.exclamationmark.bubble.right") { model.feedback = FeedbackRequest(screenshot: nil) }
                     row("Settings", icon: "gearshape") { model.showSettings = true }
                     row("Help and support", icon: "questionmark.circle") {
-                        if let u = URL(string: "https://www.jaynichols.net/bearings/support.html") { UIApplication.shared.open(u) }
+                        if let u = URL(string: "https://northfix.app/support.html") { UIApplication.shared.open(u) }
                     }
                 }
 

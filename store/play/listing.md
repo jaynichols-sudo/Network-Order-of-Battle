@@ -48,8 +48,8 @@ To start, request your data from LinkedIn (Settings, Data privacy, Get a copy of
 - Category: Business
 - Tags: Networking, Productivity
 - Email: jay@jaynichols.net
-- Website: https://www.jaynichols.net/bearings/
-- Privacy policy: https://www.jaynichols.net/bearings/privacy.html
+- Website: https://northfix.app/
+- Privacy policy: https://northfix.app/privacy.html
 
 ## Graphics
 

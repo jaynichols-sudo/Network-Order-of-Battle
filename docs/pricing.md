@@ -50,4 +50,4 @@ Proposed: **$49 per person per month, billed yearly ($588 per seat a year)**, wi
 2. **Create the products in App Store Connect,** under Monetization > Subscriptions and In-App Purchases, using the IDs above. Each needs a display name, a description and a review screenshot (use the paywall screenshot from CI, `phone-28-paywall`). Claude can do this through the App Store Connect API once you confirm.
 3. **Set the gating switch in `apple/Bearings/Pro.swift` to on,** and ship a build.
 
-The paywall's Terms link uses Apple's standard license agreement, and Privacy links to jaynichols.net/bearings/privacy.html. Both are required for subscriptions.
+The paywall's Terms link uses Apple's standard license agreement, and Privacy links to northfix.app/privacy.html. Both are required for subscriptions.

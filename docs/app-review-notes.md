@@ -22,4 +22,4 @@ ENRICHMENT (OPTIONAL). Users who already have a ZoomInfo or Seamless.AI account 
 
 AI. Briefs and draft messages use Apple's on-device Foundation Models when available, with a plain template fallback. No third-party AI service.
 
-Privacy policy: https://www.jaynichols.net/bearings/privacy.html
+Privacy policy: https://northfix.app/privacy.html

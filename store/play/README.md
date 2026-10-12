@@ -17,7 +17,7 @@ Everything that can be prepared ahead of time is in this folder. These are the s
 4. Fill in **App content**:
    - Data safety, target audience and ads: answers are in `data-safety.md`.
    - Content rating: the questionnaire answers are all "No", since there's no violence, user-generated content, gambling or the like. That gives an Everyone / 3+ rating.
-   - Privacy policy: https://www.jaynichols.net/bearings/privacy.html
+   - Privacy policy: https://northfix.app/privacy.html
 
 ## 3. First upload (by hand)
 

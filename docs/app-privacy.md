@@ -26,5 +26,5 @@ Declare only this. Everything else stays "not collected".
 ## Other questions in App Store Connect
 
 - **Tracking:** No. There's no IDFA, no ad SDKs, and no data broker sharing.
-- **Privacy policy URL:** https://www.jaynichols.net/bearings/privacy.html, already in the listing.
+- **Privacy policy URL:** https://northfix.app/privacy.html, already in the listing.
 - **Privacy choices URL (optional):** leave it blank, or use the same privacy policy URL.
