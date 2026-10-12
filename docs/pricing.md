@@ -37,7 +37,7 @@ Decided October 11, 2026.
 
 ## Northfix Team
 
-Proposed: **$49 per person per month, billed yearly ($588 per seat a year)**, with a 30-day free trial for up to 5 people. Everyone on a team gets Northfix Pro while they're on it.
+Decided: **$49 per person per month, billed yearly ($588 per seat a year)**, with a 30-day free trial for up to 5 people. Everyone on a team gets Northfix Pro while they're on it.
 
 - **Sold on the web, not in the App Store.** Teams subscribe through Stripe, which Apple allows for services sold to organizations (guideline 3.1.3(c)). Apple's 15% doesn't apply.
 - **Separate from Pro,** so lifetime Pro stays lifetime: a lifetime buyer who joins a team pays for the seat, not for Pro.

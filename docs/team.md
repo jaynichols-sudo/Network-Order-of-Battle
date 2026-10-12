@@ -26,7 +26,7 @@ Members never see each other's notes, messages, emails, tags or contact details.
 | Trial | 30 days, up to 5 people, everything included |
 | Team | Per seat, billed yearly. Every member also gets Northfix Pro while they're on the team |
 
-The proposed price is in [pricing.md](pricing.md). Teams pay on the web (Stripe), which Apple allows for services sold to organizations (App Store Review Guideline 3.1.3(c)). When the trial ends without a subscription, the team becomes read-only: people can still see what's there, but can't upload new shares or invite more people.
+The price ($49 per person per month, billed yearly) is in [pricing.md](pricing.md). Teams pay on the web (Stripe), which Apple allows for services sold to organizations (App Store Review Guideline 3.1.3(c)). When the trial ends without a subscription, the team becomes read-only: people can still see what's there, but can't upload new shares or invite more people.
 
 ## Encryption format
 
