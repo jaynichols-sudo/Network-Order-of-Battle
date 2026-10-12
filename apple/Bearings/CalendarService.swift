@@ -259,14 +259,38 @@ final class CalendarService {
         .sorted { ($0.0.score, -$0.2) > ($1.0.score, -$1.2) }
     }
 
-    /// Meeting briefs 30 minutes ahead, and a heads-up three days before a trip.
+    /// "Ask about meetings when they end" in Settings. On unless turned off.
+    static var askAfterMeetings: Bool {
+        get { UserDefaults.standard.object(forKey: "askAfterMeeting") as? Bool ?? true }
+        set { UserDefaults.standard.set(newValue, forKey: "askAfterMeeting") }
+    }
+
+    /// Meetings whose "How did it go?" prompt was answered, so it never comes back.
+    static var askedMeetings: [String] { UserDefaults.standard.stringArray(forKey: "askedMeetings") ?? [] }
+
+    static func markAsked(_ id: String) {
+        guard !id.isEmpty else { return }
+        var list = askedMeetings.filter { $0 != id }
+        list.append(id)
+        UserDefaults.standard.set(Array(list.suffix(100)), forKey: "askedMeetings")
+    }
+
+    /// Meeting briefs ahead, a "How did it go?" two minutes after, and a heads-up three days before a trip.
     private func scheduleNotifications(model: AppModel) {
         let center = UNUserNotificationCenter.current()
         Task {
             let pending = await center.pendingNotificationRequests()
-            center.removePendingNotificationRequests(withIdentifiers: pending.map(\.identifier).filter { $0.hasPrefix("m-") || $0.hasPrefix("t-") || $0.hasPrefix("a-") })
-            guard UserDefaults.standard.object(forKey: "notify") as? Bool ?? true else { return }
             let now = Date()
+            let ask = CalendarService.askAfterMeetings && (UserDefaults.standard.object(forKey: "notify") as? Bool ?? true)
+            center.removePendingNotificationRequests(withIdentifiers: pending.filter { r in
+                if r.identifier.hasPrefix("a-") {
+                    // a meeting that just ended drops out of the scan, so keep its prompt when it's minutes away
+                    if ask, let d = (r.trigger as? UNCalendarNotificationTrigger)?.nextTriggerDate(), d < now.addingTimeInterval(10 * 60) { return false }
+                    return true
+                }
+                return r.identifier.hasPrefix("m-") || r.identifier.hasPrefix("t-")
+            }.map(\.identifier))
+            guard UserDefaults.standard.object(forKey: "notify") as? Bool ?? true else { return }
             for m in meetings.prefix(20) {
                 // ten minutes out: who, and the one thing worth remembering
                 let at = m.start.addingTimeInterval(-10 * 60)
@@ -285,17 +309,28 @@ final class CalendarService {
                 let comps = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: at)
                 try? await center.add(UNNotificationRequest(identifier: "m-\(m.id)", content: c, trigger: UNCalendarNotificationTrigger(dateMatching: comps, repeats: false)))
             }
-            // after the meeting: a quick note, typed right into the notification
-            for m in meetings.prefix(20) {
-                let at = m.end.addingTimeInterval(15 * 60)
-                guard at > now, let first = m.matched.compactMap({ model.person($0) }).first else { continue }
-                let c = UNMutableNotificationContent()
-                c.title = "How did it go with \(first.f)?"
-                c.body = "Add a quick note to \(first.f)’s timeline while it’s fresh. Press and hold to type it here."
-                c.categoryIdentifier = "AFTER"
-                c.userInfo = ["k": first.k, "mt": m.title]
-                let comps = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: at)
-                try? await center.add(UNNotificationRequest(identifier: "a-\(m.id)", content: c, trigger: UNCalendarNotificationTrigger(dateMatching: comps, repeats: false)))
+            // after the meeting: "How did it go?", answered right in the notification or on the watch
+            if ask {
+                let asked = Set(CalendarService.askedMeetings)
+                let delivered = await center.deliveredNotifications()
+                let shown = Set(delivered.map(\.request.identifier))
+                for m in meetings.prefix(20) {
+                    let id = "a-\(m.id)"
+                    // one prompt per meeting; skip long blocks like offsites and conferences
+                    guard !asked.contains(m.id), !shown.contains(id), m.end.timeIntervalSince(m.start) <= 4 * 3600 else { continue }
+                    let at = m.end.addingTimeInterval(2 * 60)
+                    let people = m.matched.compactMap { model.person($0) }
+                    guard at > now, let first = people.first else { continue }
+                    let others = people.count - 1
+                    let c = UNMutableNotificationContent()
+                    c.title = others == 0 ? "How did it go with \(first.fullName)?" : "How did it go with \(first.f) and \(others) other\(others == 1 ? "" : "s")?"
+                    c.body = "Reply with a quick note. Northfix files it on their profile."
+                    c.categoryIdentifier = Notifications.meetingEnd
+                    c.sound = .default
+                    c.userInfo = ["k": first.k, "ks": people.map(\.k), "after": m.id, "mt": String(m.title.prefix(60))]
+                    let comps = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: at)
+                    try? await center.add(UNNotificationRequest(identifier: id, content: c, trigger: UNCalendarNotificationTrigger(dateMatching: comps, repeats: false)))
+                }
             }
             for t in trips.prefix(10) {
                 let n = nearby(t, model: model).count

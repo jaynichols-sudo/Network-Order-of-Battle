@@ -17,8 +17,18 @@ final class Notifications: NSObject, UNUserNotificationCenterDelegate, @unchecke
         let follow = UNNotificationCategory(identifier: "FOLLOW", actions: [done, snooze], intentIdentifiers: [], options: [])
         let note = UNTextInputNotificationAction(identifier: "note", title: "Add a note", options: [], textInputButtonTitle: "Save", textInputPlaceholder: "What did you talk about?")
         let after = UNNotificationCategory(identifier: "AFTER", actions: [note], intentIdentifiers: [], options: [])
-        center.setNotificationCategories([follow, after])
+        // "How did it go?" when a meeting ends. Background actions (no .foreground) so a reply
+        // from the Lock Screen or a mirrored Apple Watch notification is filed without opening
+        // the app. The watch uses the categories registered here; the text field gives it dictation and Scribble.
+        let meetNote = UNTextInputNotificationAction(identifier: "meet.note", title: "Add a note", options: [], textInputButtonTitle: "Add a note", textInputPlaceholder: "What happened, what’s next?")
+        let meetWeek = UNNotificationAction(identifier: "meet.week", title: "Follow up in a week", options: [])
+        let meetDone = UNNotificationAction(identifier: "meet.done", title: "Done", options: [])
+        let meeting = UNNotificationCategory(identifier: Notifications.meetingEnd, actions: [meetNote, meetWeek, meetDone], intentIdentifiers: [], options: [])
+        center.setNotificationCategories([follow, after, meeting])
     }
+
+    /// Category for the prompt after a meeting with people you know.
+    static let meetingEnd = "MEETING_END"
 
     func requestPermission() async {
         guard UserDefaults.standard.object(forKey: "notify") as? Bool ?? true else { return }
@@ -100,6 +110,16 @@ final class Notifications: NSObject, UNUserNotificationCenterDelegate, @unchecke
     func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
         let info = response.notification.request.content.userInfo
         let k = info["k"] as? String
+        // "How did it go?" after a meeting: filed right here, so it works when iOS wakes the
+        // app in the background (a reply from the Lock Screen or the watch). Tapping the banner itself opens the person.
+        if response.notification.request.content.categoryIdentifier == Notifications.meetingEnd, response.actionIdentifier.hasPrefix("meet.") {
+            let typed = (response as? UNTextInputNotificationResponse)?.userText
+            let keys = (info["ks"] as? [String]) ?? (k.map { [$0] } ?? [])
+            let meeting = (info["after"] as? String) ?? ""
+            let title = (info["mt"] as? String) ?? ""
+            await AppModel.afterMeeting(action: response.actionIdentifier, text: typed, keys: keys, meeting: meeting, title: title)
+            return
+        }
         var action = response.actionIdentifier
         if let typed = response as? UNTextInputNotificationResponse {
             action = "note:" + ((info["mt"] as? String) ?? "") + "\n" + typed.userText

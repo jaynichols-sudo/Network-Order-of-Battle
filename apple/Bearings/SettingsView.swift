@@ -11,6 +11,7 @@ struct SettingsView: View {
     @AppStorage("name") private var name = ""
     @AppStorage("salesnav") private var salesNav = false
     @AppStorage("notify") private var notify = true
+    @AppStorage("askAfterMeeting") private var askAfterMeeting = true
     @AppStorage("haptics") private var haptics = true
     @AppStorage("sounds") private var sounds = true
     @AppStorage("contactPhotos") private var contactPhotos = true
@@ -124,6 +125,12 @@ struct SettingsView: View {
                 } label: {
                     LabeledContent("Calendars", value: CalendarPicker.summary)
                 }
+                Toggle("Ask about meetings when they end", isOn: Binding(
+                    get: { askAfterMeeting },
+                    set: { on in
+                        askAfterMeeting = on
+                        Task { await CalendarService.shared.scan(model: model, force: true) }
+                    }))
             }
             Toggle("Follow-ups in Apple Reminders", isOn: Binding(
                 get: { remindersOn },
@@ -174,7 +181,7 @@ struct SettingsView: View {
         } header: {
             Text("Calendar")
         } footer: {
-            Text("Northfix reads your calendar on this device to brief you before meetings with people you know (what you talked about last time, on the Lock Screen and your watch), and to spot trips more than 75 miles from home. In Trip mode, a trip shows on your Lock Screen two days ahead with who you know nearby. With arrival alerts, landing in a city away from home tells you who you know there (choose “Always” for location when asked). With Reminders on, follow-ups go on a Northfix list in Apple Reminders, and checking one off there marks it done here. Nothing is uploaded.")
+            Text("Northfix reads your calendar on this device to brief you before meetings with people you know (what you talked about last time, on the Lock Screen and your watch), and to spot trips more than 75 miles from home. When a meeting with them ends, it asks how it went. Reply in the notification, on your iPhone or watch, and the note goes on their profile. In Trip mode, a trip shows on your Lock Screen two days ahead with who you know nearby. With arrival alerts, landing in a city away from home tells you who you know there (choose “Always” for location when asked). With Reminders on, follow-ups go on a Northfix list in Apple Reminders, and checking one off there marks it done here. Nothing is uploaded.")
         }
     }
 

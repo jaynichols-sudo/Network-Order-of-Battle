@@ -287,9 +287,14 @@ struct QuickNoteRow: View {
                     .frame(width: 28, height: 28)
                     .background(Circle().fill(WatchTheme.soft))
                     .accessibilityHidden(true)
-                Text("Quick note")
-                    .font(WatchTheme.font(.body, .medium))
-                    .foregroundStyle(WatchTheme.text)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Just met someone?")
+                        .font(WatchTheme.font(.body, .medium))
+                        .foregroundStyle(WatchTheme.text)
+                    Text("Quick note")
+                        .font(WatchTheme.font(.footnote))
+                        .foregroundStyle(WatchTheme.text2)
+                }
                 Spacer(minLength: 4)
             }
         }
