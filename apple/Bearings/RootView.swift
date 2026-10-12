@@ -91,6 +91,8 @@ struct RootView: View {
                     case .moves: MovesView()
                     case .intros: IntrosView()
                     case .socials: SocialsView()
+                    case .opportunities: OpportunitiesView()
+                    case .opportunity(let id): OpportunityView(id: id)
                     }
                 }
         }

@@ -192,6 +192,8 @@ struct UnitView: View {
     @State private var placeText = ""
     @State private var enrichAsking = false
     @State private var startingPursuit = false
+    /// SAM.gov notices at this agency, when it is one on the federal map.
+    @State private var sam: OpportunityMatch?
     /// Everyone at this company or unit, capped so one tap can't burn a whole credit balance.
     private var unitKeys: [String] { Array((u?.rungs.flatMap(\.keys) ?? []).prefix(100)) }
 
@@ -204,6 +206,7 @@ struct UnitView: View {
                 locationSection(u)
                 gapSection(u)
                 TrendSection(name: name)
+                SamUnitSection(match: sam)
                 ForEach(u.rungs) { r in rungSection(r) }
                 alumniSection(u)
                 if u.isTarget { noteSection }
@@ -240,6 +243,9 @@ struct UnitView: View {
         .task(id: name) {
             await load()
             note = u?.note ?? ""
+        }
+        .task(id: "\(name)-\(model.info.rev)-\(SamFeed.shared.last?.timeIntervalSince1970 ?? 0)") {
+            sam = await SamFeed.shared.at(name, model: model)
         }
         .overlay { if u == nil { ProgressView() } }
     }

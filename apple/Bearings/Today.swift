@@ -309,6 +309,7 @@ struct YouView: View {
                     row("Quick note", icon: "mic") { model.showQuickLog = true }
                     row("Pursuits", icon: "scope") { model.open(.pursuits) }
                     row("The federal map", icon: "building.columns") { model.companiesMode = .agencies; model.paths[.companies] = []; model.tab = .companies }
+                    row("SAM.gov opportunities", icon: "doc.text.magnifyingglass", detail: (SamFeed.shared.match?.newCount ?? 0) > 0 ? "\(SamFeed.shared.match?.newCount ?? 0) new" : nil) { model.open(.opportunities) }
                     row("Across your socials", icon: "person.3.sequence") { model.open(.socials) }
                     row("Intros", icon: "person.line.dotted.person") { model.open(.intros) }
                     row("Moves and rotations", icon: "arrow.triangle.swap") { model.open(.moves) }

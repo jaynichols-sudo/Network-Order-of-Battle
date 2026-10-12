@@ -37,6 +37,7 @@ struct SettingsView: View {
                 MailSettingsSection()
                 salesforceSection
                 EnrichSettingsSection()
+                SamSettingsSection()
                 dataSection
                 aboutSection
             }

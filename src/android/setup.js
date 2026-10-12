@@ -129,6 +129,8 @@ export function openSettings(){
       <p class="sec-h">Places</p><div class="card list"><button type="button" class="row act" data-a="locate" ${M.locating ? 'disabled' : ''}>${icon('contactCheck')}<span>${M.locating ? 'Matching…' : 'Match with my Contacts'}</span></button></div>
       <p class="foot">Works out where people are from their cards in your Contacts: the address, then the phone area code. It all happens on this phone.</p>
       <p class="sec-h">Enrichment</p><div class="card list"><button type="button" class="row act" data-a="enrich">${icon('sparkles')}<span>ZoomInfo and Seamless.AI</span>${icon('chevR', 'chev')}</button></div>
+      <p class="sec-h">Federal opportunities</p><div class="card list"><button type="button" class="row act" data-a="sam">${icon('building')}<span>SAM.gov opportunities</span>${icon('chevR', 'chev')}</button></div>
+      <p class="foot">New SAM.gov notices at agencies where you know people. Uses your own free SAM.gov key; searches go straight from this phone to SAM.gov.</p>
       <p class="sec-h">Your data</p><div class="card list">
         <button type="button" class="row act" data-a="import">${icon('download')}<span>${isSample() ? 'Import connections' : 'Refresh connections'}</span></button>
         <button type="button" class="row act" data-a="export">${icon('share')}<span>Export everyone as a spreadsheet</span></button>
@@ -155,6 +157,7 @@ export function openSettings(){
       },
       locate: () => locate(),
       enrich: () => open('enrichSettings'),
+      sam: () => open('samSettings'),
       import(){ closeSheet(); setTimeout(() => open('import'), 300); },
       export: () => exportCSV(null),
       backup: () => backup(),

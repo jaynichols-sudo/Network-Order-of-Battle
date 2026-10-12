@@ -45,6 +45,8 @@ enum Route: Hashable {
     case moves
     case intros
     case socials
+    case opportunities
+    case opportunity(String)
 }
 
 enum CompaniesMode: String, CaseIterable, Identifiable {
@@ -346,6 +348,7 @@ final class AppModel {
             - Book a follow-up demo with \(names.first ?? "the team") in November
             """
             Task { await ingestNotes(text, source: "Plaud") }
+        case "opportunities": paths[tab, default: []].append(.opportunities)
         case "share": showShareCard = true
         case "import": showImport = true
         case "filters": showFiltersOnLaunch = true
@@ -435,6 +438,8 @@ final class AppModel {
         SpotlightIndex.update(people, sample: info.isSample)
         Notifications.shared.schedule(model: self)
         pushWatch()
+        // SAM.gov notices: fetched at most every six hours, matched again when the network changes
+        Task { await SamFeed.shared.refresh(model: self) }
     }
 
     // MARK: places
@@ -1109,6 +1114,7 @@ final class AppModel {
         if action == "weekly" { showWeekly = true; return }
         if action == "arrival" { UserDefaults.standard.set("map", forKey: "exploreMode"); go("explore"); return }
         if action.hasPrefix("event:") { tab = .home; paths[.home] = [.event(String(action.dropFirst(6)))]; return }
+        if action.hasPrefix("opportunity:") { tab = .home; paths[.home] = [.opportunities, .opportunity(String(action.dropFirst(12)))]; return }
         if action.hasPrefix("note:"), let k {
             let body = action.dropFirst(5)
             let parts = body.split(separator: "\n", maxSplits: 1, omittingEmptySubsequences: false)

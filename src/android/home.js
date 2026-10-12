@@ -14,6 +14,7 @@ import { nextTrip, tripChip } from './trips.js';
 import { birthdaysCard } from './birthdays.js';
 import { reviewYear, yearSeason } from './team.js';
 import { watchlistCard, watchHandlers } from './watchlist.js';
+import { opportunitiesCard, oppHandlers } from './opportunities.js';
 
 const LINKEDIN_EXPORT = 'https://www.linkedin.com/mypreferences/d/download-my-data';
 let compass = null, compassData = null, compassVersion = -1;
@@ -177,7 +178,7 @@ export const HomeView = {
         <button type="button" class="glance-compass" data-a="explore" aria-label="Your network compass. Opens Explore"></button>
         <p class="cc-key">You’re in the middle. The closer someone sits, the closer you are. The rim is colored by sector.</p>
         <div class="gstats"></div></section>
-      <div class="chips-slot"></div><div class="watch-slot"></div><div class="bday-slot"></div><div class="cards-slot"></div></div>`;
+      <div class="chips-slot"></div><div class="watch-slot"></div><div class="opp-slot"></div><div class="bday-slot"></div><div class="cards-slot"></div></div>`;
     compass = createCompass({initials: myInitials(), interactive: false, labels: false, glance: true});
     $('.glance-compass', el).appendChild(compass.el);
     this.ptr(el);
@@ -198,6 +199,7 @@ export const HomeView = {
     $('.gstats', el).innerHTML = stats(compassData);
     $('.chips-slot', el).innerHTML = chips();
     watchlistCard($('.watch-slot', el));
+    opportunitiesCard($('.opp-slot', el));
     $('.bday-slot', el).innerHTML = birthdaysCard();
     $('.cards-slot', el).innerHTML = worth();
     animateRings(el);
@@ -227,6 +229,7 @@ export const HomeView = {
     ask: () => { fx.tap(); open('ask'); },
     quickNote: () => { fx.tap(); open('quickNote'); },
     ...watchHandlers,
+    ...oppHandlers,
     year: () => open('year'),
     sig: v => { fx.tap(); if (v === 'close') showPeople({rel: ['Close']}); else perform({kind: 'filter', sig: [v]}); },
     card: i => perform((M.home.cards[+i] || {}).act),
