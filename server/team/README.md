@@ -47,3 +47,11 @@ npm test
 ```
 
 The tests run the worker in Miniflare with a local D1 database and a fake Stripe.
+
+## Your own address
+
+Once the website's domain is on Cloudflare, give the team server `team.` at that domain, so invite links carry your name instead of `workers.dev`:
+
+1. In `wrangler.toml`, add `routes = [{ pattern = "team.example.com", custom_domain = true }]` with your domain, and run the Team server workflow. Cloudflare creates the DNS record and certificate.
+2. Change the repository variable `TEAM_URL` to `https://team.example.com`. The next builds use it.
+3. Invite links made before the change keep working while `workers_dev = true` stays in `wrangler.toml`.
