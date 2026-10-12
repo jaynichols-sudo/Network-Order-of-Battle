@@ -40,6 +40,8 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="bearings" android:host="linkedin" />
                 <data android:scheme="bearings" android:host="seamless" />
+                <!-- a Bearings Team invite, handed off from the invite page -->
+                <data android:scheme="bearings" android:host="team" />
             </intent-filter>
 
             <!-- "Share to Bearings" from Gmail, Files or Drive; MainActivity turns it into a VIEW -->

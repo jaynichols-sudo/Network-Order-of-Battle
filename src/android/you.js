@@ -9,7 +9,8 @@ import { openURL, fx, prefs } from './platform.js';
 import { tripsAhead } from './trips.js';
 import { birthdaysWithin } from './birthdays.js';
 import { reviewYear, yearSeason } from './team.js';
-import { unlocked, GATING } from './pro.js';
+import { unlocked, GATING, teamPro } from './pro.js';
+import { onTeam, teamState } from './teamsync.js';
 import './enrich.js';
 
 const row = (a, ic, label, detail = '', chev = true) => `<button type="button" class="row act" data-a="${a}">${icon(ic)}<span>${esc(label)}</span>${detail ? `<span class="muted">${esc(detail)}</span>` : ''}${chev ? icon('chevR', 'chev') : ''}</button>`;
@@ -63,7 +64,7 @@ export const YouView = {
         ${row('trips', 'plane', 'Trips', tripsAhead().length ? fmt(tripsAhead().length) : '')}
         ${row('birthdays', 'gift', 'Birthdays', birthdaysWithin(7).length ? `${fmt(birthdaysWithin(7).length)} this week` : '')}
         ${row('explore', 'scope', 'Explore', 'Compass, map, clusters')}
-        ${row('team', 'people', 'Team packs', M.api.teamList().length ? fmt(M.api.teamList().length) : '')}
+        ${row('team', 'people', 'Team', onTeam() ? (teamState().teamName || 'On a team') : M.api.teamList().length ? fmt(M.api.teamList().length) : '')}
         ${row('year', 'sparkles', `Your ${reviewYear()} in review`, yearSeason() ? 'New' : '')}
       </section>
       <section class="card list"><div class="card-head static"><h2>Data</h2></div>
@@ -73,11 +74,11 @@ export const YouView = {
         ${isSample() ? '' : row('enrichFile', 'download', 'Import an enrichment file', 'CSV', false)}
       </section>
       <section class="card list">
-        ${row('pro', 'starCircle', 'Bearings Pro', !GATING ? 'Unlocked for now' : unlocked() ? 'Active' : '')}
+        ${row('pro', 'starCircle', 'Bearings Pro', teamPro() ? 'Through your team' : !GATING ? 'Unlocked for now' : unlocked() ? 'Active' : '')}
         ${row('settings', 'gear', 'Settings')}
         ${row('help', 'mail', 'Help and contact support', '', false)}
       </section>
-      <p class="foot center">Everything stays on this phone.</p>`;
+      <p class="foot center">${onTeam() ? 'Your team share is encrypted on this phone before it’s sent.' : 'Everything stays on this phone.'}</p>`;
   },
   handlers: {
     settings: () => open('settings'),

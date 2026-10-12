@@ -15,6 +15,7 @@ import { openTrackIntro } from './relationships.js';
 
 let mode = ls.get('bearings.companies') || 'watchlist';
 let gov = false, shownUnc = 25;
+let fedTeam = ls.get('bearings.fedTeam') === '1';
 let fedFilter = ls.get('bearings.fedFilter') || 'gaps', fedFocus = ls.get('bearings.fedFocus') || 'all', fedDept = '';
 register('companiesMode', m => { mode = m; ls.set('bearings.companies', m); });
 
@@ -52,23 +53,34 @@ function industries(){
 const FOCUS = [['all', 'Everything'], ['energy', 'Energy'], ['water', 'Water'], ['defense', 'Defense'], ['cyber', 'Cyber'], ['transport', 'Transportation'], ['infrastructure', 'Infrastructure'], ['intel', 'Intelligence']];
 let fedMap = null;
 function federal(){
-  const m = fedMap = M.api.agencyCoverage();
+  const hasTeam = M.api.teamList().length > 0, withTeam = hasTeam && fedTeam;
+  const m = fedMap = M.api.agencyCoverage(withTeam);
   const t = m.totals, pct = n => (n / Math.max(1, t.agencies) * 100).toFixed(2);
+  const known = r => r.known + (withTeam ? r.teamKnown : 0);
   const rank = {none: 0, thin: 1, covered: 2};
   const rows = m.rows.filter(r => (fedFocus === 'all' || r.tags.includes(fedFocus)) && (!fedDept || r.dept === fedDept)
     && (fedFilter === 'all' || (fedFilter === 'gaps' ? r.status !== 'covered' : r.status === fedFilter)))
-    .sort((a, b) => rank[a.status] - rank[b.status] || b.known - a.known);
+    .sort((a, b) => rank[a.status] - rank[b.status] || known(b) - known(a));
   const groups = []; for (const r of rows){ let g = groups.find(x => x[0] === r.dept); if (!g) groups.push(g = [r.dept, []]); g[1].push(r); }
   const AMBER = 'var(--amber)';
   const col = st => st === 'covered' ? 'var(--good)' : st === 'thin' ? AMBER : 'var(--text3)';
-  const row = r => `<div class="row fed-row"><button type="button" class="fed-main" data-a="fedOpen" data-v="${esc(r.short)}"><i class="dot lg" style="background:${col(r.status)}"></i><span class="grow"><b>${r.short !== r.name && !r.name.startsWith(r.short + ' ') ? `<span class="mono muted small">${esc(r.short)}</span> ` : ''}${esc(r.name)}</b><span class="muted small">${esc(r.known ? `${r.known} you know${r.senior ? ` · ${r.senior} senior` : ''}${r.gap ? ' · ' + r.gap.toLowerCase() : ''}` : 'No one yet')}</span></span></button>${r.watched ? `<span class="accent">${icon('star')}</span>` : `<button type="button" class="pill-btn soft small" data-a="fedWatch" data-v="${esc(r.short)}">Watch</button>`}<button type="button" class="pill-btn soft small" data-a="fedWays" data-v="${esc(r.short)}">Ways in</button></div>`;
-  return `<div class="card pad"><p class="eyebrow">THE FEDERAL MAP</p><p><b class="fed-big">${t.agencies - t.none}</b> <span class="muted">of ${t.agencies} agencies and commands where you know someone</span></p>
+  // "3 you know · 2 through Pat", and with the team on, the team's best paths underneath
+  const through = r => r.teamKnown ? `${r.teamKnown} through ${r.teamOwners === 1 && r.teamBest[0] ? r.teamBest[0].owner.split(/\s+/)[0] : 'the team'}` : '';
+  const line = r => withTeam
+    ? (known(r) ? [r.known ? `${r.known} you know` : '', through(r), r.gap ? r.gap.toLowerCase() : ''].filter(Boolean).join(' · ') : 'No one on the team yet')
+    : (r.known ? `${r.known} you know${r.senior ? ` · ${r.senior} senior` : ''}${r.gap ? ' · ' + r.gap.toLowerCase() : ''}` : 'No one yet');
+  const best = r => withTeam && r.teamBest.length ? `<span class="muted small fed-team">${esc(r.teamBest.map(b => `${b.name}${b.p ? `, ${b.p}` : ''} (${b.owner.split(/\s+/)[0]})`).join(' · '))}</span>` : '';
+  const row = r => `<div class="row fed-row"><button type="button" class="fed-main" data-a="fedOpen" data-v="${esc(r.short)}"><i class="dot lg" style="background:${col(r.status)}"></i><span class="grow"><b>${r.short !== r.name && !r.name.startsWith(r.short + ' ') ? `<span class="mono muted small">${esc(r.short)}</span> ` : ''}${esc(r.name)}</b><span class="muted small">${esc(line(r))}</span>${best(r)}</span></button>${r.watched ? `<span class="accent">${icon('star')}</span>` : `<button type="button" class="pill-btn soft small" data-a="fedWatch" data-v="${esc(r.short)}">Watch</button>`}<button type="button" class="pill-btn soft small" data-a="fedWays" data-v="${esc(r.short)}">Ways in</button></div>`;
+  const alone = t.agencies - m.mine.none;
+  return `<div class="card pad"><p class="eyebrow">THE FEDERAL MAP</p><p><b class="fed-big">${t.agencies - t.none}</b> <span class="muted">of ${t.agencies} agencies and commands where ${withTeam ? 'your team knows' : 'you know'} someone</span></p>
+      ${withTeam ? `<p class="small muted">You alone: ${alone}</p>` : ''}
       <div class="stack-bar" style="display:flex;height:10px;border-radius:5px;overflow:hidden;background:var(--hairline);margin:10px 0"><i style="width:${pct(t.covered)}%;background:var(--good)"></i><i style="width:${pct(t.thin)}%;background:var(--amber)"></i></div>
       <p class="small muted"><i class="dot" style="background:var(--good)"></i> ${t.covered} covered &nbsp; <i class="dot" style="background:var(--amber)"></i> ${t.thin} thin &nbsp; <i class="dot" style="background:var(--text3)"></i> ${t.none} not connected</p></div>
+    ${hasTeam ? `<div class="card list fed-team-toggle"><label class="toggle-row"><span>Include my team</span><input type="checkbox" class="switch" data-ch="fedTeam" ${withTeam ? 'checked' : ''}></label></div>` : ''}
     ${segmented('fedFilter', [['gaps', 'Gaps'], ['none', 'Not connected'], ['thin', 'Thin'], ['covered', 'Covered'], ['all', 'All']], fedFilter)}
     <div class="row-between" style="margin:8px 4px"><button type="button" class="link" data-a="fedFocus">${esc((FOCUS.find(f => f[0] === fedFocus) || FOCUS[0])[1])}</button><button type="button" class="link" data-a="fedDept">${esc(fedDept || 'All departments')}</button></div>
     ${groups.length ? groups.map(([d, rs]) => `<p class="sec-h">${esc(d)}</p><div class="card list">${rs.map(row).join('')}</div>`).join('') : '<p class="muted pad">Nothing here with these filters.</p>'}
-    <p class="foot">Bearings matches each person’s employer and title to ${t.agencies} federal departments, agencies and commands. Covered means you know someone senior and someone warm there.</p>`;
+    <p class="foot">Bearings matches each person’s employer and title to ${t.agencies} federal departments, agencies and commands. Covered means ${withTeam ? 'you or a teammate know' : 'you know'} someone senior and someone warm there.</p>`;
 }
 function allCompanies(){
   const o = M.api.orgs({text: '', filters: {}});
@@ -98,6 +110,7 @@ export const CompaniesView = {
     fedFilter(v, t){ fx.select(); fedFilter = v; ls.set('bearings.fedFilter', v); CompaniesView.update(t.closest('.screen')); },
     fedFocus(_, t){ const scr = t.closest('.screen'); menu(t, FOCUS.map(([id, l]) => ({label: l, on: id === fedFocus, run: () => { fedFocus = id; ls.set('bearings.fedFocus', id); CompaniesView.update(scr); }}))); },
     fedDept(_, t){ const scr = t.closest('.screen'); const ds = (fedMap ? fedMap.depts : []); menu(t, [{label: 'All departments', on: !fedDept, run: () => { fedDept = ''; CompaniesView.update(scr); }}].concat(ds.map(d => ({label: `${d.name} (${d.agencies - d.none}/${d.agencies})`, on: d.name === fedDept, run: () => { fedDept = d.name; CompaniesView.update(scr); }})))); },
+    fedTeam(on, t){ fx.select(); fedTeam = !!on; ls.set('bearings.fedTeam', fedTeam ? '1' : '0'); CompaniesView.update(t.closest('.screen')); },
     fedOpen: v => openUnit(v),
     fedWays: v => openIntro(v),
     async fedWatch(v, t){ const scr = t.closest('.screen'); await toggleTarget(v); show(`${v} added to your watchlist`); CompaniesView.update(scr); },

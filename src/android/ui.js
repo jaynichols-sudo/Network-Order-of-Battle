@@ -238,6 +238,22 @@ export function prompt({title, message = '', placeholder = '', value = '', ok = 
   });
 }
 
+/** An in-app yes/no question. With `type`, the OK button waits until that exact text is typed. Resolves true or false. */
+export function confirmDialog({title, message = '', ok = 'OK', danger = false, type = ''}){
+  return new Promise(resolve => {
+    const el = document.createElement('div');
+    el.className = 'dialog-layer';
+    el.innerHTML = `<form class="dialog"><h3>${esc(title)}</h3>${message ? `<p>${esc(message)}</p>` : ''}${type ? `<input type="text" placeholder="${esc(type)}" autocomplete="off" aria-label="${esc(`Type ${type} to confirm`)}">` : ''}<div class="dialog-btns"><button type="button" data-x>Cancel</button><button type="submit" class="strong${danger ? ' danger' : ''}" ${type ? 'disabled' : ''}>${esc(ok)}</button></div></form>`;
+    document.body.appendChild(el);
+    const input = $('input', el), go = $('[type=submit]', el);
+    if (input){ setTimeout(() => input.focus(), 60); input.addEventListener('input', () => { go.disabled = input.value.trim() !== type.trim(); }); }
+    const done = v => { el.classList.add('out'); setTimeout(() => el.remove(), 180); resolve(v); };
+    $('form', el).addEventListener('submit', e => { e.preventDefault(); if (!go.disabled) done(true); });
+    $('[data-x]', el).addEventListener('click', () => done(false));
+    el.addEventListener('click', e => { if (e.target === el) done(false); });
+  });
+}
+
 /** Empty-state block, like ContentUnavailableView. */
 export const empty = (ic, title, text = '', button = '') => `<div class="empty">${icon(ic)}<h3>${esc(title)}</h3>${text ? `<p>${esc(text)}</p>` : ''}${button}</div>`;
 export const callout = ({ic, tint, title, text, button, act, arg = ''}) => `<div class="card callout">${`<span class="callout-ic" style="color:${tint}">${icon(ic)}</span>`}<div><h4>${esc(title)}</h4><p>${esc(text)}</p>${button ? `<button type="button" class="btn prominent small" data-a="${act}" data-v="${esc(arg)}">${esc(button)}</button>` : ''}</div></div>`;

@@ -33,6 +33,7 @@ jobs:
       - name: Build web core
         env:
           CONNECT_URL: ${{ vars.CONNECT_URL }}
+          TEAM_URL: ${{ vars.TEAM_URL }}
         run: |
           npm ci
           npm run build

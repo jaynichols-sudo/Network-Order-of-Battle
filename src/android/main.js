@@ -25,7 +25,8 @@ import { handleLinkedInUrl } from './linkedin.js';
 import { handleSeamlessUrl } from './enrich.js';
 import { initBilling } from './pro.js';
 import { checkArrival } from './arrivals.js';
-import { addTeamPackText } from './team.js';
+import { addTeamPackText, handleTeamUrl } from './team.js';
+import { autoSync } from './teamsync.js';
 import { open, openPerson } from './actions.js';
 import { migrate, onAppEvents, onNotification, readIncoming, scheduleMonday, ls, prefs } from './platform.js';
 
@@ -61,9 +62,9 @@ async function boot(){
   // the engine's "today" is set when it loads; start fresh when you come back on a new day
   const bootDay = new Date().toDateString();
   onAppEvents({
-    resume: () => { if (new Date().toDateString() !== bootDay) location.reload(); else checkArrival(); },
+    resume: () => { if (new Date().toDateString() !== bootDay) location.reload(); else { checkArrival(); autoSync(); } },
     url: async u => {
-      if (handleLinkedInUrl(u) || handleSeamlessUrl(u)) return;
+      if (handleTeamUrl(u) || handleLinkedInUrl(u) || handleSeamlessUrl(u)) return;
       // text shared to Bearings (MainActivity turns it into bearings://notes?text=…)
       if (/^bearings:\/\/notes/i.test(u)){ const t = new URL(u).searchParams.get('text') || ''; if (t.trim()){ go('home'); ingestNotes(t, guessSource(t, new URL(u).searchParams.get('from') || '')); } return; }
       if (!/^(content|file):/i.test(u)) return;
@@ -90,6 +91,7 @@ async function boot(){
   scheduleMonday();
   initBilling();
   setTimeout(checkArrival, 1500);
+  autoSync();
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => refreshVisible('fonts'));
   document.documentElement.classList.add('ready');
 }

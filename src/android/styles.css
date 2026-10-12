@@ -1021,3 +1021,19 @@ input[type=range] { accent-color: var(--accent); }
 .so-how summary { cursor: pointer; padding: 6px 0; }
 .so-how ol { padding-left: 18px; margin: 4px 0 6px; }
 .so-how li { margin: 3px 0; }
+
+/* Bearings Team */
+.team-pitch h2 { font-size: 22px; line-height: 1.2; margin-bottom: 8px; }
+.team-pitch p + p { margin-top: 8px; }
+.team-head h2 { font-size: 22px; font-weight: 700; letter-spacing: -.01em; }
+.team-head p { margin-top: 4px; }
+.team-reach .stat b { font-size: 20px; }
+.team-row .seats { flex: none; padding: 3px 9px; border-radius: 999px; background: var(--soft); }
+.team-row .grow > .muted + .muted { margin-top: 0; }
+.invite-link { margin: 10px 0 2px; padding: 10px 12px; border-radius: 12px; background: var(--fill2); font-size: 13px; word-break: break-all; user-select: all; }
+.pill-btn.bad { color: var(--bad); }
+.fed-team { display: block; margin-top: 2px; white-space: normal; }
+.fed-team-toggle { margin: 12px 0 10px; }
+.team-row .grow > .wrap { white-space: normal; }
+.dialog-btns .danger { color: var(--bad); }
+.dialog-btns button:disabled { opacity: .4; }

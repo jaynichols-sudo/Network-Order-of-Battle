@@ -14,13 +14,15 @@ const PROPOSED = {yearly: '$99.99', monthly: '$19.99', lifetime: '$249.99'};
 export const FEATURES = {
   events: ['Event mode', 'See who you know before a conference, then work the follow-up list.', 'ticket'],
   waysIn: ['Ways in', 'The best paths into any company, with the intro ask drafted.', 'waysIn'],
-  team: ['Team packs', 'Pool networks with teammates, privately, to find warm paths.', 'people'],
+  team: ['Team', 'Pool who your team knows, privately, to find warm paths.', 'people'],
   arrivals: ['Arrival check', 'Open Bearings in a new city and see who you know there.', 'plane'],
   enrich: ['ZoomInfo and Seamless.AI', 'Fill in emails, phones and locations from your own account.', 'sparkles'],
 };
 
 const P = {owned: ls.get('bearings.pro') === '1', ready: false, store: null};
-export const unlocked = () => !GATING || P.owned;
+// Everyone on an active (not read-only) Bearings Team gets Pro; teamsync.js keeps this flag.
+export const teamPro = () => ls.get('bearings.teamPro') === '1';
+export const unlocked = () => !GATING || P.owned || teamPro();
 
 function cdv(){ return globalThis.CdvPurchase; }
 export async function initBilling(){
