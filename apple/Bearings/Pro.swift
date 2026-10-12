@@ -4,7 +4,7 @@ import Observation
 
 /// Northfix Pro. The map, Today, People, Companies, Catch Up, search and reminders stay
 /// free. Pro adds the tools for working a network: event mode, ways in, team packs,
-/// arrival alerts, the account map PDF and Salesforce.
+/// arrival alerts, the account map PDF and CRM sync (Salesforce, HubSpot, Dynamics 365).
 ///
 /// Nothing is locked until `gating` is turned on, which waits on Jay confirming prices
 /// and the products existing in App Store Connect (see docs/pricing.md).
@@ -32,7 +32,7 @@ final class Pro {
             case .team: return "Team"
             case .arrivals: return "Arrival alerts"
             case .accountMap: return "Account map PDF"
-            case .salesforce: return "Salesforce"
+            case .salesforce: return "CRM sync"
             case .enrich: return "ZoomInfo and Seamless.AI"
             }
         }
@@ -43,7 +43,7 @@ final class Pro {
             case .team: return "Pool networks with teammates, privately, to find warm paths."
             case .arrivals: return "Land somewhere and see who you know there."
             case .accountMap: return "A one-page map of who you know at an account, to share."
-            case .salesforce: return "Send contacts, tasks and notes to your Salesforce."
+            case .salesforce: return "Send contacts, tasks and notes to Salesforce, HubSpot or Dynamics 365."
             case .enrich: return "Fill in emails, phones and locations from your own account."
             }
         }

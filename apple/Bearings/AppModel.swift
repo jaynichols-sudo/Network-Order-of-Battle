@@ -233,7 +233,7 @@ final class AppModel {
             Task { @MainActor in self?.scheduleReload() }
         }
         isCloud = await store.isCloud()
-        await Salesforce.shared.attach(store)
+        await CRM.attach(store)
         Task { await Pro.shared.load() }
         await reload()
         loaded = true
@@ -605,7 +605,7 @@ final class AppModel {
             try await engine.run(call, args)
             await saveFile("edits", "edits.json")
             await refreshPerson(k)
-            Salesforce.shared.afterEdit(k, model: self)
+            CRM.afterEdit(k, model: self)
         } catch { show(error.localizedDescription) }
     }
 
@@ -771,7 +771,7 @@ final class AppModel {
             await saveFile("edits", "edits.json")
             if companyIndustry != nil { await refreshAll() } else { await refreshPerson(k) }
             await loadFull(k)
-            Salesforce.shared.afterEdit(k, model: self)
+            CRM.afterEdit(k, model: self)
             Haptic.success()
             show(info.isSample ? "Sample data: changes aren’t saved" : (isCloud ? "Saved and syncing to iCloud" : "Saved"))
         } catch { show("Couldn’t save: \(error.localizedDescription)") }
@@ -962,6 +962,10 @@ final class AppModel {
             go("explore")
         case "event":
             if let id = parts.first?.removingPercentEncoding { tab = .home; paths[.home] = [.event(id)] }
+        case "oauth":
+            // bearings://oauth/salesforce and bearings://oauth/dynamics are sign-in callbacks,
+            // caught by the sign-in sheet. One that lands here on its own changes nothing.
+            break
         case "team":
             // bearings://team/join?code=…&k=…, handed over by the invite page
             let q = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []

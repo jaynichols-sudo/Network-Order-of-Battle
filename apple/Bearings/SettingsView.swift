@@ -16,14 +16,7 @@ struct SettingsView: View {
     @AppStorage("sounds") private var sounds = true
     @AppStorage("contactPhotos") private var contactPhotos = true
     @State private var restoring = false
-    @Environment(\.webAuthenticationSession) private var webAuth
-    @AppStorage("sfDomain") private var sfDomain = "login.salesforce.com"
-    @AppStorage("sfClientId") private var sfClientId = ""
-    @AppStorage("sfAuto") private var sfAuto = true
-    @AppStorage("sfAccounts") private var sfAccounts = true
-    @State private var sfGuide = false
     @State private var feedback = false
-    @State private var sfWorking = false
     @State private var homeText = UserDefaults.standard.string(forKey: "homeName") ?? ""
     @State private var arrivals = ArrivalAlerts.enabled
     @State private var remindersOn = ReminderSync.shared.enabled && ReminderSync.shared.authorized
@@ -36,7 +29,7 @@ struct SettingsView: View {
                 contactsSection
                 calendarSection
                 MailSettingsSection()
-                salesforceSection
+                CRMSettingsSection()
                 EnrichSettingsSection()
                 dataSection
                 aboutSection
@@ -48,6 +41,11 @@ struct SettingsView: View {
                 if case .success(let url) = r { Task { await model.restore(url) } }
             }
             .onChange(of: name) { _, _ in Task { await model.refreshAll() } }
+            .sheet(item: Binding(get: { model.paywallFeature }, set: { model.paywallFeature = $0 })) { f in PaywallView(feature: f).environment(AppModel.shared) }
+            .sheet(isPresented: $feedback) {
+                FeedbackMail(to: AppInfo.supportEmail, body: "\n\n\n—\n" + Diagnostics.shared.summary(model: model), attachments: Diagnostics.shared.reports)
+                    .ignoresSafeArea()
+            }
         }
     }
 
@@ -182,69 +180,6 @@ struct SettingsView: View {
             Text("Calendar")
         } footer: {
             Text("Northfix reads your calendar on this device to brief you before meetings with people you know (what you talked about last time, on the Lock Screen and your watch), and to spot trips more than 75 miles from home. When a meeting with them ends, it asks how it went. Reply in the notification, on your iPhone or watch, and the note goes on their profile. In Trip mode, a trip shows on your Lock Screen two days ahead with who you know nearby. With arrival alerts, landing in a city away from home tells you who you know there (choose “Always” for location when asked). With Reminders on, follow-ups go on a Northfix list in Apple Reminders, and checking one off there marks it done here. Nothing is uploaded.")
-        }
-    }
-
-    private var salesforceSection: some View {
-        Section {
-            if Salesforce.shared.connected {
-                LabeledContent("Connected to", value: Salesforce.shared.host)
-                Button(sfWorking ? "Sending… \(Salesforce.shared.progress)" : "Send starred, follow-ups and notes now") {
-                    sfWorking = true
-                    Task {
-                        let r = await Salesforce.shared.syncAll(model: model)
-                        sfWorking = false
-                        model.show(r.failed == 0 ? "Sent \(r.ok) \(r.ok == 1 ? "person" : "people") to Salesforce" : "Sent \(r.ok), \(r.failed) failed. \(r.error ?? "")")
-                    }
-                }
-                .disabled(sfWorking)
-                Toggle("Keep linked people up to date", isOn: $sfAuto)
-                Toggle("Create missing accounts", isOn: $sfAccounts)
-                Button("Disconnect", role: .destructive) { Salesforce.shared.disconnect() }
-            } else {
-                Picker("Salesforce login", selection: Binding(get: { ["login.salesforce.com", "test.salesforce.com"].contains(sfDomain) ? sfDomain : "custom" },
-                                                               set: { sfDomain = $0 == "custom" ? "" : $0 })) {
-                    Text("Production").tag("login.salesforce.com")
-                    Text("Sandbox").tag("test.salesforce.com")
-                    Text("My Domain").tag("custom")
-                }
-                if !["login.salesforce.com", "test.salesforce.com"].contains(sfDomain) {
-                    TextField("yourcompany.my.salesforce.com", text: $sfDomain)
-                        .textInputAutocapitalization(.never).autocorrectionDisabled().keyboardType(.URL)
-                }
-                TextField("Connected app consumer key", text: $sfClientId)
-                    .textInputAutocapitalization(.never).autocorrectionDisabled()
-                Button(sfWorking ? "Connecting…" : "Connect Salesforce") { if model.allow(.salesforce) { connectSalesforce() } }
-                    .disabled(sfClientId.trimmingCharacters(in: .whitespaces).isEmpty || sfWorking)
-                Button("How to set this up") { sfGuide = true }
-            }
-        } header: {
-            Text("Salesforce")
-        } footer: {
-            Text("Sends contacts, follow-up tasks and notes from Northfix to Salesforce. You sign in with Salesforce directly; Northfix never sees your password, and there’s no Northfix server in between.")
-        }
-        .sheet(isPresented: $sfGuide) { SalesforceGuide().environment(AppModel.shared) }
-        .sheet(item: Binding(get: { model.paywallFeature }, set: { model.paywallFeature = $0 })) { f in PaywallView(feature: f).environment(AppModel.shared) }
-        .sheet(isPresented: $feedback) {
-            FeedbackMail(to: AppInfo.supportEmail, body: "\n\n\n—\n" + Diagnostics.shared.summary(model: model), attachments: Diagnostics.shared.reports)
-                .ignoresSafeArea()
-        }
-    }
-
-    private func connectSalesforce() {
-        let id = sfClientId.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let url = Salesforce.shared.authorizeURL(domain: sfDomain, clientId: id) else { return }
-        sfWorking = true
-        Task {
-            defer { sfWorking = false }
-            do {
-                let cb = try await webAuth.authenticate(using: url, callbackURLScheme: "bearings")
-                try await Salesforce.shared.finishSignIn(callback: cb, domain: sfDomain, clientId: id)
-                Haptic.success()
-                model.show("Connected to Salesforce")
-            } catch {
-                if (error as NSError).code != 1 { model.show("Salesforce: \(error.localizedDescription)") }
-            }
         }
     }
 

@@ -284,7 +284,7 @@ struct PersonAboutView: View {
     @State private var loadedFor = ""
     @State private var placeQuery = ""
     @State private var editingPlace = false
-    @State private var sfBusy = false
+    @State private var crmBusy: CRM?
     @FocusState private var noteFocused: Bool
     @Environment(\.openURL) private var openURL
     @State private var addingContact = false
@@ -326,24 +326,26 @@ struct PersonAboutView: View {
         seg = ed.seg; branch = ed.branch; status = ed.status; grade = ed.grade; rank = ed.rank
     }
 
-    private func sendToSalesforce(_ p: Person) {
-        sfBusy = true
+    private func sendToCRM(_ crm: CRM, _ p: Person) {
+        crmBusy = crm
         Task {
             do {
-                try await Salesforce.shared.push(p, profileURL: links?.profile ?? p.u)
+                try await crm.send(p, profileURL: links?.profile ?? p.u)
                 Haptic.success()
-                model.show("Sent to Salesforce")
-            } catch { model.show("Salesforce: \(error.localizedDescription)") }
-            sfBusy = false
+                model.show("Sent to \(crm.title)")
+            } catch { model.show("\(crm.title): \(error.localizedDescription)") }
+            crmBusy = nil
         }
     }
 
     @ViewBuilder private func more(_ p: Person) -> some View {
         Section {
             if let l = links, !l.profile.isEmpty { LinkButton(title: "LinkedIn profile", url: l.profile, icon: "link") }
-            if Salesforce.shared.connected && !model.info.isSample {
-                Button { sendToSalesforce(p) } label: { Label(sfBusy ? "Sending to Salesforce" : "Send to Salesforce", systemImage: "cloud") }
-                    .disabled(sfBusy)
+            if !model.info.isSample {
+                ForEach(CRM.connectedOnes) { crm in
+                    Button { sendToCRM(crm, p) } label: { Label(crmBusy == crm ? "Sending to \(crm.short)" : "Send to \(crm.short)", systemImage: crm.icon) }
+                        .disabled(crmBusy != nil)
+                }
             }
             if model.salesNav, let l = links, !l.salesNav.isEmpty { LinkButton(title: "Sales Navigator", url: l.salesNav, icon: "safari") }
             if !p.e.isEmpty {
@@ -362,8 +364,12 @@ struct PersonAboutView: View {
                         NewContactView(name: p.fullName, company: p.c, title: p.p, email: p.e, url: links?.profile ?? p.u).ignoresSafeArea()
                     }
             }
-            if Salesforce.shared.connected && !model.info.isSample, let url = Salesforce.shared.contactURL(p.k) {
-                Link(destination: url) { Label("Open in Salesforce", systemImage: "cloud") }
+            if !model.info.isSample {
+                ForEach(CRM.connectedOnes) { crm in
+                    if let url = crm.contactURL(p.k) {
+                        Link(destination: url) { Label("Open in \(crm.short)", systemImage: crm.icon) }
+                    }
+                }
             }
         }
     }
