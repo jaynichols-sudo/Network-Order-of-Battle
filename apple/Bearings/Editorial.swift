@@ -66,15 +66,14 @@ struct DailyFiveCard: View {
     @Environment(AppModel.self) private var model
     @Environment(\.accessibilityReduceMotion) private var reduce
     let picks: [WeeklyPick]
-    @State private var later: [String] = []
+    @State private var snoozed: [String] = AppModel.shared.weeklySnoozed()
     @State private var memory: MemoryInfo?
     @State private var draft = ""
     @State private var writing: WeeklyPick?
     @State private var celebrate: Date?
 
     private var open: [WeeklyPick] {
-        let o = picks.filter { !model.weeklyDone($0.k) }
-        return o.filter { !later.contains($0.k) } + later.compactMap { k in o.first { $0.k == k } }
+        picks.filter { !model.weeklyDone($0.k) && !snoozed.contains($0.k) }
     }
 
     var body: some View {
@@ -101,6 +100,7 @@ struct DailyFiveCard: View {
                 }
             }
             .animation(Motion.spring, value: open.map(\.k))
+            .task(id: WeeklyBrief.weekStart) { snoozed = model.weeklySnoozed() }
             .onChange(of: done) { old, new in
                 if new == picks.count && old < new { celebrate = Date(); Signature.complete() }
                 else if new > old { Signature.done() }
@@ -185,14 +185,23 @@ struct DailyFiveCard: View {
                     Text(action(w.kind)).frame(maxWidth: .infinity)
                 }
                 .buttonStyle(BigPillStyle(filled: true))
-                Button {
-                    Haptic.tap()
-                    withAnimation(Motion.spring) { later.removeAll { $0 == w.k }; later.append(w.k) }
+                Menu {
+                    Section("Remind me about \(p.f.isEmpty ? p.fullName : p.f)") {
+                        Button("Tomorrow", systemImage: "sun.max") { snooze(w.k, days: 1) }
+                        Button("In 3 days", systemImage: "calendar") { snooze(w.k, days: 3) }
+                        Button("Next week", systemImage: "calendar.badge.clock") { snooze(w.k, days: 7) }
+                    }
                 } label: {
-                    Text("Later").padding(.horizontal, 26)
+                    Text("Remind me later")
+                        .font(Theme.geist(.subheadline, .semibold))
+                        .lineLimit(1)
+                        .padding(.horizontal, 18)
+                        .frame(minHeight: 46)
+                        .foregroundStyle(Color.primary)
+                        .background { Capsule().strokeBorder(Theme.hairline, lineWidth: 1.5) }
+                        .contentShape(Capsule())
                 }
-                .buttonStyle(BigPillStyle(filled: false))
-                .disabled(open.count < 2)
+                .accessibilityHint("Takes them off today’s list and sets a reminder")
             }
         }
         .padding(16)
@@ -200,12 +209,26 @@ struct DailyFiveCard: View {
         .animation(Motion.gentle, value: draft)
     }
 
+    private var finishedLine: String {
+        let later = picks.filter { snoozed.contains($0.k) && !model.weeklyDone($0.k) }.count
+        let monday = "Fresh picks arrive Monday morning."
+        if later == 0 { return "You’re caught up for the week. " + monday }
+        return "You’re caught up. \(later == 1 ? "One person is" : "\(later) people are") set to remind you later. " + monday
+    }
+
+    /// Takes someone off this week's list and sets a follow-up, so the reminder brings them back.
+    private func snooze(_ k: String, days: Int) {
+        Haptic.tap()
+        withAnimation(Motion.spring) { snoozed = model.snoozeWeekly(k) }
+        Task { await model.followUp(k, days: days) }
+    }
+
     private var finished: some View {
         VStack(spacing: 8) {
             Image(systemName: "checkmark.seal.fill").font(.system(size: 34)).foregroundStyle(Theme.good)
                 .symbolEffect(.bounce, value: celebrate)
-            Text("This week’s five are done.").font(Theme.serif(.title3, .semibold))
-            Text("Fresh picks arrive Monday morning.").font(Theme.geist(.footnote)).foregroundStyle(Theme.text2)
+            Text("All actions complete.").font(Theme.serif(.title3, .semibold))
+            Text(finishedLine).font(Theme.geist(.footnote)).foregroundStyle(Theme.text2).multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 26)

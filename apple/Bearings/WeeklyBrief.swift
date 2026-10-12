@@ -66,6 +66,16 @@ extension AppModel {
         return out
     }
 
+    /// People set aside with "Remind me later" this week. They leave the list; their follow-up brings them back.
+    func weeklySnoozed() -> [String] { prefs.stringArray(forKey: "weekly-snoozed-" + WeeklyBrief.weekStart) ?? [] }
+
+    @discardableResult func snoozeWeekly(_ k: String) -> [String] {
+        var list = weeklySnoozed()
+        if !list.contains(k) { list.append(k) }
+        prefs.set(list, forKey: "weekly-snoozed-" + WeeklyBrief.weekStart)
+        return list
+    }
+
     /// Done this week: messaged them or logged a touch since Monday.
     func weeklyDone(_ k: String) -> Bool {
         guard let p = person(k) else { return false }

@@ -616,3 +616,13 @@ test('team overview: members, combined reach, pursuits and watchlist', () => {
   assert.equal(o.pursuits.filter(p => !p.mine).length, 3);
   assert.ok(o.targets.some(t => t.owners.includes('You') && t.owners.length > 1), 'a shared watchlist account shows who watches it');
 });
+
+test('quote: one per day, stable within a day, changes the next day', async () => {
+  const {quote, QUOTES} = await import('../src/quotes.js');
+  const a = quote('2026-10-12'), b = quote('2026-10-12'), c = quote('2026-10-13');
+  assert.deepEqual(a, b);
+  assert.notDeepEqual(a, c);
+  assert.ok(a.text && a.by);
+  const seen = new Set(); for (let i = 0; i < QUOTES.length; i++) seen.add(quote(new Date(Date.UTC(2026, 0, 1 + i)).toISOString().slice(0, 10)).text);
+  assert.equal(seen.size, QUOTES.length);
+});

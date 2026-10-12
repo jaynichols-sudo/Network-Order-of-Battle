@@ -347,6 +347,15 @@ export function replacePick(k, list){
   ls.set(weekKey(), JSON.stringify(out));
   return out;
 }
+/** People set aside with "Remind me later" this week. They leave the list; their follow-up brings them back. */
+export const weeklySnoozed = () => ls.json('weekly-snoozed-' + weekStart(), []);
+export function snoozeWeekly(k){
+  const list = weeklySnoozed(); if (!list.includes(k)) list.push(k);
+  ls.set('weekly-snoozed-' + weekStart(), JSON.stringify(list));
+  return list;
+}
+/** Today's quote: the same one the iPhone shows. */
+export function dailyQuote(){ try { return api.quote(new Date().toLocaleDateString('en-CA')); } catch { return null; } }
 /** Done this week: messaged them or logged a touch since Monday. */
 export function weeklyDone(k){
   const p = person(k); if (!p) return false;

@@ -772,6 +772,9 @@ input[type=range] { accent-color: var(--accent); }
 .home .callout { margin-top: 12px; margin-bottom: 0; }
 
 /* the five as segments: filled for done, the next one breathing */
+.daily-quote { margin: 0 6px 14px; padding: 2px 0 2px 14px; border-left: 3px solid var(--amber); }
+.daily-quote blockquote { margin: 0; font-size: 16px; font-style: italic; line-height: 1.4; }
+.daily-quote figcaption { margin-top: 6px; color: var(--text3); }
 .pstrip { display: flex; gap: 4px; padding: 0 6px 12px; }
 .pstrip i { flex: 1; height: 4px; border-radius: 2px; background: var(--hairline); transition: background .4s; }
 .pstrip i.on { background: var(--text); }

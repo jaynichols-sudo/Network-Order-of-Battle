@@ -3,7 +3,7 @@
 // daily five one person at a time (why them, what to remember, a draft, one button), the
 // import or refresh nudge, the night-sky compass card, chips for the rest, birthdays, and
 // the "worth your time" cards.
-import { M, isSample, isStarter, myInitials, firstName, person, persons, weeklyPicks, weeklyDone, runList, deleteSearch, reload, lastBackup, setQuery, memory, messages } from './model.js';
+import { M, isSample, isStarter, myInitials, firstName, person, persons, weeklyPicks, weeklyDone, weeklySnoozed, snoozeWeekly, dailyQuote, followUp, runList, deleteSearch, reload, lastBackup, setQuery, memory, messages } from './model.js';
 import { esc, fmt, icon, avatar, stack, meAvatar, callout, toneVar, ring, animateRings, Day, menu, $, plural, REDUCED } from './ui.js';
 import { createCompass } from './compass.js';
 import { perform, showPeople, openPerson, open, openToday } from './actions.js';
@@ -17,8 +17,6 @@ import { watchlistCard, watchHandlers } from './watchlist.js';
 
 const LINKEDIN_EXPORT = 'https://www.linkedin.com/mypreferences/d/download-my-data';
 let compass = null, compassData = null, compassVersion = -1;
-/** "Later" sends someone to the back of the line for this session. */
-let later = [];
 let shownK = '', lastDone = null;
 
 const WORDS = ['No', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten'];
@@ -32,7 +30,7 @@ const countPhrase = n => n === 1 ? 'One person' : `${n <= 10 ? WORDS[n] : fmt(n)
 /** "Good morning, Jay. Five people need you." with the count picked out in amber. */
 export function headline(open, total){
   const g = esc(greeting());
-  if (open <= 0) return total ? `${g}. Your week is done.` : `${g}. You’re all caught up.`;
+  if (open <= 0) return `${g}. You’re all caught up.`;
   return `${g}. <span class="count">${esc(countPhrase(open))}</span> ${open === 1 ? 'needs' : 'need'} you.`;
 }
 function eyebrowLine(){
@@ -49,12 +47,12 @@ const EYEBROW = {reply: ['WAITING ON YOU', 'var(--needs)'], congrats: ['NEW ROLE
 const ACTION = {reply: 'Reply', congrats: 'Congratulate', new: 'Say thanks', intro: 'Nudge'};
 
 function openLine(picks){
-  const o = picks.filter(p => !weeklyDone(p.k));
-  return o.filter(p => !later.includes(p.k)).concat(later.map(k => o.find(p => p.k === k)).filter(Boolean));
+  const off = weeklySnoozed();
+  return picks.filter(p => !weeklyDone(p.k) && !off.includes(p.k));
 }
 function progressStrip(picks){
   if (!picks.length) return '';
-  const done = picks.filter(p => weeklyDone(p.k)).length;
+  const done = picks.length - openLine(picks).length;
   return `<div class="pstrip" role="img" aria-label="${done} of ${picks.length} done">${picks.map((_, i) => `<i class="${i < done ? 'on' : i === done ? 'next' : ''}"></i>`).join('')}</div>`;
 }
 function nextLine(rest){
@@ -71,19 +69,28 @@ function focusCard(w, p, enter){
   const me = (prefs.name || '').trim();
   const draft = ((messages(w.k)[0] || {}).text || '').split('\n').map(l => l.trim()).filter(l => l && l !== me && !/^[-–—]\s*\S+$/.test(l)).join(' ');
   const sub = [p.p, p.c].filter(Boolean).join(' · ');
-  const n = openLine(weeklyPicks()).length;
   return `<section class="card daily-focus ${enter ? 'enter' : ''}" data-k="${esc(p.k)}">
     <button type="button" class="df-who" data-a="open" data-v="${esc(p.k)}">${avatar(p, 64)}
       <span class="df-text"><span class="eyebrow" style="color:${color}">${tag}</span><b class="serif">${esc(p.full)}</b>${sub ? `<span class="df-sub">${esc(sub)}</span>` : ''}</span></button>
     <p class="df-memory">${esc(recall)}</p>
     ${draft ? `<p class="df-draft serif">“${esc(draft)}”</p>` : ''}
     <div class="df-btns"><button type="button" class="bigpill filled" data-a="write" data-v="${esc(p.k)}">${esc(ACTION[w.kind] || 'Write')}</button>
-      <button type="button" class="bigpill" data-a="later" data-v="${esc(p.k)}" ${n < 2 ? 'disabled' : ''}>Later</button></div>
+      <button type="button" class="bigpill" data-a="later" data-v="${esc(p.k)}" aria-haspopup="menu">Remind me later</button></div>
   </section>`;
+}
+function finishedLine(){
+  const off = weeklySnoozed(), n = weeklyPicks().filter(p => off.includes(p.k) && !weeklyDone(p.k)).length;
+  const monday = 'Fresh picks arrive Monday morning.';
+  if (!n) return 'You’re caught up for the week. ' + monday;
+  return `You’re caught up. ${n === 1 ? 'One person is' : n + ' people are'} set to remind you later. ${monday}`;
+}
+function quoteCard(){
+  const q = dailyQuote(); if (!q) return '';
+  return `<figure class="daily-quote" aria-label="Quote of the day"><blockquote class="serif">“${esc(q.text)}”</blockquote><figcaption class="eyebrow">${esc(q.by)}</figcaption></figure>`;
 }
 function finished(celebrate){
   const bits = celebrate && !REDUCED() ? `<span class="confetti" aria-hidden="true">${Array.from({length: 18}, (_, i) => { const a = i / 18 * Math.PI * 2, r = 70 + (i % 3) * 26; return `<i style="--x:${Math.round(Math.cos(a) * r)}px;--y:${Math.round(Math.sin(a) * r)}px;background:${['var(--needs)', 'var(--good)', 'var(--info)', 'var(--violet)'][i % 4]}"></i>`; }).join('')}</span>` : '';
-  return `<section class="card daily-done ${celebrate ? 'pop' : ''}">${bits}<span class="dd-ic">${icon('seal')}</span><h3 class="serif">This week’s five are done.</h3><p>Fresh picks arrive Monday morning.</p></section>`;
+  return `<section class="card daily-done ${celebrate ? 'pop' : ''}">${bits}<span class="dd-ic">${icon('seal')}</span><h3 class="serif">All actions complete.</h3><p>${esc(finishedLine())}</p></section>`;
 }
 function dailyFive(){
   const picks = weeklyPicks();
@@ -91,7 +98,6 @@ function dailyFive(){
   const open = openLine(picks), done = picks.length - open.length;
   const celebrate = lastDone != null && lastDone < done && done === picks.length;
   lastDone = done;
-  later = later.filter(k => open.some(w => w.k === k));
   const w = open[0], p = w && person(w.k);
   if (!w || !p){ shownK = ''; return finished(celebrate); }
   const enter = shownK && shownK !== w.k; shownK = w.k;
@@ -164,7 +170,7 @@ export const HomeView = {
   mount(el){
     el.innerHTML = `<div class="scr home">
       <header class="today-head"><div><p class="eyebrow date-line"></p><h1 class="headline serif"></h1></div>${accountButton()}</header>
-      <div class="strip-slot"></div><div class="five-slot"></div>
+      <div class="quote-slot"></div><div class="strip-slot"></div><div class="five-slot"></div>
       <div class="banner-slot"></div>
       <section class="card night night-card compass-card glance">
         <div class="cc-head"><p class="eyebrow">YOUR NETWORK</p><span class="mono cc-count"></span></div>
@@ -178,10 +184,11 @@ export const HomeView = {
     this.update(el);
   },
   update(el, what){
-    const picks = weeklyPicks(), open = picks.filter(p => !weeklyDone(p.k)).length;
+    const picks = weeklyPicks(), open = openLine(picks).length;
     $('.date-line', el).textContent = eyebrowLine();
     $('.headline', el).innerHTML = headline(open, picks.length);
     $('.today-head .me-btn', el).outerHTML = accountButton();
+    $('.quote-slot', el).innerHTML = quoteCard();
     $('.strip-slot', el).innerHTML = progressStrip(picks);
     $('.five-slot', el).innerHTML = dailyFive();
     $('.banner-slot', el).innerHTML = banner();
@@ -212,9 +219,9 @@ export const HomeView = {
     open: k => openPerson(k),
     write: k => { fx.tap(); open('message', k); },
     later(k, t){
-      fx.tap();
-      later = later.filter(x => x !== k).concat(k);
-      HomeView.update(t.closest('.screen'));
+      const p = person(k), who = p ? (p.f || p.full) : 'them';
+      const snooze = days => { snoozeWeekly(k); HomeView.update(t.closest('.screen')); followUp(k, days); };
+      menu(t, [{header: `Remind me about ${who}`}, {label: 'Tomorrow', icon: 'sun', run: () => snooze(1)}, {label: 'In 3 days', icon: 'calendar', run: () => snooze(3)}, {label: 'Next week', icon: 'calendar', run: () => snooze(7)}]);
     },
     notes: () => { fx.tap(); open('notes'); },
     ask: () => { fx.tap(); open('ask'); },

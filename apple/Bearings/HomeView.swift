@@ -58,6 +58,7 @@ struct HomeView: View {
     private var narrowLayout: some View {
         VStack(alignment: .leading, spacing: 12) {
             header.cascade(0, distance: 10)
+            QuoteCard().cascade(1, distance: 10)
             progress
             DailyFiveCard(picks: picks).cascade(2).edgeSettle()
             banner.cascade(3).edgeSettle()
@@ -74,6 +75,7 @@ struct HomeView: View {
     private var wideLayout: some View {
         VStack(alignment: .leading, spacing: 16) {
             header.cascade(0, distance: 10)
+            QuoteCard().cascade(1, distance: 10)
             AdaptiveColumns(width: width, ratio: 0.54, spacing: 14) {
                 progress
                 DailyFiveCard(picks: picks).cascade(2)
@@ -112,13 +114,13 @@ struct HomeView: View {
         }
     }
 
-    private var openCount: Int { picks.filter { !model.weeklyDone($0.k) }.count }
+    private var openCount: Int { let off = model.weeklySnoozed(); return picks.filter { !model.weeklyDone($0.k) && !off.contains($0.k) }.count }
 
     /// "Good morning, Jay. Five people need you." Spelled out, since it reads as a sentence.
     private var headline: String {
         let n = openCount
         if !picksLoaded { return greeting + "." }
-        if n == 0 { return picks.isEmpty ? "\(greeting). You’re all caught up." : "\(greeting). Your week is done." }
+        if n == 0 { return "\(greeting). You’re all caught up." }
         return "\(greeting). \(countPhrase) \(n == 1 ? "needs" : "need") you."
     }
 
