@@ -17,7 +17,9 @@ struct QuoteCard: View {
     @State private var quote: DailyQuote?
 
     var body: some View {
-        Group {
+        // a ZStack with a zero-height anchor, so the view exists (and its task runs) before the quote arrives
+        ZStack(alignment: .topLeading) {
+            Color.clear.frame(height: 0)
             if let q = quote {
                 HStack(alignment: .top, spacing: 12) {
                     Capsule().fill(Theme.amber).frame(width: 3)
