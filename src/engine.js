@@ -10,6 +10,7 @@ import {
 import { parseQuery, matchNL } from './nlq.js';
 import { findAgency, officeOf } from './agencies.js';
 import {compileFederal} from './federal.js';
+import { parseFlight, parseICS, tripsFromEvents, tripsFromFeed } from './flights.js';
 import { INDUSTRIES, indColor, indShort, setIndustryOverrides, companyKey, UNCLASSIFIED, GOV_IND } from './industry.js';
 
 /* ---------- state ---------- */
@@ -1724,6 +1725,17 @@ const lean = o => {
 };
 function people(){ return S.all.map(r => lean(vm(r))); }
 function person(k){ const r = S.byK.get(k); if (!r) return null; const so = socialOf(k); return Object.assign(vm(r, true), {links: {profile: links.person(r), salesNav: links.snPerson(r)}}, so ? {social: {on: so.on, h: so.h}} : {}); }
+/* ---------- flights and travel feeds (src/flights.js) ---------- */
+// One event: is it a flight, and where do you land? Null when it isn't one.
+function flightInfo(title, location, notes){ return parseFlight(title, location, notes); }
+// Many at once ([[title, location, notes], …]), so the iPhone asks once per calendar scan.
+function flightInfos(list){ return (list || []).map(x => Array.isArray(x) ? parseFlight(x[0], x[1], x[2]) : null); }
+// A TripIt (or any iCalendar) feed's text → trips. home: {lat, lon, name} or null.
+function feedTrips(icsText, home){ return tripsFromFeed(icsText, home || null); }
+// Calendar events the app read itself ({uid, start, end (ms), startDay, endDay, allDay, title, location, notes}) → trips.
+function eventTrips(events, home, opts){ return tripsFromEvents(events, home || null, opts || {}); }
+function icsEvents(icsText){ return parseICS(icsText); }
+
 function constants(){
   return {industries: INDUSTRIES.map(i => ({id: i.id, short: i.short, color: i.color})), seniority: SENIORITY, funcs: FUNCS, segs: SEGS.map(s => ({id: s.id, short: s.short, color: segColor(s.id)})),
     branches: BRANCHES, statuses: STATUSES, tiers: TIERS, certs: CERTS.map(c => c[0]), since: SINCE, signals: SIGNALS_UI, grades: GRADE_OPTS, bands: BAND_LABEL, unclassified: UNCLASSIFIED, gov: GOV_IND};
@@ -1731,7 +1743,8 @@ function constants(){
 
 const api = {load, loadSample, loadFiles, clearNotes, clusters, placeClues, setCompanyLocation, companyPlaces, messages, matchAttendees, alsoAt, setLens, info, people, person, search, facets, home, payoff, targets, unit, addTargetCandidates, toggleTarget, setTargetNote, orgs,
   industries, industry, setCompanyIndustry, setCompanyLink, ranks, deck, deckCount, reviewed, radar, compass, startFromContacts, introPaths, weekly, touch, setCircle, setEdit, followUp, markReplied, addNote,
-  importTexts, importSnapshot, yearInReview, teamPack, teamShare, addTeamPack, setTeamShares, removeTeamPack, teamList, teamOverview, demoTeamShares, matchEnrichment, readNotes, memory, applyMail, clearMail, addProspects, clearProspects, addPursuit, updatePursuit, removePursuit, assignRole, pursuits, pursuit, moves, setRoleSince, quickLog, addIntro, setIntro, intros, trend, snapshot, targetChanges, ask, importSocial, clearSocial, socials, agencyCoverage, orgChart, structureFor, setReportsTo, backup, restore, exportCSV, reminders, watch, constants, quote};
+  importTexts, importSnapshot, yearInReview, teamPack, teamShare, addTeamPack, setTeamShares, removeTeamPack, teamList, teamOverview, demoTeamShares, matchEnrichment, readNotes, memory, applyMail, clearMail, addProspects, clearProspects, addPursuit, updatePursuit, removePursuit, assignRole, pursuits, pursuit, moves, setRoleSince, quickLog, addIntro, setIntro, intros, trend, snapshot, targetChanges, ask, importSocial, clearSocial, socials, agencyCoverage, orgChart, structureFor, setReportsTo, backup, restore, exportCSV, reminders, watch, constants, quote,
+  flightInfo, flightInfos, feedTrips, eventTrips, icsEvents};
 // Every call goes through here: JSON string in, JSON string out, errors as {error}.
 globalThis.Bearings = {
   call(name, argsJSON){

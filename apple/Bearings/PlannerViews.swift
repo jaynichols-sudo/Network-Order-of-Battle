@@ -11,7 +11,7 @@ struct ComingUp: View {
         let meetings = cal.meetings.filter { $0.start < Date().addingTimeInterval(36 * 3600) }
         let trips = cal.trips.filter { $0.start < Date().addingTimeInterval(30 * 86400) }
         VStack(alignment: .leading, spacing: 10) {
-            if !cal.enabled || !cal.authorized {
+            if (!cal.enabled || !cal.authorized) && cal.feedTrips.isEmpty {
                 if !promptHidden && !model.info.isSample {
                     Callout(icon: "calendar.badge.clock", tint: Theme.violet, title: "Prep for meetings and trips",
                             text: "Northfix can read your calendar on this device to brief you before meetings with people you know, and to show who’s near where you’re traveling.",
@@ -192,6 +192,7 @@ struct TripView: View {
                     VStack(alignment: .leading, spacing: 4) {
                         Text(t.city).geist(.title2, .bold)
                         Text(t.when + (t.source == "calendar" ? ", from your calendar" : "")).font(Theme.geist(.subheadline)).foregroundStyle(.secondary)
+                        TripFlightLines(trip: t)
                     }
                     .listRowBackground(Color.clear)
                     Map(initialPosition: .region(MKCoordinateRegion(center: t.coordinate, latitudinalMeters: radius * 3600, longitudinalMeters: radius * 3600))) {
