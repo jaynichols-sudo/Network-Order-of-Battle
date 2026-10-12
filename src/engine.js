@@ -1279,8 +1279,9 @@ function demoTeamShares(){
   const pick = a => a[Math.floor(rnd() * a.length)];
   const mates = [['Pat Morgan', 0], ['Alex Reyes', 1], ['Sam Okafor', 2]];
   return mates.map(([owner, i]) => {
-    const people = A.filter((r, j) => j % 7 === i).slice(0, 90).map(r => ({f: r.f, l: r.l, c: r.c || '', p: r.p || '', u: '', b: pick(bands)}));
-    for (const g of gaps.filter((r, j) => j % 3 === i).slice(0, 22)) for (let n = 0; n < 1 + Math.floor(rnd() * 3); n++)
+    // their own people (new names at the same kinds of employers), plus a few where you have no one
+    const people = A.filter((r, j) => j % 7 === i).slice(0, 90).map(r => ({f: pick(firsts), l: pick(lasts), c: r.c || '', p: r.p || '', u: '', b: pick(bands)}));
+    for (const g of gaps.filter((r, j) => j % 3 === i).slice(0, 12)) for (let n = 0; n < 1 + Math.floor(rnd() * 3); n++)
       people.push({f: pick(firsts), l: pick(lasts), c: g.name, p: pick(titles), u: '', b: pick(bands)});
     const ag = gaps.filter((r, j) => j % 3 === i)[0];
     const pursuits = [{name: `${ag ? ag.short : 'CISA'} ${['OT visibility pilot', 'zero trust gateway', 'grid resilience study'][i]}`, agency: ag ? ag.short : 'CISA', stage: ['Pursuing', 'Proposal', 'Tracking'][i],
