@@ -89,14 +89,39 @@ final class Pro {
 
     func refresh() async {
         var has: String?
+        var until: Date?
         for await r in Transaction.currentEntitlements {
             if case .verified(let t) = r, Pro.all.contains(t.productID), t.revocationDate == nil,
                t.expirationDate.map({ $0 > Date() }) ?? true {
                 has = t.productID
+                until = t.expirationDate
             }
         }
         owned = has != nil
         ownedID = has
+        await writeAIAccess(until: has == nil ? nil : until)
+    }
+
+    /// What ai-access.json last said, so it's only rewritten when that changes.
+    @ObservationIgnored private var aiAccessWritten: String?
+
+    /// Northfix for AI tools (the local MCP server in mcp/) reads ai-access.json next to the
+    /// network files to know whether to answer without the free daily limit. It mirrors what
+    /// the app already knows; it isn't a lock. Saved in iCloud, so Pro bought on an iPhone
+    /// reaches the Mac too.
+    func writeAIAccess(until: Date?) async {
+        let pro = unlocked || TeamSync.shared.grantsPro
+        let iso = ISO8601DateFormatter()
+        let untilText = pro ? until.map { iso.string(from: $0) } : nil
+        let key = "\(pro)|\(untilText ?? "")"
+        guard key != aiAccessWritten else { return }
+        let body: [String: Any] = ["pro": pro, "until": untilText ?? NSNull(), "written": iso.string(from: Date())]
+        guard let data = try? JSONSerialization.data(withJSONObject: body, options: [.sortedKeys]),
+              let text = String(data: data, encoding: .utf8) else { return }
+        do {
+            try await AppModel.shared.store.write("ai-access.json", text)
+            aiAccessWritten = key
+        } catch {}
     }
 
     func buy(_ id: String = Pro.lifetime) async -> Bool {
