@@ -369,7 +369,8 @@ final class TeamSync {
         _ = try? await model.engine.call("setTeamShares", [shares], as: [TeamListItem].self)
         demo = true
         let now = Date()
-        members = [TeamMember(id: "me", role: "owner", name: "You", title: "Director of Federal Sales", joined: now.addingTimeInterval(-9 * 86400), shared: now, isMe: true)]
+        let me = (UserDefaults.standard.string(forKey: "name") ?? "").trimmingCharacters(in: .whitespaces)
+        members = [TeamMember(id: "me", role: "owner", name: me.isEmpty ? "You" : me, title: "Director of Federal Sales", joined: now.addingTimeInterval(-9 * 86400), shared: now, isMe: true)]
             + [("demo-0", "Pat Morgan", "Capture Manager", "admin"), ("demo-1", "Alex Reyes", "Account Executive", "member"), ("demo-2", "Sam Okafor", "Solutions Architect", "member")].enumerated().map { i, m in
                 TeamMember(id: m.0, role: m.3, name: m.1, title: m.2, joined: now.addingTimeInterval(Double(-8 + i) * 86400), shared: now.addingTimeInterval(Double(-i) * 3600 * 5), isMe: false)
             }

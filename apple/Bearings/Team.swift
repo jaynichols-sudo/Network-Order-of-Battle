@@ -93,7 +93,7 @@ struct TeamView: View {
             .frame(maxWidth: .infinity)
         }
         .background(Theme.bg)
-        .navigationTitle(team.joined ? team.teamName : "Team")
+        .navigationTitle("Team")
         .refreshable { await team.sync(model: model) }
         .task(id: team.rev) { overview = try? await model.engine.call("teamOverview", as: TeamOverview.self) }
         .task {
@@ -170,7 +170,7 @@ struct TeamView: View {
                 Theme.line.frame(height: 1)
                 HStack(spacing: 12) {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(m.isMe ? "\(m.name) (you)" : m.name).font(Theme.geist(.subheadline, .semibold))
+                        Text(m.isMe && m.name != "You" ? "\(m.name) (you)" : m.name).font(Theme.geist(.subheadline, .semibold))
                         Text([m.title, m.role == "member" ? "" : m.role.capitalized].filter { !$0.isEmpty }.joined(separator: ", "))
                             .font(Theme.geist(.footnote)).foregroundStyle(Theme.text2)
                         Text(memberLine(m, count: counts[m.id])).font(Theme.geist(.caption)).foregroundStyle(Theme.text3)
