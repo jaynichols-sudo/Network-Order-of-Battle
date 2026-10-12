@@ -32,7 +32,7 @@ Decided October 11, 2026.
 - **The free app has to win the Today habit on its own.** People pay for the work tools once they rely on the app.
 - **Priced for professionals, not hobbyists.** The buyer is a BD, capture or sales professional who often expenses tools. $19.99 a month is still well under LinkedIn's paid plans.
 - **Monthly is the anchor; yearly is the plan to sell.** Yearly is 58% off twelve months of monthly ($239.88), so it reads as the clear deal without making monthly look inflated.
-- **Lifetime doesn't undercut yearly.** At about 2.5 years of yearly, the most committed users still pay fairly, and the federal data that has to stay current is paid for. Consider retiring lifetime after launch, or keeping it as a limited "founding member" offer.
+- **Lifetime is permanent.** It stays on sale, and a lifetime purchase is Pro for good: no expiry and no later move to a subscription. At about 2.5 years of yearly, it doesn't undercut the yearly plan.
 - **What it nets.** Under Apple's Small Business Program (15%), yearly nets about $85 per subscriber.
 
 ## To turn it on
