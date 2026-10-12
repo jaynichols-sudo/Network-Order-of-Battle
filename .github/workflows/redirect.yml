@@ -1,0 +1,20 @@
+name: getnorthfix.com redirect
+
+on:
+  push:
+    branches: [main]
+    paths: ['server/redirect/**', '.github/workflows/redirect.yml']
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: server/redirect
+          command: deploy
