@@ -97,6 +97,7 @@ jobs:
           mshot 08-profile -startTab people -demoOpen person
           mshot 09-you -startTab you
           mshot 10-team -startTab you -demoOpen team
+          mshot 11-opportunities -demoOpen opportunities
           pkill -x Bearings >/dev/null 2>&1 || true
           ls -la shots | grep mac- || true
       - name: UI tests
@@ -192,6 +193,8 @@ jobs:
             shoot $dev $p-39-federal -startTab companies -startCompanies agencies
             shoot $dev $p-40-team -startTab you -demoOpen team
             shoot $dev $p-41-federal-team -startTab companies -startCompanies agencies -demoOpen teamfed
+            shoot $dev $p-42-opportunities -demoOpen opportunities
+            shoot $dev $p-43-settings -demoOpen settings
             xcrun simctl ui $dev content_size accessibility-large
             shoot $dev $p-21-home-xl
             shoot $dev $p-22-profile-xl -startTab people -demoOpen person
