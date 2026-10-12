@@ -16,7 +16,7 @@ PERMISSIONS, ALL OPTIONAL AND ASKED IN CONTEXT:
 - Camera: scanning a business card at an event (text is read on device with Vision).
 - Notifications: follow-up reminders and the Monday brief.
 
-SYNC. Data syncs only through the user's own iCloud (CloudKit/iCloud Documents). Optional Salesforce integration signs in directly with the user's Salesforce org via OAuth and is off by default.
+SYNC. Data syncs only through the user's own iCloud (CloudKit/iCloud Documents). Optional CRM sync (Salesforce, HubSpot or Microsoft Dynamics 365) connects directly to the user's own CRM (OAuth for Salesforce and Dynamics, a user-pasted access token for HubSpot) and is off by default.
 
 ENRICHMENT (OPTIONAL). Users who already have a ZoomInfo or Seamless.AI account can add their own API credentials in Settings. Only when they tap Look up, the selected people's names and companies are sent from the device to that provider to fetch work email, phone, title and city. Credentials stay in the device Keychain. Off by default; no Northfix server is involved.
 

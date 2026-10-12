@@ -15,7 +15,7 @@
 - Team packs
 - Arrival alerts
 - The account map PDF
-- Salesforce
+- CRM sync (Salesforce, HubSpot, Dynamics 365)
 
 | Product ID | Type | Price |
 |---|---|---|
