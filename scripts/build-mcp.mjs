@@ -60,7 +60,7 @@ writeFileSync(`${OUT}/manifest.json`, JSON.stringify(manifest, null, 2) + '\n');
 const zip = new JSZip();
 zip.file('manifest.json', JSON.stringify(manifest, null, 2) + '\n');
 zip.file('server/index.mjs', readFileSync(`${OUT}/northfix-mcp.mjs`), { unixPermissions: 0o755 });
-zip.file('icon.png', readFileSync('brand/northfix-icon-1024.png'));
+zip.file('icon.png', readFileSync('brand/northfix-icon-512.png'));
 const bytes = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE', compressionOptions: { level: 9 }, platform: 'UNIX' });
 writeFileSync(`${OUT}/northfix.mcpb`, bytes);
 console.log(`built ${OUT}/northfix-mcp.mjs (${Math.round(readFileSync(`${OUT}/northfix-mcp.mjs`).length / 1024)} KB) and ${OUT}/northfix.mcpb (${Math.round(bytes.length / 1024)} KB)`);
