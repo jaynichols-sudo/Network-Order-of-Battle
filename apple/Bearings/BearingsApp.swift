@@ -133,7 +133,7 @@ enum MacWindow {
     static func configure() {
         #if targetEnvironment(macCatalyst)
         for case let scene as UIWindowScene in UIApplication.shared.connectedScenes {
-            scene.sizeRestrictions?.minimumSize = CGSize(width: 1120, height: 720)
+            scene.sizeRestrictions?.minimumSize = CGSize(width: 960, height: 660)
         }
         #endif
     }

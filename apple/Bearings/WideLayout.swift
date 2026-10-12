@@ -43,18 +43,44 @@ struct AdaptiveColumns<Primary: View, Secondary: View>: View {
 
     var body: some View {
         if width >= Wide.threshold {
-            let usable = min(width, Wide.page) - 32 - Wide.gutter
-            HStack(alignment: .top, spacing: Wide.gutter) {
+            TwoColumns(ratio: ratio, gutter: Wide.gutter) {
                 VStack(alignment: .leading, spacing: spacing) { primary }
-                    .frame(width: usable * ratio)
                 VStack(alignment: .leading, spacing: spacing) { secondary }
-                    .frame(width: usable * (1 - ratio))
             }
         } else {
             VStack(alignment: .leading, spacing: spacing) {
                 primary
                 secondary
             }
+        }
+    }
+}
+
+/// Splits the width it's offered between two columns, top-aligned. Working from the offered
+/// width, rather than a measured one, means the columns can never run past the window.
+struct TwoColumns: Layout {
+    var ratio: CGFloat
+    var gutter: CGFloat
+
+    private func widths(_ total: CGFloat) -> (CGFloat, CGFloat) {
+        let usable = max(0, total - gutter)
+        let left = (usable * ratio).rounded()
+        return (left, usable - left)
+    }
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let total = proposal.width ?? Wide.page
+        let (l, r) = widths(total)
+        let h = zip(subviews, [l, r]).map { $0.sizeThatFits(ProposedViewSize(width: $1, height: nil)).height }.max() ?? 0
+        return CGSize(width: total, height: h)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let (l, r) = widths(bounds.width)
+        var x = bounds.minX
+        for (view, w) in zip(subviews, [l, r]) {
+            view.place(at: CGPoint(x: x, y: bounds.minY), anchor: .topLeading, proposal: ProposedViewSize(width: w, height: nil))
+            x += w + gutter
         }
     }
 }

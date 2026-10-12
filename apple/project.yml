@@ -38,6 +38,7 @@ targets:
       path: Bearings/Info.plist
       properties:
         CFBundleDisplayName: Northfix
+        CFBundleName: Northfix
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         BearingsConnectURL: $(CONNECT_URL)
