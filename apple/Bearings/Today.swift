@@ -326,6 +326,7 @@ struct YouView: View {
                 }
                 } secondary: {
                 group("Your data") {
+                    row("Set up Northfix", icon: "checklist") { model.showSetup = true }
                     row(model.info.isSample ? "Import your connections" : "Refresh connections", icon: "square.and.arrow.down",
                         detail: model.info.lastImport.isEmpty ? nil : Day.nice(model.info.lastImport)) { model.showImport = true }
                     if !model.info.isSample {

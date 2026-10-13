@@ -639,6 +639,30 @@ input[type=range] { accent-color: var(--accent); }
 .tchip .mono { color: var(--text2); font-size: 13px; }
 .cards-slot > .card { margin-top: 14px; }
 
+/* set up Northfix */
+.setup-slot > .card { margin-top: 14px; }
+.setup-card .card-head { padding-bottom: 2px; }
+.setup-card .card-meta .tool.plain { width: 28px; height: 28px; background: none; box-shadow: none; color: var(--text2); }
+.setup-card .card-meta .tool.plain .i { width: 16px; height: 16px; }
+.setup-ring { width: 18px; height: 18px; transform: rotate(-90deg); }
+.setup-ring circle { fill: none; stroke-width: 2.5; }
+.setup-ring .ring-bg { stroke: var(--soft); }
+.setup-ring .ring-arc { stroke: var(--needs); }
+.setup-ring.full .ring-arc { stroke: var(--good); }
+.setup-row { gap: 12px; padding: 10px 16px; }
+.setup-ic { flex: none; width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; color: var(--primary); background: var(--soft); }
+.setup-ic .i { width: 16px; height: 16px; stroke-width: 2.3; }
+.setup-row.done .setup-ic { color: var(--good); background: var(--good-bg); }
+.setup-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; text-align: left; }
+.setup-main b { font-size: 15px; font-weight: 600; line-height: 1.3; }
+.setup-main > span { font-size: 13px; color: var(--text2); line-height: 1.35; }
+.setup-row.done .setup-main b { color: var(--text3); text-decoration: line-through; }
+.setup-row.done:disabled { opacity: 1; }
+.setup-fold { min-height: 42px; padding: 8px 16px 12px; gap: 6px; font-size: 13px; font-weight: 500; color: var(--text2); }
+.setup-fold .i.good { width: 15px; height: 15px; stroke-width: 2.4; color: var(--good); }
+.setup-fold span { flex: 1; }
+.list > .setup-row + .setup-row::before, .list > .setup-row + .setup-fold::before { left: 58px; }
+
 /* worth your time */
 .worth { padding-bottom: 4px; }
 .wrow { align-items: flex-start; gap: 12px; padding: 12px 16px; }

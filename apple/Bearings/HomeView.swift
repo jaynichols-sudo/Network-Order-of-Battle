@@ -63,6 +63,7 @@ struct HomeView: View {
             QuoteCard().cascade(1, distance: 10)
             progress
             DailyFiveCard(picks: picks).cascade(2).edgeSettle()
+            SetupCard().cascade(3).edgeSettle()
             banner.cascade(3).edgeSettle()
             TodayCompassCard().id("compass").cascade(3).edgeSettle()
             TodayChips().cascade(4, distance: 10)
@@ -91,6 +92,7 @@ struct HomeView: View {
             Masonry(columns: width >= Wide.fourColumns ? 4 : 3, fillHeight: max(0, viewport.height - 150)) {
                 VStack(alignment: .leading, spacing: 12) {
                     DailyFiveCard(picks: picks)
+                    SetupCard()
                     TodayChips()
                 }
                 .cascade(2)
@@ -114,6 +116,7 @@ struct HomeView: View {
             AdaptiveColumns(width: width, ratio: 0.54, spacing: 14) {
                 progress
                 DailyFiveCard(picks: picks).cascade(2)
+                SetupCard().cascade(3)
                 banner.cascade(3)
                 TodayChips().cascade(4, distance: 10)
                 ComingUp().cascade(5)

@@ -124,6 +124,8 @@ final class AppModel {
     var companiesMode: CompaniesMode = .watchlist
     var showImport = false
     var showSettings = false
+    /// You > Set up Northfix: the checklist as a sheet, for after the Today card is hidden.
+    var showSetup = false
     var showAddTarget = false
     var showOnboarding = false
     var showPayoff = false
