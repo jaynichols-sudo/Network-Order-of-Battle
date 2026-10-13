@@ -7,6 +7,22 @@ import UniformTypeIdentifiers
 enum SocialPlatform: String, CaseIterable, Identifiable {
     case facebook, instagram, snapchat, tiktok
     var id: String { rawValue }
+
+    /// Which app a data download came from, by the files inside it. Nil for anything else
+    /// (a LinkedIn export, say), so the caller can treat it the usual way.
+    static func detect(_ url: URL) -> SocialPlatform? {
+        let access = url.startAccessingSecurityScopedResource()
+        defer { if access { url.stopAccessingSecurityScopedResource() } }
+        guard let data = try? Data(contentsOf: url, options: .mappedIfSafe), data.prefix(2) == Data([0x50, 0x4B]),
+              let zip = try? ZipReader(data: data) else { return nil }
+        let names = zip.entries.map { $0.name.lowercased() }
+        if names.contains(where: { $0.hasSuffix("connections.csv") }) { return nil }
+        if names.contains(where: { $0.contains("your_friends") || $0.contains("connections/friends/") }) { return .facebook }
+        if names.contains(where: { $0.contains("followers_and_following") }) { return .instagram }
+        if names.contains(where: { $0.contains("snap") && $0.contains("friends") }) { return .snapchat }
+        if names.contains(where: { $0.contains("user_data") && $0.contains("tiktok") }) || names.contains("user_data.json") { return .tiktok }
+        return nil
+    }
     var name: String { ["facebook": "Facebook", "instagram": "Instagram", "snapchat": "Snapchat", "tiktok": "TikTok"][rawValue]! }
     var color: Color {
         switch self {
@@ -27,7 +43,7 @@ enum SocialPlatform: String, CaseIterable, Identifiable {
             "Tap Accounts Center, then Your information and permissions, then Download your information.",
             "Tap Download or transfer information, choose your Facebook profile, then Specific types of information.",
             "Tick Friends and followers only, then Next.",
-            "Choose Download to device. Set Date range to All time and Format to JSON, then Create files.",
+            "Choose Download to device. Set Date range to All time, then Create files. HTML or JSON both work.",
             "Facebook tells you when it’s ready, usually within a few hours. Download the zip, then tap Add file here (or share the zip to Northfix).",
         ]
         case .instagram: return [
@@ -35,7 +51,7 @@ enum SocialPlatform: String, CaseIterable, Identifiable {
             "Tap Your information and permissions, then Download your information.",
             "Tap Download or transfer information, choose your Instagram account, then Specific types of information.",
             "Tick Followers and following only, then Next.",
-            "Choose Download to device. Set Date range to All time and Format to JSON, then Create files.",
+            "Choose Download to device. Set Date range to All time, then Create files. HTML or JSON both work.",
             "When Instagram says it’s ready, download the zip, then tap Add file here.",
         ]
         case .snapchat: return [
@@ -111,7 +127,7 @@ extension AppModel {
                 let zip = try ZipReader(data: data)
                 let wanted = zip.entries.filter { e in
                     let n = e.name.lowercased()
-                    guard n.hasSuffix(".json"), e.size < 60_000_000 else { return false }
+                    guard n.hasSuffix(".json") || n.hasSuffix(".html"), e.size < 60_000_000 else { return false }
                     switch p {
                     case .facebook: return n.contains("friend")
                     case .instagram: return n.contains("follow")
@@ -123,7 +139,7 @@ extension AppModel {
             } else {
                 files[url.lastPathComponent] = String(decoding: data, as: UTF8.self)
             }
-            guard !files.isEmpty else { show("No \(p.name) friends or followers in that file. Request the download in JSON format."); return }
+            guard !files.isEmpty else { show("No \(p.name) friends or followers in that file. Make sure the download includes Connections."); return }
             struct Result: Decodable { var entries: Int; var matched: Int; var added: Int }
             let r = try await engine.call("importSocial", [p.rawValue, files], as: Result.self)
             await saveFile("social", "social.json")
@@ -194,7 +210,7 @@ struct SocialsView: View {
         .navigationTitle("Across your socials")
         .navigationBarTitleDisplayMode(.inline)
         .task(id: "\(model.socialRev)-\(model.info.rev)") { d = await model.socials() }
-        .fileImporter(isPresented: Binding(get: { importing != nil }, set: { if !$0 { importing = nil } }), allowedContentTypes: [.zip, .json]) { r in
+        .fileImporter(isPresented: Binding(get: { importing != nil }, set: { if !$0 { importing = nil } }), allowedContentTypes: [.zip, .json, .html]) { r in
             if case .success(let url) = r, let p = importing { Task { await model.importSocial(p, url: url); d = await model.socials() } }
         }
         .sheet(item: $showing) { e in SocialPersonSheet(e: e).environment(AppModel.shared) }

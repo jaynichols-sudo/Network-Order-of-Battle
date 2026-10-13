@@ -19,6 +19,33 @@ struct RootView: View {
             Tab(AppTab.you.title, systemImage: AppTab.you.icon, value: AppTab.you) {
                 stack(.you) { YouView() }
             }
+            TabSection("Workspace") {
+                Tab(AppTab.explore.title, systemImage: AppTab.explore.icon, value: AppTab.explore) {
+                    stack(.explore) { ExploreView() }
+                }
+                .defaultVisibility(.hidden, for: .tabBar)
+                Tab(AppTab.pursuits.title, systemImage: AppTab.pursuits.icon, value: AppTab.pursuits) {
+                    stack(.pursuits) { PursuitsView() }
+                }
+                .defaultVisibility(.hidden, for: .tabBar)
+                Tab(AppTab.opportunities.title, systemImage: AppTab.opportunities.icon, value: AppTab.opportunities) {
+                    stack(.opportunities) { OpportunitiesView() }
+                }
+                .defaultVisibility(.hidden, for: .tabBar)
+                Tab(AppTab.socials.title, systemImage: AppTab.socials.icon, value: AppTab.socials) {
+                    stack(.socials) { SocialsView() }
+                }
+                .defaultVisibility(.hidden, for: .tabBar)
+                Tab(AppTab.trips.title, systemImage: AppTab.trips.icon, value: AppTab.trips) {
+                    stack(.trips) { TripsView() }
+                }
+                .defaultVisibility(.hidden, for: .tabBar)
+                Tab(AppTab.team.title, systemImage: AppTab.team.icon, value: AppTab.team) {
+                    stack(.team) { TeamView() }
+                }
+                .defaultVisibility(.hidden, for: .tabBar)
+            }
+            .defaultVisibility(.hidden, for: .tabBar)
         }
         .tabViewStyle(.sidebarAdaptable)
         .modifier(ModernTabBar())
@@ -66,10 +93,10 @@ struct RootView: View {
 
     @ViewBuilder
     private func stack<Content: View>(_ tab: AppTab, @ViewBuilder content: () -> Content) -> some View {
-        if tab == .home {
-            plainStack(tab, content: content)
-        } else {
+        if [.people, .companies, .you].contains(tab) {
             WideSplit(tab: tab, zoom: zoom, content: content)
+        } else {
+            plainStack(tab, content: content)
         }
     }
 

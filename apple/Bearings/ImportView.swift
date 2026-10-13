@@ -69,6 +69,32 @@ struct ImportView: View {
                     if reading { HStack { ProgressView(); Text("Reading \(fileName)…") } }
                     if !error.isEmpty { Text(error).foregroundStyle(Theme.bad) }
                 }
+                if plan == nil {
+                    Section {
+                        Button {
+                            dismiss()
+                            Task { @MainActor in
+                                try? await Task.sleep(nanoseconds: 350_000_000)
+                                model.open(.socials)
+                            }
+                        } label: {
+                            HStack(spacing: 12) {
+                                HStack(spacing: -6) {
+                                    ForEach(SocialPlatform.allCases) { p in
+                                        Circle().fill(p.color).frame(width: 22, height: 22)
+                                            .overlay(Circle().strokeBorder(Color(.systemBackground), lineWidth: 2))
+                                    }
+                                }
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Add Facebook, Instagram, Snapchat or TikTok").fontWeight(.semibold)
+                                    Text("Bring in the people you know off LinkedIn from your own data download. You can also choose that file right here.")
+                                        .font(.footnote).foregroundStyle(.secondary)
+                                }
+                            }
+                            .padding(.vertical, 4)
+                        }
+                    }
+                }
                 if model.info.isSample && plan == nil {
                     Section {
                         Button {
@@ -120,7 +146,7 @@ struct ImportView: View {
             .navigationTitle(model.info.isSample ? "Import your connections" : "Refresh your network")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Close") { dismiss() } } }
-            .fileImporter(isPresented: $picking, allowedContentTypes: [.zip, .commaSeparatedText, .plainText]) { result in
+            .fileImporter(isPresented: $picking, allowedContentTypes: [.zip, .commaSeparatedText, .plainText, .json, .html]) { result in
                 if case .success(let url) = result { read(url) }
             }
             .task {
@@ -155,6 +181,15 @@ struct ImportView: View {
     }
 
     private func read(_ url: URL) {
+        // a Facebook, Instagram, Snapchat or TikTok download goes to Across your socials instead
+        if let p = SocialPlatform.detect(url) {
+            dismiss()
+            Task {
+                await model.importSocial(p, url: url)
+                model.open(.socials)
+            }
+            return
+        }
         fileName = url.lastPathComponent
         error = ""
         plan = nil

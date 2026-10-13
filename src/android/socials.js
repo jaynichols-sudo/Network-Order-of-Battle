@@ -9,10 +9,10 @@ import { openURL, fx } from './platform.js';
 
 export const PLATFORMS = [
   {id: 'facebook', name: 'Facebook', color: '#1877F2', letter: 'f', ink: '#fff',
-    how: '', steps: ["In the Facebook app, tap Menu, then Settings & privacy, then Settings.", "Tap Accounts Center, then Your information and permissions, then Download your information.", "Tap Download or transfer information, choose your Facebook profile, then Specific types of information.", "Tick Friends and followers only, then Next.", "Choose Download to device. Set Date range to All time and Format to JSON, then Create files.", "Facebook tells you when it’s ready, usually within a few hours. Download the zip, then tap Add file here."],
+    how: '', steps: ["In the Facebook app, tap Menu, then Settings & privacy, then Settings.", "Tap Accounts Center, then Your information and permissions, then Download your information.", "Tap Download or transfer information, choose your Facebook profile, then Specific types of information.", "Tick Friends and followers only, then Next.", "Choose Download to device. Set Date range to All time, then Create files. HTML or JSON both work.", "Facebook tells you when it’s ready, usually within a few hours. Download the zip, then tap Add file here."],
     url: 'https://accountscenter.facebook.com/info_and_permissions/dyi'},
   {id: 'instagram', name: 'Instagram', color: '#E1306C', letter: 'ig', ink: '#fff',
-    how: '', steps: ["In Instagram, go to your profile, tap the menu (three lines), then Accounts Center.", "Tap Your information and permissions, then Download your information.", "Tap Download or transfer information, choose your Instagram account, then Specific types of information.", "Tick Followers and following only, then Next.", "Choose Download to device. Set Date range to All time and Format to JSON, then Create files.", "When Instagram says it’s ready, download the zip, then tap Add file here."],
+    how: '', steps: ["In Instagram, go to your profile, tap the menu (three lines), then Accounts Center.", "Tap Your information and permissions, then Download your information.", "Tap Download or transfer information, choose your Instagram account, then Specific types of information.", "Tick Followers and following only, then Next.", "Choose Download to device. Set Date range to All time, then Create files. HTML or JSON both work.", "When Instagram says it’s ready, download the zip, then tap Add file here."],
     url: 'https://accountscenter.instagram.com/info_and_permissions/dyi'},
   {id: 'snapchat', name: 'Snapchat', color: '#F7C600', letter: 'sc', ink: '#000',
     how: '', steps: ["In Snapchat, tap your profile, then the gear for Settings.", "Scroll to Privacy Controls and tap My Data.", "Turn on Friends (you can leave Memories and other media off to keep it small). Choose JSON if it asks, and All time.", "Tap Submit. Snapchat emails you a link when the file is ready.", "Download the zip from that link, then tap Add file here."],
@@ -88,7 +88,7 @@ registerRoute('socials', () => {
       filter(v, t){ filter = v; fx.select(); view.update(t.closest('.page-body')); },
       async add(id, t){
         const p = P(id), body = t.closest('.page-body');
-        const f = await pickFile('.zip,.json,application/zip,application/json');
+        const f = await pickFile('.zip,.json,.html,application/zip,application/json,text/html');
         if (!f) return;
         busy = id; view.update(body);
         try {

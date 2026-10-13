@@ -7,6 +7,11 @@ import WidgetKit
 
 enum AppTab: String, Hashable, CaseIterable {
     case home, people, companies, you
+    // Mac and iPad sidebar only; the iPhone tab bar keeps the four above.
+    case explore, pursuits, opportunities, socials, trips, team
+
+    /// The four tabs every device shows.
+    static let main: [AppTab] = [.home, .people, .companies, .you]
 
     var title: String {
         switch self {
@@ -14,6 +19,12 @@ enum AppTab: String, Hashable, CaseIterable {
         case .people: return "People"
         case .companies: return "Companies"
         case .you: return "You"
+        case .explore: return "Explore"
+        case .pursuits: return "Pursuits"
+        case .opportunities: return "Opportunities"
+        case .socials: return "Socials"
+        case .trips: return "Trips"
+        case .team: return "Team"
         }
     }
     var icon: String {
@@ -22,6 +33,12 @@ enum AppTab: String, Hashable, CaseIterable {
         case .people: return "person.2"
         case .companies: return "building.2"
         case .you: return "person.crop.circle"
+        case .explore: return "circle.hexagongrid"
+        case .pursuits: return "scope"
+        case .opportunities: return "building.columns"
+        case .socials: return "person.3.sequence"
+        case .trips: return "airplane"
+        case .team: return "person.3"
         }
     }
 }

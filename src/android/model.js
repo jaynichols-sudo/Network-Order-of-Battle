@@ -501,11 +501,11 @@ export async function importSocial(platform, name, file){
     const entries = Object.values(zip.files).filter(f => {
       const n = f.name.toLowerCase();
       const size = (f._data && f._data.uncompressedSize) || 0;
-      return !f.dir && n.endsWith('.json') && size < 60e6 && want(n);
+      return !f.dir && (n.endsWith('.json') || n.endsWith('.html')) && size < 60e6 && want(n);
     }).slice(0, 40);
     for (const f of entries) files[f.name] = await f.async('string');
   } else files[file.name || `${platform}.json`] = new TextDecoder().decode(buf);
-  if (!Object.keys(files).length) throw new Error(`No ${name} friends or followers in that file. Request the download in JSON format.`);
+  if (!Object.keys(files).length) throw new Error(`No ${name} friends or followers in that file. Make sure the download includes Connections.`);
   const r = api.importSocial(platform, files);
   await saveFile('social', 'social.json');
   refreshAll();
