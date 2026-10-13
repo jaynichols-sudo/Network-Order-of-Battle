@@ -91,7 +91,7 @@ function vm(r, full){
     cl: {seg: c.seg, branch: c.branch, status: c.status, rank: c.rank, grade: c.grade, tier: c.tier, gn: c.gn, sen: c.sen, func: c.func, agency: c.agency, certs: c.certs, clr: !!c.clr, lv: c.lv, ind: c.ind, indHow: c.indHow || ''},
     group: groupOf(r), color: groupColor(groupOf(r)), indColor: indColor(c.ind), indShort: indShort(c.ind),
     band: r.wm.band, score: r.wm.score, isNew: !!r.isNew, moved: !!r.movedNow,
-    waiting: isWaiting(r), cooling: isCooling(r), due: isDue(r), anniv: isAnniversary(r.d),
+    waiting: isWaiting(r) || isMailWaiting(r), mailWaiting: isMailWaiting(r), cooling: isCooling(r), due: isDue(r), anniv: isAnniversary(r.d),
     over: isOverdue(r), touch: lastTouch(r), next: touchDue(r)};
   if (r.x) o.x = r.x;
   if (r.jc) o.jc = r.jc;
@@ -100,6 +100,7 @@ function vm(r, full){
   // the list view gets a slim copy; the profile asks for the full person
   if (r.rx) o.rx = full ? r.rx : Object.fromEntries(Object.entries(r.rx).filter(([k]) => k !== 's' && k !== 'invn'));
   if (r.ed) o.ed = full || !r.ed.note || r.ed.note.length <= 80 ? r.ed : Object.assign({}, r.ed, {note: r.ed.note.slice(0, 80)});
+  if (full){ const ml = mailView(r); if (ml) o.mail = ml; }
   return o;
 }
 
@@ -124,7 +125,7 @@ function sigOk(r, s){
     case 'jcw': return r.movedNow;
     case 'anniv': return isAnniversary(r.d);
     case 'due': return isDue(r);
-    case 'waiting': return isWaiting(r);
+    case 'waiting': return isWaiting(r) || isMailWaiting(r);
     case 'overdue': return isOverdue(r);
     case 'circle': return !!(r.ed && CIRCLES[r.ed.circle]);
     case 'cold': return isCooling(r);
@@ -445,7 +446,7 @@ function stats(){
   return [
     {id: 'all', label: 'People', value: A.length, detail: newCount ? `+${fmt(newCount)} new this refresh` : 'in your network', up: newCount > 0, act: {kind: 'tab', tab: 'people'}},
     {id: 'jc', label: 'Changed jobs', value: n(r => !!r.jc), detail: 'new title or company', act: {kind: 'filter', sig: ['jc']}},
-    ...(S.hasRel ? [{id: 'wait', label: 'Waiting on you', value: n(r => isWaiting(r)), detail: 'unanswered messages', act: {kind: 'filter', sig: ['waiting']}}] : []),
+    ...(S.hasRel || A.some(mailOf) ? [{id: 'wait', label: 'Waiting on you', value: n(r => isWaiting(r) || isMailWaiting(r)), detail: 'unanswered messages', act: {kind: 'filter', sig: ['waiting']}}] : []),
     {id: 'star', label: 'Starred', value: n(r => r.ed && r.ed.star), detail: 'your shortlist', act: {kind: 'filter', sig: ['star']}},
     {id: 'due', label: 'Follow-ups', value: dueCount, detail: dueCount ? 'due now' : 'none due', act: {kind: 'filter', sig: ['due']}},
     ...(S.lens ? [
@@ -467,8 +468,8 @@ function cards(opts){
   if (rq) out.push({tone: 'coral', icon: 'rectangle.stack', hero: true, title: `Catch up on ${fmt(rq)} ${rq === 1 ? 'person' : 'people'}`, body: 'New connections and job changes since your last refresh. Swipe right to star, left to skip. Takes a couple of minutes.', people: keys(A.filter(r => r.isNew || r.movedNow).sort(bySenior)), act: {kind: 'tab', tab: 'catchup'}});
   const due = A.filter(r => isDue(r)).sort((a, b) => (a.ed.due || '').localeCompare(b.ed.due || ''));
   if (due.length) out.push({tone: 'violet', icon: 'bell', title: `${fmt(due.length)} ${due.length === 1 ? 'follow-up' : 'follow-ups'} due`, body: `You planned to reach out to ${names(due, 2)}.`, people: keys(due), act: {kind: 'filter', sig: ['due']}});
-  const waiting = A.filter(r => isWaiting(r)).sort((a, b) => b.rx.t.localeCompare(a.rx.t));
-  if (waiting.length) out.push({tone: 'coral', icon: 'arrowshape.turn.up.left', title: `${fmt(waiting.length)} ${waiting.length === 1 ? 'person is' : 'people are'} waiting on your reply`, body: `They wrote last and you haven’t answered: ${names(waiting, 2)}.`, people: keys(waiting), act: {kind: 'filter', sig: ['waiting']}});
+  const waiting = A.filter(r => isWaiting(r) || isMailWaiting(r)).sort((a, b) => lastTouch(b).localeCompare(lastTouch(a)));
+  if (waiting.length) out.push({tone: 'coral', icon: 'arrowshape.turn.up.left', title: `${fmt(waiting.length)} ${waiting.length === 1 ? 'person is' : 'people are'} waiting on your reply`, body: `They wrote last and you haven’t answered: ${waiting.slice(0, 2).map(r => fullName(r) + (isWaiting(r) ? '' : ' (by email)')).join(', ')}${waiting.length > 2 ? ` and ${fmt(waiting.length - 2)} more` : ''}.`, people: keys(waiting), act: {kind: 'filter', sig: ['waiting']}});
   const cooling = A.filter(r => isCooling(r)).sort((a, b) => b.wm.score - a.wm.score || a.cl.lv - b.cl.lv);
   if (cooling.length) out.push({tone: 'sky', icon: 'snowflake', title: `${fmt(cooling.length)} good ${cooling.length === 1 ? 'relationship is' : 'relationships are'} going cold`, body: `You used to talk regularly but it’s been a while: ${cooling.slice(0, 2).map(r => `${fullName(r)} (${ago(r.rx.t)})`).join(', ')}${cooling.length > 2 ? ` and ${fmt(cooling.length - 2)} more` : ''}.`, people: keys(cooling), act: {kind: 'filter', sig: ['cold']}});
   const moved = A.filter(r => r.movedNow).sort(bySenior), senMoved = moved.filter(r => r.cl.lv <= 2);
@@ -671,16 +672,41 @@ function markReplied(k){ const r = S.byK.get(k); const t = [(r && r.rx && r.rx.t
 /* ---------- email ---------- */
 // The phone reads only who, when and the subject line from the user's mailbox and hands
 // them over; matching to people happens here. rows: [{name, email, date, dir: 'i'|'o', subject}].
+// What's kept per person, in edits.mail (compact, headers only, never a body):
+//   t, dir, s   the latest email: day, 'i' (from them) or 'o' (from you), subject
+//   ti, si      the last email from them and its subject;  to, so  the last one from you
+//   n           how many emails in the last 90 days
+//   ev          recent emails as [day, dir, subject], newest first, 180 days, at most MAIL_KEEP
+const MAIL_KEEP = 40, MAIL_DAYS = 180;
+const mailSubject = s => String(s || '').replace(/\s+/g, ' ').trim().slice(0, 120);
+// Fold new header rows into what's already known. Same day, direction and subject count once.
+function mergeMail(cur, add){
+  const seen = new Set(), ev = [];
+  const old = cur && cur.t ? [[cur.t, cur.dir, cur.s || ''], ...(cur.ev || [])] : [];
+  for (const e of [...old, ...add]){
+    if (!e || !e[0]) continue;
+    const key = e.join('\u0001'); if (seen.has(key)) continue;
+    seen.add(key); ev.push([e[0], e[1] === 'o' ? 'o' : 'i', e[2] || '']);
+  }
+  ev.sort((a, b) => b[0].localeCompare(a[0]) || (a[1] === 'o' ? -1 : 1) - (b[1] === 'o' ? -1 : 1));
+  const latest = ev[0]; if (!latest) return null;
+  const keep = ev.filter(e => daysSince(e[0]) <= MAIL_DAYS).slice(0, MAIL_KEEP);
+  const m = {t: latest[0], dir: latest[1], s: latest[2], n: keep.filter(e => daysSince(e[0]) <= 90).length, ev: keep};
+  // the last email each way may be older than what's kept in detail; carry it forward
+  const last = (dir, oldT, oldS) => { const e = ev.find(x => x[1] === dir); if (e && e[0] >= (oldT || '')) return [e[0], e[2]]; return oldT ? [oldT, oldS || ''] : null; };
+  const li = last('i', cur && cur.ti, cur && cur.si), lo = last('o', cur && cur.to, cur && cur.so);
+  if (li){ m.ti = li[0]; if (li[1]) m.si = li[1]; }
+  if (lo){ m.to = lo[0]; if (lo[1]) m.so = lo[1]; }
+  return m;
+}
 function applyMail(rows){
   const list = (rows || []).filter(x => x && x.date && (x.email || x.name));
   const keys = matchAttendees(list.map(x => ({email: x.email, name: x.name})));
   const best = new Map();
   list.forEach((x, i) => {
     const k = keys[i]; if (!k) return;
-    const t = String(x.date).slice(0, 10);
-    const b = best.get(k) || {n: 0, t: '', dir: '', s: '', em: ''};
-    b.n++;
-    if (t > b.t || (t === b.t && x.dir === 'o')){ b.t = t; b.dir = x.dir === 'o' ? 'o' : 'i'; b.s = String(x.subject || '').replace(/\s+/g, ' ').trim().slice(0, 120); }
+    const b = best.get(k) || {ev: [], em: ''};
+    b.ev.push([String(x.date).slice(0, 10), x.dir === 'o' ? 'o' : 'i', mailSubject(x.subject)]);
     if (x.email && !b.em) b.em = String(x.email).toLowerCase();
     best.set(k, b);
   });
@@ -688,16 +714,26 @@ function applyMail(rows){
   for (const [k, b] of best){
     const r = S.byK.get(k); if (!r) continue;
     const cur = mailOf(r);
-    if (cur && cur.t > b.t) continue;
-    if (cur && cur.t === b.t && cur.dir === b.dir && cur.s === b.s) continue;
+    const next = mergeMail(cur, b.ev); if (!next) continue;
+    if (cur && JSON.stringify(cur) === JSON.stringify(next)) continue;
     const ed = Object.assign({}, S.edits[k] || {});
-    ed.mail = {t: b.t, dir: b.dir, s: b.s, n: Math.max(b.n, (cur && cur.n) || 0)};
+    ed.mail = next;
     if (b.em && !r.e && !ed.em) ed.em = b.em;
     S.edits[k] = Object.assign(ed, {updated: TODAY});
     changed++;
   }
   if (changed) rehydrate();
   return {matched: best.size, changed, scanned: list.length};
+}
+// Email on a profile: the last 5 as timeline events (kind 'email-in' / 'email-out'), the
+// last one each way, how many in 90 days, and how many older ones aren't listed.
+function mailView(r){
+  const m = mailOf(r); if (!m) return null;
+  const ev = m.ev || [[m.t, m.dir, m.s || '']];
+  const events = ev.slice(0, 5).map(e => ({kind: e[1] === 'o' ? 'email-out' : 'email-in', date: e[0], subject: e[2] || ''}));
+  return {lastIn: m.ti || (m.dir === 'i' ? m.t : ''), lastOut: m.to || (m.dir === 'o' ? m.t : ''),
+    subjectIn: m.si || (m.dir === 'i' ? m.s || '' : ''), subjectOut: m.so || (m.dir === 'o' ? m.s || '' : ''),
+    n90: m.n || 0, events, more: Math.max(0, ev.length - events.length)};
 }
 // Forget every email detail (the user turned the mail source off).
 function clearMail(){
@@ -1446,17 +1482,22 @@ function memory(k){
   const x = r.rx || {};
   const msg = x.t ? {date: x.t, mine: x.dir === 'o', text: String(x.s || '').slice(0, 160)} : null;
   const ml = mailOf(r);
-  const mail = ml ? {date: ml.t, mine: ml.dir === 'o', subject: ml.s || '', count: ml.n || 1} : null;
+  const mail = ml ? {date: ml.t, mine: ml.dir === 'o', subject: ml.s || '', count: ml.n || 1, lastIn: ml.ti || (ml.dir === 'i' ? ml.t : ''), lastOut: ml.to || (ml.dir === 'o' ? ml.t : '')} : null;
   const parts = [];
   const mailNewest = mail && (!last || !last.date || mail.date > last.date) && (!msg || mail.date >= msg.date);
-  if (mailNewest) parts.push(`Last email ${niceDate(mail.date)}${mail.subject ? ': “' + mail.subject + '”' : ''}${mail.mine ? ', from you' : ''}.`);
+  const mailWaiting = isMailWaiting(r);
+  if (mailNewest){
+    const subj = mail.subject ? ': “' + mail.subject + '”' : '';
+    if (mail.mine) parts.push(`You emailed ${he} ${ago(mail.date)}${subj}.`);
+    else parts.push(`${he} emailed you ${ago(mail.date)}${subj}${mailWaiting ? ', you haven’t replied' : ''}.`);
+  }
   if (mailNewest && last) parts.push(`Your last note${last.date ? ' (' + niceDate(last.date) + ')' : ''}: ${last.text.length > 90 ? last.text.slice(0, 87).replace(/\s+\S*$/, '') + '…' : last.text}`);
   else if (mailNewest) {}
   else if (last) parts.push(`Last time${last.date ? ' (' + niceDate(last.date) + ')' : ''}: ${last.text.length > 120 ? last.text.slice(0, 117).replace(/\s+\S*$/, '') + '…' : last.text}`);
   else if (msg && msg.text) parts.push(`${msg.mine ? 'You wrote' : he + ' wrote'} ${niceDate(msg.date)}: “${msg.text.length > 90 ? msg.text.slice(0, 87).replace(/\s+\S*$/, '') + '…' : msg.text}”`);
   else if (msg) parts.push(`Last message ${niceDate(msg.date)}.`);
   if (isWaiting(r)) parts.push(`${he} is waiting on your reply.`);
-  else if (isMailWaiting(r)) parts.push(`${he} is waiting on your email reply.`);
+  else if (mailWaiting && !mailNewest) parts.push(`${he} is waiting on your email reply.`);
   { const so = socialOf(k); if (so){ const on = Object.keys(so.on || {}).map(p => PLATFORMS[p]); if (on.length) parts.push(`Also connected on ${on.length > 1 ? on.slice(0, -1).join(', ') + ' and ' + on[on.length - 1] : on[0]}.`); } }
   { const mv = moveOf(r); if (mv) parts.push(mv.kind === 'pcs' ? `Likely to rotate ${mv.est <= TODAY ? 'soon' : 'by ' + niceDate(mv.est)}.` : `${he} is ${/retir/i.test((r.p || '') + (r.c || '')) ? 'retiring' : 'transitioning out'}.`); }
   if (r.jc && daysAgo(r.jc) <= 120) parts.push(`New role${r.p ? ' as ' + r.p : ''}${r.c ? ' at ' + r.c : ''} since ${niceDate(r.jc)}.`);

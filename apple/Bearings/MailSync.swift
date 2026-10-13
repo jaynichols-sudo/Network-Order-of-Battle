@@ -385,7 +385,7 @@ struct MailSettingsSection: View {
             Text("Email")
         } footer: {
             Text(MailProvider.allCases.contains { $0.available }
-                 ? "Northfix reads only who you emailed, when, and the subject line, never the message itself. It uses this to remember your last conversation and to spot who’s waiting on you. Nothing goes to a Northfix server."
+                 ? "Only who wrote to whom, the subject and the date are read. Never the body. Northfix uses this to show your last emails on each profile and to spot who’s waiting on you. Nothing goes to a Northfix server."
                  : "Email isn’t switched on in this version yet.")
         }
     }

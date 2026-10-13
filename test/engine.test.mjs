@@ -375,15 +375,75 @@ test('email dates and subjects feed memory, waiting and the weekly five', () => 
     {email: 'nobody@x.com', name: 'No One', date: today, dir: 'i', subject: 'Spam'}]);
   assert.equal(r.matched, 2);
   let m = call('memory', by.get('Ada'));
-  assert.match(m.line, /^Last email .*: “OT roadmap review”\. Ada is waiting on your email reply\./);
+  assert.match(m.line, /^Ada emailed you today: “OT roadmap review”, you haven’t replied\./);
   assert.equal(m.waiting, true);
   assert.ok(call('weekly', []).some(w => w.k === by.get('Ada') && w.kind === 'reply' && /Emailed you/.test(w.why)));
+  assert.ok(call('home', {}).cards.some(c => /waiting on your reply/.test(c.title) && /Ada Lovelace \(by email\)/.test(c.body)), 'the home card counts email too');
+  assert.ok(call('people').find(p => p.k === by.get('Ada')).waiting, 'waiting flag covers email');
+  assert.ok(searchKeys({filters: {sig: ['waiting']}}).includes(by.get('Ada')));
   call('markReplied', by.get('Ada'));
   assert.equal(call('memory', by.get('Ada')).waiting, false);
   assert.equal(call('memory', by.get('Grace')).mail.mine, true);
-  assert.equal(call('applyMail', [{email: 'ghopper@navy.mil', name: 'Grace Hopper', date: '2026-01-01', dir: 'i', subject: 'old'}]).changed, 0);
+  call('applyMail', [{email: 'ghopper@navy.mil', name: 'Grace Hopper', date: '2026-01-01', dir: 'i', subject: 'old'}]);
+  const g = call('person', by.get('Grace')).mail;
+  assert.deepEqual([g.lastOut, g.subjectOut, g.lastIn, g.subjectIn, g.n90], ['2026-02-03', 'Thanks', '2026-01-01', 'old', 0], 'older mail fills in the last one each way but never moves the latest');
+  assert.equal(call('memory', by.get('Grace')).mail.mine, true);
+  assert.equal(call('applyMail', [{email: 'ghopper@navy.mil', name: 'Grace Hopper', date: '2026-01-01', dir: 'i', subject: 'old'}]).changed, 0, 'a repeat changes nothing');
   assert.equal(call('clearMail').cleared, 2);
   assert.equal(call('memory', by.get('Grace')).mail, null);
+  assert.equal(call('person', by.get('Grace')).mail, undefined);
+});
+
+test('email touchpoints: last each way, count in 90 days, timeline events, no bodies', () => {
+  const net = ['First Name,Last Name,URL,Email Address,Company,Position,Connected On',
+    'Dana,Whitfield,,dana@navfac.navy.mil,NAVFAC,Program Manager,05 Oct 2020'].join('\n');
+  call('importTexts', { connections: net }, 'test');
+  const netFile = globalThis.Bearings.fileJSON('network');
+  call('loadFiles', { network: netFile }, null);
+  const k = people()[0].k;
+  const today = call('info').today;
+  const day = n => new Date(Date.parse(today) - n * 864e5).toISOString().slice(0, 10);
+  const rows = [];
+  for (let i = 0; i < 8; i++) rows.push({email: 'dana@navfac.navy.mil', name: 'Dana Whitfield', date: day(20 + i * 10) + 'T09:00:00Z', dir: i % 2 ? 'o' : 'i', subject: `Thread ${i}`, body: 'SHOULD NEVER BE STORED'});
+  rows.push({email: 'dana@navfac.navy.mil', date: day(3), dir: 'o', subject: '  Re: NAVFAC   pilot '});
+  rows.push({email: 'dana@navfac.navy.mil', date: day(12), dir: 'i', subject: 'Site visit'});
+  rows.push({email: 'dana@navfac.navy.mil', date: day(400), dir: 'i', subject: 'Ancient'});
+  assert.equal(call('applyMail', rows).changed, 1);
+  const p = call('person', k);
+  assert.deepEqual({lastIn: p.mail.lastIn, lastOut: p.mail.lastOut, subjectIn: p.mail.subjectIn, subjectOut: p.mail.subjectOut, n90: p.mail.n90, more: p.mail.more},
+    {lastIn: day(12), lastOut: day(3), subjectIn: 'Site visit', subjectOut: 'Re: NAVFAC pilot', n90: 10, more: 5});
+  assert.equal(p.mail.events.length, 5, 'at most five on the timeline');
+  assert.deepEqual(p.mail.events[0], {kind: 'email-out', date: day(3), subject: 'Re: NAVFAC pilot'});
+  assert.deepEqual(p.mail.events[1], {kind: 'email-in', date: day(12), subject: 'Site visit'});
+  assert.ok(p.mail.events.every(e => e.date >= p.mail.events[4].date), 'newest first');
+  assert.doesNotMatch(JSON.stringify(call('person', k)) + globalThis.Bearings.fileJSON('edits'), /NEVER BE STORED|Ancient/, 'no bodies, and nothing older than the window');
+  assert.ok(!people().find(x => x.k === k).mail, 'the list payload stays slim');
+  const m = call('memory', k);
+  assert.equal(m.line, `You emailed Dana 3 days ago: “Re: NAVFAC pilot”.`);
+  assert.equal(m.waiting, false);
+  assert.equal(m.mail.lastIn, day(12));
+  // the next sync overlaps the last one: nothing doubles up, newer mail lands on top
+  const again = call('applyMail', [{email: 'dana@navfac.navy.mil', date: day(3), dir: 'o', subject: 'Re: NAVFAC pilot'}]);
+  assert.equal(again.changed, 0, 'a repeat header changes nothing');
+  call('applyMail', [{email: 'dana@navfac.navy.mil', date: day(1), dir: 'i', subject: 'Re: Re: NAVFAC pilot'}]);
+  const q = call('person', k);
+  assert.equal(q.mail.n90, 11);
+  assert.equal(q.mail.lastIn, day(1));
+  assert.equal(q.mail.lastOut, day(3));
+  assert.equal(q.mailWaiting, true);
+  assert.equal(call('memory', k).line, `Dana emailed you yesterday: “Re: Re: NAVFAC pilot”, you haven’t replied.`);
+  assert.ok(call('weekly', []).some(w => w.k === k && w.kind === 'reply' && /Emailed you yesterday about “Re: Re: NAVFAC pilot”/.test(w.why)));
+  // saved edits from an older version (one email, no list) still read
+  call('loadFiles', { network: netFile, edits: JSON.stringify({edits: {[k]: {mail: {t: day(5), dir: 'i', s: 'Legacy', n: 2}}}}) }, null);
+  const legacy = call('person', k).mail;
+  assert.deepEqual(legacy.events, [{kind: 'email-in', date: day(5), subject: 'Legacy'}]);
+  assert.equal(legacy.lastIn, day(5));
+  assert.equal(legacy.lastOut, '');
+  call('applyMail', [{email: 'dana@navfac.navy.mil', date: day(2), dir: 'o', subject: 'Back to you'}]);
+  const up = call('person', k).mail;
+  assert.equal(up.events.length, 2);
+  assert.equal(up.lastIn, day(5));
+  assert.equal(up.lastOut, day(2));
 });
 
 test('people from an enrichment file you are not connected to fill empty org chart seats', () => {

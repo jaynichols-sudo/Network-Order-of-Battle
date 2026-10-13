@@ -17,9 +17,13 @@ export function briefText(p){
   const x = p.rx;
   if (x && x.t){ a = x.dir === 'i' ? `${p.f} wrote you ${Day.ago(x.t)}` : `You last wrote ${Day.ago(x.t)}`; if (x.m > 1) a += `, ${x.m} messages in all`; a += '.'; }
   else a = `You haven’t messaged ${p.f} yet; connected ${Day.nice(p.d)}.`;
+  // the last email, when it's newer than the last LinkedIn message (headers only, synced from the iPhone)
+  const e = p.mail && Array.isArray(p.mail.events) ? p.mail.events[0] : null;
+  if (e && e.date && e.date >= ((x && x.t) || '')) a += ` ${e.kind === 'email-out' ? `You emailed ${p.f}` : `${p.f} emailed you`} ${Day.ago(e.date)}${e.subject ? `: “${e.subject}”` : ''}.`;
   const c = p.ed && CIRCLES[p.ed.circle], due = p.ed && p.ed.due;
   let b = '';
-  if (p.waiting) b = 'They’re waiting on your reply.';
+  if (p.mailWaiting) b = 'They’re waiting on your email reply.';
+  else if (p.waiting) b = 'They’re waiting on your reply.';
   else if (p.moved) b = `New role${p.c ? ` at ${p.c}` : ''}: a natural moment to say congratulations.`;
   else if (p.over && c) b = `Overdue for your ${c.title.toLowerCase()}. A quick hello keeps it warm.`;
   else if (p.cooling) b = 'You used to talk often; worth a check-in before it goes cold.';
@@ -41,6 +45,11 @@ export function timelineEvents(p){
     const source = line.slice(10, colon).trim().replace(/^\(|\)$/g, '');
     out.push({id: 'note' + i, date, icon: 'note', color: 'var(--violet)', title: source ? `Note from ${source}` : 'Note', detail: line.slice(colon + 1).trim()});
   });
+  // email, headers only: the last five, then one line for the rest. Comes from the mail sync on
+  // the iPhone by way of the synced files; there is no mail sync on Android, so this is often empty.
+  const ml = p.mail && Array.isArray(p.mail.events) ? p.mail.events.slice(0, 5).filter(e => e && e.date) : [];
+  ml.forEach((e, i) => out.push({id: 'mail' + i, date: e.date, icon: 'mail', color: e.kind === 'email-out' ? 'var(--good)' : 'var(--amber)', title: e.kind === 'email-out' ? `Email to ${p.f}` : `Email from ${p.f}`, detail: e.subject ? `“${e.subject}”` : ''}));
+  if (ml.length && p.mail.more > 0) out.push({id: 'mailmore', date: ml[ml.length - 1].date, rank: 1, icon: 'mail', color: 'var(--text2)', title: `and ${fmt(p.mail.more)} more ${p.mail.more === 1 ? 'email' : 'emails'}`});
   const x = p.rx;
   if (x){
     if (x.t) out.push({id: 'last', date: x.t, icon: x.dir === 'i' ? 'arrowIn' : 'arrowOut', color: x.dir === 'i' ? 'var(--amber)' : 'var(--good)', title: x.dir === 'i' ? `${p.f} wrote you` : `You wrote ${p.f}`, detail: x.s ? `“${x.s}”` : ''});
@@ -50,7 +59,7 @@ export function timelineEvents(p){
   if (p.jc) out.push({id: 'jc', date: p.jc, icon: 'briefcase', color: 'var(--info)', title: 'Started a new role', detail: [p.p, p.c].filter(Boolean).join(' at ')});
   (p.pv || []).forEach((r, i) => { if (r.until) out.push({id: 'pv' + i, date: r.until, icon: 'uturn', color: 'var(--text2)', title: `Left ${r.c || 'a role'}`, detail: r.p || ''}); });
   if (p.d) out.push({id: 'conn', date: p.d, icon: 'link', color: 'var(--accent)', title: 'Connected on LinkedIn'});
-  return out.sort((a, b) => b.date.localeCompare(a.date));
+  return out.sort((a, b) => b.date.localeCompare(a.date) || (a.rank || 0) - (b.rank || 0));
 }
 function timeline(p){
   const ev = timelineEvents(p); if (!ev.length) return '';
@@ -62,7 +71,7 @@ function timeline(p){
 /* ---------- what to remember ---------- */
 function memoryCard(k){
   const m = memory(k);
-  if (!m || !(m.last || (m.msg && m.msg.text))) return '';
+  if (!m || !(m.last || (m.msg && m.msg.text) || m.mail)) return '';
   const src = m.last && m.last.source;
   return `<section class="card memory"><div class="mem-top">${icon('memory')}<span class="eyebrow">What to remember</span>${src ? `<span class="mem-src">${esc(src)}</span>` : ''}</div><p>${esc(m.line)}</p></section>`;
 }

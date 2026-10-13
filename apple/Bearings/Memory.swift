@@ -10,11 +10,17 @@ import ActivityKit
 struct MemoryInfo: Decodable, Hashable {
     struct Note: Decodable, Hashable { var date: String; var source: String; var text: String }
     struct Message: Decodable, Hashable { var date: String; var mine: Bool; var text: String }
+    /// The latest email either way: day, direction and subject. Never a body.
+    struct Mail: Decodable, Hashable { var date: String; var mine: Bool; var subject: String; var count: Int }
     var k: String
     var line: String
     var last: Note?
     var msg: Message?
+    var mail: Mail?
     var waiting: Bool
+
+    /// The line is worth a card when there's a note, a message or an email behind it.
+    var hasSomething: Bool { last != nil || msg?.text.isEmpty == false || mail != nil }
 }
 
 extension AppModel {
@@ -31,7 +37,7 @@ struct MemoryCard: View {
 
     var body: some View {
         Group {
-            if let info, info.last != nil || info.msg?.text.isEmpty == false {
+            if let info, info.hasSomething {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack(spacing: 6) {
                         Image(systemName: "brain.head.profile").foregroundStyle(Theme.violet)
@@ -54,7 +60,7 @@ struct MemoryCard: View {
             }
         }
         .animation(Motion.spring, value: info)
-        .task(id: "\(person.k)-\(model.info.edits)") { info = await model.memory(person.k) }
+        .task(id: "\(person.k)-\(model.info.edits)-\(person.ed?.updated ?? "")-\(person.mail?.latest?.date ?? "")") { info = await model.memory(person.k) }
     }
 }
 
