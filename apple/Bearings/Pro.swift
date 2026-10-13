@@ -136,7 +136,7 @@ final class Pro {
         if case .success(let v) = r, case .verified(let t) = v {
             await t.finish()
             await refreshTeamStarter()
-            return t.jwsRepresentation
+            return v.jwsRepresentation
         }
         return nil
     }
