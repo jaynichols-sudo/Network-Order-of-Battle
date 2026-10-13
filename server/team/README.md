@@ -17,6 +17,14 @@ Leaving or being removed deletes that member's share and revokes their token. De
 
 You can also set `APP_STORE_URL` as a worker variable. The invite page links to it for people who don't have Northfix yet (otherwise it links to the Northfix site).
 
+## The App Store plan
+
+"Northfix Team, up to 5 seats" is bought in the app. The owner's app sends the StoreKit 2 transaction to `POST /v1/billing/apple`, and `apple.js` checks it against Apple Root CA - G3 (embedded) before the team moves to plan `team5` with 5 seats and a renewal date. Nothing to configure. Two optional worker variables: `APPLE_BUNDLE_ID` (defaults to `com.jaynichols.networkoob`) and `APPLE_ALLOW_SANDBOX` (`true` accepts TestFlight and sandbox purchases while testing; leave it unset in production).
+
+## Changing the schema
+
+`schema.sql` describes a fresh database and is applied on every deploy, but SQLite can't add a column or widen a CHECK with IF NOT EXISTS. `migrate.js` brings an older database forward (it runs once per worker instance, before the first request) and holds a copy of the teams table that a test keeps equal to `schema.sql`. Add new columns in both places, and the migration steps in `migrate.js`.
+
 ## Raising seats by hand
 
 Without Stripe, a team keeps its trial seats (5). To give a team more seats, or to turn a trial into a paid team:
@@ -33,7 +41,7 @@ Find the team id in the app, or list teams with `SELECT id, plan, seats, created
 | Route | What it does |
 |---|---|
 | `GET /health` | `{"ok": true}` |
-| `/v1/...` | The team API. See the table in [docs/team.md](../../docs/team.md) |
+| `/v1/...` | The team API, including `POST /v1/billing/apple`. See the table in [docs/team.md](../../docs/team.md) |
 | `GET /join/:code` | The invite page that hands off to the app |
 | `GET /billing/done` | Where Stripe Checkout and the customer portal return |
 | `POST /stripe/webhook` | Stripe updates (signature checked) |
@@ -46,7 +54,7 @@ npm install
 npm test
 ```
 
-The tests run the worker in Miniflare with a local D1 database and a fake Stripe.
+The tests run the worker in Miniflare with a local D1 database, a fake Stripe, and a stubbed App Store verifier (`createWorker({verifyApple})`). `test/apple.test.mjs` checks the real verifier against a test certificate chain in `test/fixtures/` that's shaped like Apple's.
 
 ## Your own address
 

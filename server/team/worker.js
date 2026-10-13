@@ -2,14 +2,25 @@
 //
 // Teams pool encrypted network summaries. Every team name, profile and share arrives
 // already encrypted with a team key the server never sees (it lives after the # in invite
-// links). This worker stores ciphertext, checks who may do what, and keeps billing state.
+// links). This worker stores ciphertext, checks who may do what, and keeps billing state
+// (Stripe on the web, or the App Store plan checked by apple.js).
 //
 // Bindings: DB (D1). Optional vars/secrets: STRIPE_SECRET_KEY, STRIPE_PRICE_ID,
-// STRIPE_WEBHOOK_SECRET (billing returns 501 until set), APP_STORE_URL.
+// STRIPE_WEBHOOK_SECRET (billing returns 501 until set), APP_STORE_URL, APPLE_BUNDLE_ID
+// (defaults to the Northfix bundle), APPLE_ALLOW_SANDBOX ("true" accepts TestFlight and
+// sandbox purchases for the App Store team plan).
+
+import {verifyAppleJWS, AppleVerifyError} from './apple.js';
+import {migrate} from './migrate.js';
 
 const DAY = 86400000;
 const TRIAL_DAYS = 30;
 const TRIAL_SEATS = 5;
+// The App Store starter plan: one yearly subscription for a team of up to 5.
+const APPLE_BUNDLE_ID = 'com.jaynichols.networkoob';
+const TEAM5_PRODUCT = 'com.jaynichols.networkoob.team5';
+const TEAM5_SEATS = 5;
+const MAX_JWS = 20000;
 const MAX_MEMBERS = 200;
 const LIMITS = {body: 2000000, profile: 4096, name: 2048};
 const MAX_REQUEST = 2100000; // the largest JSON request we read (a share plus its wrapper)
@@ -79,7 +90,11 @@ function intIn(value, fallback, min, max, what) {
 }
 
 const isAdmin = (m) => m.role === 'owner' || m.role === 'admin';
-const readOnly = (team, t = now()) => team.plan === 'canceled' || (team.plan === 'trial' && t > team.trial_ends);
+// Paid means Stripe says active or past due, a trial that hasn't ended, or an App Store plan whose paid period hasn't.
+const readOnly = (team, t = now()) =>
+  team.plan === 'canceled' || (team.plan === 'trial' && t > team.trial_ends) || (team.plan === 'team5' && !(team.apple_expires > t));
+// When the current paid period ends, for teams billed through the App Store.
+const renewsAt = (team) => (team.plan === 'team5' ? team.apple_expires ?? null : null);
 const event = (db, teamId, actor, kind, target = null) =>
   db.prepare('INSERT INTO events (team_id, at, actor, kind, target) VALUES (?, ?, ?, ?, ?)').bind(teamId, now(), actor, kind, target);
 const countMembers = async (db, teamId) => (await db.prepare('SELECT COUNT(*) AS n FROM members WHERE team_id = ?').bind(teamId).first()).n;
@@ -128,7 +143,7 @@ async function getTeam(db, {me, team}) {
     invites = results.map((i) => ({code: i.code, role: i.role, usesLeft: i.uses_left, expires: i.expires}));
   }
   return json({
-    team: {id: team.id, name: team.name_enc, plan: team.plan, seats: team.seats, trialEnds: team.trial_ends, created: team.created, readOnly: readOnly(team)},
+    team: {id: team.id, name: team.name_enc, plan: team.plan, seats: team.seats, trialEnds: team.trial_ends, renewsAt: renewsAt(team), created: team.created, readOnly: readOnly(team)},
     me: {id: me.id, role: me.role},
     members: rows.map((r) => ({id: r.id, role: r.role, profile: r.profile_enc, joined: r.joined, seen: r.seen, shareUpdated: r.updated ?? null, shareSize: r.size ?? null})),
     invites,
@@ -307,7 +322,47 @@ async function stripe(env, method, path, form) {
 
 async function billing(db, env, {me, team}) {
   needAdmin(me);
-  return json({plan: team.plan, seats: team.seats, used: await countMembers(db, team.id), trialEnds: team.trial_ends, canCheckout: billingReady(env) && me.role === 'owner'});
+  return json({
+    plan: team.plan, seats: team.seats, used: await countMembers(db, team.id), trialEnds: team.trial_ends, renewsAt: renewsAt(team),
+    canCheckout: billingReady(env) && me.role === 'owner',
+    // The App Store plan can be applied to a trial, a lapsed team, or to renew itself. Teams on Stripe manage billing there.
+    canSubscribeOnAppStore: me.role === 'owner' && team.plan !== 'active' && team.plan !== 'past_due',
+  });
+}
+
+// ---------- billing (App Store) ----------
+
+// The owner bought "Northfix Team, up to 5 seats" in the app and sends the StoreKit 2
+// transaction JWS. `verify` checks it against Apple's certificate chain (apple.js); tests
+// inject a stub. The app sends the latest transaction again whenever the server says the
+// plan has lapsed, which is how renewals reach the server without App Store notifications.
+async function appleBilling(req, db, env, {me, team}, verify) {
+  needOwner(me);
+  const body = await readJson(req);
+  const jws = body.transaction;
+  if (typeof jws !== 'string' || !jws) stop(400, 'Send the App Store transaction.');
+  if (jws.length > MAX_JWS) stop(413, 'That transaction is too large.');
+  if (team.plan === 'active' || team.plan === 'past_due') stop(409, 'This team is billed on the web. Manage seats and billing there.');
+  let tx;
+  try {
+    tx = await verify(jws, {bundleId: env.APPLE_BUNDLE_ID || APPLE_BUNDLE_ID, productIds: [TEAM5_PRODUCT], allowSandbox: env.APPLE_ALLOW_SANDBOX === 'true'});
+  } catch (e) {
+    if (e instanceof AppleVerifyError) { console.error('Apple transaction refused', e.reason); stop(402, e.message); }
+    throw e;
+  }
+  const expires = Number(tx.expiresDate);
+  if (!(expires > now())) stop(402, 'That App Store subscription has ended. Renew it in Settings, under your Apple Account, then try again.');
+  const txId = String(tx.originalTransactionId || tx.transactionId || '');
+  if (!txId) stop(402, "The App Store didn't confirm that subscription.");
+  const other = await db.prepare('SELECT id FROM teams WHERE apple_transaction_id = ? AND id != ?').bind(txId, team.id).first();
+  if (other) stop(409, 'That App Store subscription already pays for another team.');
+  const used = await countMembers(db, team.id);
+  if (used > TEAM5_SEATS) stop(409, `This team has ${used} people, and the App Store plan covers up to ${TEAM5_SEATS}. Subscribe on the web for more seats.`);
+  await db.batch([
+    db.prepare('UPDATE teams SET plan = ?, seats = ?, apple_transaction_id = ?, apple_expires = ? WHERE id = ?').bind('team5', TEAM5_SEATS, txId, expires, team.id),
+    event(db, team.id, me.id, 'billing', `team5:${expires}`),
+  ]);
+  return json({plan: 'team5', seats: TEAM5_SEATS, renewsAt: expires});
 }
 
 async function checkout(req, db, env, url, {me, team}) {
@@ -437,7 +492,7 @@ var a=document.getElementById('open');a.href='bearings://team/join?code='+encode
 
 // ---------- router ----------
 
-async function route(req, env) {
+async function route(req, env, verify) {
   const url = new URL(req.url);
   const path = url.pathname.replace(/\/+$/, '') || '/';
   const method = req.method;
@@ -470,6 +525,7 @@ async function route(req, env) {
     ['GET', /^\/v1\/billing$/, (c) => billing(db, env, c)],
     ['POST', /^\/v1\/billing\/checkout$/, (c) => checkout(req, db, env, url, c)],
     ['POST', /^\/v1\/billing\/portal$/, (c) => portal(db, env, url, c)],
+    ['POST', /^\/v1\/billing\/apple$/, (c) => appleBilling(req, db, env, c, verify)],
   ];
   for (const [verb, re, handler] of routes) {
     if (verb !== method || !(m = re.exec(path))) continue;
@@ -479,16 +535,27 @@ async function route(req, env) {
   stop(404, 'Not found.');
 }
 
-export default {
-  async fetch(req, env) {
-    if (req.method === 'OPTIONS') return new Response(null, {status: 204, headers: CORS});
-    try {
-      return await route(req, env);
-    } catch (e) {
-      if (e instanceof HttpError) return fail(e.status, e.message);
-      if (e instanceof URIError) return fail(400, "That address isn't valid.");
-      console.error('Unhandled error', e?.message);
-      return fail(500, 'Something went wrong on the server. Try again.');
-    }
-  },
-};
+/**
+ * The worker. `verifyApple` checks an App Store transaction JWS and returns its claims
+ * (see apple.js); tests pass a stub.
+ */
+export function createWorker({verifyApple = verifyAppleJWS} = {}) {
+  let migrated = null;
+  return {
+    async fetch(req, env) {
+      if (req.method === 'OPTIONS') return new Response(null, {status: 204, headers: CORS});
+      try {
+        if (!migrated) migrated = migrate(env.DB).catch((e) => { migrated = null; throw e; });
+        await migrated;
+        return await route(req, env, verifyApple);
+      } catch (e) {
+        if (e instanceof HttpError) return fail(e.status, e.message);
+        if (e instanceof URIError) return fail(400, "That address isn't valid.");
+        console.error('Unhandled error', e?.message);
+        return fail(500, 'Something went wrong on the server. Try again.');
+      }
+    },
+  };
+}
+
+export default createWorker();

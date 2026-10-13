@@ -17,7 +17,14 @@ final class Pro {
     static let monthly = "com.jaynichols.networkoob.pro.monthly"
     /// The original one-time unlock, kept as the lifetime option.
     static let lifetime = "com.jaynichols.networkoob.pro"
+    /// The Pro products. Team Starter below is a separate entitlement and never unlocks Pro by itself.
     static let all = [yearly, monthly, lifetime]
+
+    /// Northfix Team, up to 5 seats: a yearly subscription the team owner buys in the app, so a
+    /// small team can start on the App Store. The team server checks the transaction and turns
+    /// the team's plan on (POST /v1/billing/apple, see docs/team.md). Bigger teams pay on the web.
+    static let team5 = "com.jaynichols.networkoob.team5"
+    static let team5Seats = 5
 
     /// Turn on to lock Pro features behind the purchase.
     static let gating = false
@@ -62,11 +69,18 @@ final class Pro {
     }
 
     /// Prices to show before the App Store answers (and in screenshots); the real ones come from StoreKit.
-    static let proposed: [String: String] = [yearly: "$99.99", monthly: "$19.99", lifetime: "$249.99"]
+    static let proposed: [String: String] = [yearly: "$99.99", monthly: "$19.99", lifetime: "$249.99", team5: "$2,939.99"]
 
     private(set) var products: [String: Product] = [:]
     private(set) var owned = false
     private(set) var ownedID: String?
+
+    /// The Team Starter subscription this Apple Account holds, if any: the latest transaction as
+    /// the signed JWS the team server checks, and when the paid period ends. Set even when it has
+    /// lapsed, so the Team screen can say so and the server can be told when it renews.
+    private(set) var teamStarterJWS: String?
+    private(set) var teamStarterExpires: Date?
+    var hasTeamStarter: Bool { teamStarterJWS != nil && (teamStarterExpires.map { $0 > Date() } ?? false) }
 
     var unlocked: Bool { !Pro.gating || owned }
 
@@ -76,7 +90,7 @@ final class Pro {
     var product: Product? { products[Pro.lifetime] ?? products[Pro.yearly] }
 
     func load() async {
-        if let list = try? await Product.products(for: Pro.all) {
+        if let list = try? await Product.products(for: Pro.all + [Pro.team5]) {
             products = Dictionary(uniqueKeysWithValues: list.map { ($0.id, $0) })
         }
         await refresh()
@@ -99,7 +113,32 @@ final class Pro {
         }
         owned = has != nil
         ownedID = has
+        await refreshTeamStarter()
         await writeAIAccess(until: has == nil ? nil : until)
+    }
+
+    /// Reads the latest Team Starter transaction, current or lapsed.
+    func refreshTeamStarter() async {
+        if let r = await Transaction.latest(for: Pro.team5), case .verified(let t) = r, t.revocationDate == nil {
+            teamStarterJWS = t.jwsRepresentation
+            teamStarterExpires = t.expirationDate
+        } else {
+            teamStarterJWS = nil
+            teamStarterExpires = nil
+        }
+    }
+
+    /// Buys Northfix Team, up to 5 seats. Returns the signed transaction to send to the team
+    /// server, or nil when the purchase didn't go through (including when it was cancelled).
+    func buyTeamStarter() async -> String? {
+        guard let product = products[Pro.team5] else { return nil }
+        guard let r = try? await product.purchase() else { return nil }
+        if case .success(let v) = r, case .verified(let t) = v {
+            await t.finish()
+            await refreshTeamStarter()
+            return t.jwsRepresentation
+        }
+        return nil
     }
 
     /// What ai-access.json last said, so it's only rewritten when that changes.
