@@ -24,6 +24,7 @@ struct RootView: View {
         .overlay(alignment: .bottom) { ToastView() }
         .sheet(isPresented: $model.showImport) { ImportView().environment(AppModel.shared) }
         .sheet(isPresented: $model.showSettings) { SettingsView().environment(AppModel.shared) }
+        .sheet(isPresented: $model.showSetup) { SetupSheet().environment(AppModel.shared) }
         .sheet(isPresented: $model.showAddTarget) { AddTargetView().environment(AppModel.shared) }
         .sheet(isPresented: $model.showPayoff) { PayoffView().environment(AppModel.shared) }
         .sheet(isPresented: $model.showShareCard) { ShareCardSheet().environment(AppModel.shared) }

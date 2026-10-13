@@ -12,6 +12,7 @@ import { reviewYear, yearSeason } from './team.js';
 import { unlocked, GATING, teamPro } from './pro.js';
 import { onTeam, teamState } from './teamsync.js';
 import './enrich.js';
+import './checklist.js';
 import { match as oppMatch } from './opportunities.js';
 
 const row = (a, ic, label, detail = '', chev = true) => `<button type="button" class="row act" data-a="${a}">${icon(ic)}<span>${esc(label)}</span>${detail ? `<span class="muted">${esc(detail)}</span>` : ''}${chev ? icon('chevR', 'chev') : ''}</button>`;
@@ -70,6 +71,7 @@ export const YouView = {
         ${row('year', 'sparkles', `Your ${reviewYear()} in review`, yearSeason() ? 'New' : '')}
       </section>
       <section class="card list"><div class="card-head static"><h2>Data</h2></div>
+        ${row('setup', 'checklist', 'Set up Northfix')}
         ${row('import', 'download', isSample() ? 'Import connections' : 'Refresh connections', M.info.lastImport && !isSample() ? Day.ago(M.info.lastImport) : '')}
         ${isSample() ? '' : row('backup', 'drive', 'Back up notes', b ? `Last ${Day.ago(b)}` : 'Never', false)}
         ${row('notes', 'notePlus', 'Add meeting notes', 'Plaud, notes apps', false)}
@@ -99,6 +101,7 @@ export const YouView = {
     events: () => open('events'),
     trips: () => open('trips'),
     birthdays: () => open('birthdays'),
+    setup: () => open('setup'),
     import: () => open('import'),
     backup: () => open('backup'),
     team: () => open('team'),

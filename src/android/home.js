@@ -1,7 +1,7 @@
 // Today, in "the mix" (apple/Bearings/HomeView.swift and Editorial.swift): the date as an
 // eyebrow, a serif headline with the count in amber, the week's five as a strip, then the
 // daily five one person at a time (why them, what to remember, a draft, one button), the
-// import or refresh nudge, the night-sky compass card, chips for the rest, birthdays, and
+// Set up Northfix checklist, the import or refresh nudge, the night-sky compass card, chips for the rest, birthdays, and
 // the "worth your time" cards.
 import { M, isSample, isStarter, myInitials, firstName, person, persons, weeklyPicks, weeklyDone, weeklySnoozed, snoozeWeekly, dailyQuote, followUp, runList, deleteSearch, reload, lastBackup, setQuery, memory, messages } from './model.js';
 import { esc, fmt, icon, avatar, stack, meAvatar, callout, toneVar, ring, animateRings, Day, menu, $, plural, REDUCED } from './ui.js';
@@ -15,6 +15,7 @@ import { birthdaysCard } from './birthdays.js';
 import { reviewYear, yearSeason } from './team.js';
 import { watchlistCard, watchHandlers } from './watchlist.js';
 import { opportunitiesCard, oppHandlers } from './opportunities.js';
+import { setupCard, setupHandlers } from './checklist.js';
 
 const LINKEDIN_EXPORT = 'https://www.linkedin.com/mypreferences/d/download-my-data';
 let compass = null, compassData = null, compassVersion = -1;
@@ -172,7 +173,7 @@ export const HomeView = {
     el.innerHTML = `<div class="scr home">
       <header class="today-head"><div><p class="eyebrow date-line"></p><h1 class="headline serif"></h1></div>${accountButton()}</header>
       <div class="quote-slot"></div><div class="strip-slot"></div><div class="five-slot"></div>
-      <div class="banner-slot"></div>
+      <div class="setup-slot"></div><div class="banner-slot"></div>
       <section class="card night night-card compass-card glance">
         <div class="cc-head"><p class="eyebrow">YOUR NETWORK</p><span class="mono cc-count"></span></div>
         <button type="button" class="glance-compass" data-a="explore" aria-label="Your network compass. Opens Explore"></button>
@@ -192,6 +193,7 @@ export const HomeView = {
     $('.quote-slot', el).innerHTML = quoteCard();
     $('.strip-slot', el).innerHTML = progressStrip(picks);
     $('.five-slot', el).innerHTML = dailyFive();
+    setupCard($('.setup-slot', el));
     $('.banner-slot', el).innerHTML = banner();
     if (compassVersion !== M.version){ compassVersion = M.version; compassData = M.api.compass({}); compass.setData(compassData); compass.setCallouts(callouts()); compass.setInitials(myInitials()); }
     if (what === 'theme') compass.retheme();
@@ -230,6 +232,7 @@ export const HomeView = {
     quickNote: () => { fx.tap(); open('quickNote'); },
     ...watchHandlers,
     ...oppHandlers,
+    ...setupHandlers,
     year: () => open('year'),
     sig: v => { fx.tap(); if (v === 'close') showPeople({rel: ['Close']}); else perform({kind: 'filter', sig: [v]}); },
     card: i => perform((M.home.cards[+i] || {}).act),
