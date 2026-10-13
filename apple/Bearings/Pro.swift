@@ -120,7 +120,7 @@ final class Pro {
     /// Reads the latest Team Starter transaction, current or lapsed.
     func refreshTeamStarter() async {
         if let r = await Transaction.latest(for: Pro.team5), case .verified(let t) = r, t.revocationDate == nil {
-            teamStarterJWS = t.jwsRepresentation
+            teamStarterJWS = r.jwsRepresentation
             teamStarterExpires = t.expirationDate
         } else {
             teamStarterJWS = nil

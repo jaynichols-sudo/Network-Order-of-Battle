@@ -25,7 +25,7 @@ enum SetupChecklist {
         set { UserDefaults.standard.set(newValue, forKey: "setupAIToolsOpened") }
     }
     /// The SAM.gov row only makes sense for a federal network or a federal purpose.
-    static func federal(_ model: AppModel) -> Bool {
+    @MainActor static func federal(_ model: AppModel) -> Bool {
         model.info.lens || model.info.lensAuto || UseCase.saved == .government
     }
 }
