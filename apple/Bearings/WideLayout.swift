@@ -20,7 +20,9 @@ enum Wide {
     /// Today goes to three columns from here.
     static let threeColumns: CGFloat = 1180
     /// How wide the three-column Today gets before it centers.
-    static let wide: CGFloat = 1680
+    static let wide: CGFloat = 2600
+    /// Four columns on Today from here.
+    static let fourColumns: CGFloat = 1640
 
     /// The page width to use for a window this wide.
     static func pageWidth(_ window: CGFloat) -> CGFloat { window >= threshold ? page : narrow }
@@ -123,6 +125,47 @@ struct Columns: Layout {
         for (view, w) in zip(subviews, widths(bounds.width)) {
             view.place(at: CGPoint(x: x, y: bounds.minY), anchor: .topLeading, proposal: ProposedViewSize(width: w, height: nil))
             x += w + gutter
+        }
+    }
+}
+
+/// Cards flow into whichever column is shortest, like a Pinterest board, so a wide window
+/// has no empty column when some cards have nothing to show. Cards with no content take no room.
+struct Masonry: Layout {
+    var columns: Int
+    var spacing: CGFloat = 14
+    var gutter: CGFloat = Wide.gutter
+
+    private func columnWidth(_ total: CGFloat) -> CGFloat {
+        let n = CGFloat(max(1, columns))
+        return ((total - gutter * (n - 1)) / n).rounded(.down)
+    }
+
+    private func arrange(_ total: CGFloat, _ subviews: Subviews) -> (points: [CGPoint?], height: CGFloat) {
+        let w = columnWidth(total)
+        var heights = Array(repeating: CGFloat(0), count: max(1, columns))
+        var points: [CGPoint?] = []
+        for view in subviews {
+            let h = view.sizeThatFits(ProposedViewSize(width: w, height: nil)).height
+            guard h >= 1 else { points.append(nil); continue }
+            let c = heights.indices.min { heights[$0] < heights[$1] } ?? 0
+            points.append(CGPoint(x: CGFloat(c) * (w + gutter), y: heights[c]))
+            heights[c] += h + spacing
+        }
+        return (points, max(0, (heights.max() ?? 0) - spacing))
+    }
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let total = proposal.width ?? Wide.wide
+        return CGSize(width: total, height: arrange(total, subviews).height)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let w = columnWidth(bounds.width)
+        let points = arrange(bounds.width, subviews).points
+        for (view, p) in zip(subviews, points) {
+            let at = p.map { CGPoint(x: bounds.minX + $0.x, y: bounds.minY + $0.y) } ?? CGPoint(x: bounds.minX, y: bounds.minY)
+            view.place(at: at, anchor: .topLeading, proposal: ProposedViewSize(width: w, height: nil))
         }
     }
 }

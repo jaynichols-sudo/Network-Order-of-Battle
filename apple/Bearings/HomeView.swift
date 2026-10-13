@@ -85,22 +85,19 @@ struct HomeView: View {
                 AccountButton().padding(.bottom, 12)
             }
             progress
-            Columns(ratios: [0.38, 0.33, 0.29]) {
-                VStack(alignment: .leading, spacing: 14) {
-                    DailyFiveCard(picks: picks).cascade(2)
-                    banner.cascade(3)
-                    TodayChips().cascade(4, distance: 10)
-                    ComingUp().cascade(5)
-                    BirthdaysCard().cascade(6)
+            Masonry(columns: width >= Wide.fourColumns ? 4 : 3) {
+                VStack(alignment: .leading, spacing: 12) {
+                    DailyFiveCard(picks: picks)
+                    TodayChips()
                 }
-                VStack(alignment: .leading, spacing: 14) {
-                    TodayCompassCard().id("compass").cascade(2)
-                    worthYourTime
-                }
-                VStack(alignment: .leading, spacing: 14) {
-                    WatchlistCard().cascade(3)
-                    OpportunitiesCard().cascade(4)
-                }
+                .cascade(2)
+                TodayCompassCard().id("compass").cascade(2)
+                ComingUp().cascade(4)
+                WatchlistCard().cascade(4)
+                OpportunitiesCard().cascade(4)
+                BirthdaysCard().cascade(5)
+                banner.cascade(5)
+                worthTiles
             }
         }
         .padding(.top, 6)
@@ -147,6 +144,29 @@ struct HomeView: View {
             .padding(.horizontal, 16)
             .card()
             .cascade(7).edgeSettle()
+        }
+    }
+
+    /// The same cards as separate tiles in groups of three, so on the dashboard they spread
+    /// across columns instead of making one very tall card.
+    @ViewBuilder private var worthTiles: some View {
+        let cards = model.home.cards
+        let groups = stride(from: 0, to: cards.count, by: 3).map { Array(cards[$0..<min($0 + 3, cards.count)]) }
+        ForEach(Array(groups.enumerated()), id: \.offset) { g, group in
+            VStack(alignment: .leading, spacing: 0) {
+                if g == 0 {
+                    Text("Worth your time").font(Theme.geist(.headline, .bold)).padding(.top, 14).padding(.bottom, 4)
+                } else {
+                    Color.clear.frame(height: 6)
+                }
+                ForEach(Array(group.enumerated()), id: \.element.id) { i, card in
+                    if i > 0 { Theme.line.frame(height: 1) }
+                    HomeCardView(card: card)
+                }
+            }
+            .padding(.horizontal, 16)
+            .card()
+            .cascade(6)
         }
     }
 
