@@ -7,47 +7,16 @@ struct RootView: View {
 
     var body: some View {
         @Bindable var model = model
-        TabView(selection: $model.tab) {
-            Tab(AppTab.home.title, systemImage: AppTab.home.icon, value: AppTab.home) {
-                stack(.home) { HomeView() }
-            }
-            Tab(AppTab.people.title, systemImage: searchRole == nil ? AppTab.people.icon : "magnifyingglass", value: AppTab.people, role: searchRole) {
-                stack(.people) { PeopleView(zoom: zoom) }
-            }
-            Tab(AppTab.companies.title, systemImage: AppTab.companies.icon, value: AppTab.companies) {
-                stack(.companies) { CompaniesView() }
-            }
-            Tab(AppTab.you.title, systemImage: AppTab.you.icon, value: AppTab.you) {
-                stack(.you) { YouView() }
-            }
+        Group {
+            // Two TabViews instead of one with a condition inside: a conditional tab list left
+            // the iPhone blank. Wide screens get the Workspace section in their sidebar.
             if sizeClass == .regular {
-            TabSection("Workspace") {
-                Tab(AppTab.explore.title, systemImage: AppTab.explore.icon, value: AppTab.explore) {
-                    stack(.explore) { ExploreView() }
+                TabView(selection: $model.tab) {
+                    mainTabs
+                    TabSection("Workspace") { workspaceTabs }
                 }
-                .defaultVisibility(.hidden, for: .tabBar)
-                Tab(AppTab.pursuits.title, systemImage: AppTab.pursuits.icon, value: AppTab.pursuits) {
-                    stack(.pursuits) { PursuitsView() }
-                }
-                .defaultVisibility(.hidden, for: .tabBar)
-                Tab(AppTab.opportunities.title, systemImage: AppTab.opportunities.icon, value: AppTab.opportunities) {
-                    stack(.opportunities) { OpportunitiesView() }
-                }
-                .defaultVisibility(.hidden, for: .tabBar)
-                Tab(AppTab.socials.title, systemImage: AppTab.socials.icon, value: AppTab.socials) {
-                    stack(.socials) { SocialsView() }
-                }
-                .defaultVisibility(.hidden, for: .tabBar)
-                Tab(AppTab.trips.title, systemImage: AppTab.trips.icon, value: AppTab.trips) {
-                    stack(.trips) { TripsView() }
-                }
-                .defaultVisibility(.hidden, for: .tabBar)
-                Tab(AppTab.team.title, systemImage: AppTab.team.icon, value: AppTab.team) {
-                    stack(.team) { TeamView() }
-                }
-                .defaultVisibility(.hidden, for: .tabBar)
-            }
-            .defaultVisibility(.hidden, for: .tabBar)
+            } else {
+                TabView(selection: $model.tab) { mainTabs }
             }
         }
         .tabViewStyle(.sidebarAdaptable)
@@ -86,6 +55,31 @@ struct RootView: View {
             Text("\(model.foundExport?.lastPathComponent ?? "A LinkedIn file") is in your Downloads. Only what changed is updated, and your notes stay put.")
         }
         .fullScreenCover(isPresented: $model.showOnboarding) { OnboardingView().environment(AppModel.shared) }
+    }
+
+    @TabContentBuilder<AppTab> private var mainTabs: some TabContent<AppTab> {
+        Tab(AppTab.home.title, systemImage: AppTab.home.icon, value: AppTab.home) {
+            stack(.home) { HomeView() }
+        }
+        Tab(AppTab.people.title, systemImage: searchRole == nil ? AppTab.people.icon : "magnifyingglass", value: AppTab.people, role: searchRole) {
+            stack(.people) { PeopleView(zoom: zoom) }
+        }
+        Tab(AppTab.companies.title, systemImage: AppTab.companies.icon, value: AppTab.companies) {
+            stack(.companies) { CompaniesView() }
+        }
+        Tab(AppTab.you.title, systemImage: AppTab.you.icon, value: AppTab.you) {
+            stack(.you) { YouView() }
+        }
+    }
+
+    /// Mac and iPad sidebar only.
+    @TabContentBuilder<AppTab> private var workspaceTabs: some TabContent<AppTab> {
+        Tab(AppTab.explore.title, systemImage: AppTab.explore.icon, value: AppTab.explore) { stack(.explore) { ExploreView() } }
+        Tab(AppTab.pursuits.title, systemImage: AppTab.pursuits.icon, value: AppTab.pursuits) { stack(.pursuits) { PursuitsView() } }
+        Tab(AppTab.opportunities.title, systemImage: AppTab.opportunities.icon, value: AppTab.opportunities) { stack(.opportunities) { OpportunitiesView() } }
+        Tab(AppTab.socials.title, systemImage: AppTab.socials.icon, value: AppTab.socials) { stack(.socials) { SocialsView() } }
+        Tab(AppTab.trips.title, systemImage: AppTab.trips.icon, value: AppTab.trips) { stack(.trips) { TripsView() } }
+        Tab(AppTab.team.title, systemImage: AppTab.team.icon, value: AppTab.team) { stack(.team) { TeamView() } }
     }
 
     /// On iOS 26 People becomes the search tab, which floats on its own beside the tab bar.
