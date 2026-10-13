@@ -90,12 +90,12 @@ struct HomeView: View {
                     DailyFiveCard(picks: picks).cascade(2)
                     banner.cascade(3)
                     TodayChips().cascade(4, distance: 10)
-                    worthYourTime
+                    ComingUp().cascade(5)
+                    BirthdaysCard().cascade(6)
                 }
                 VStack(alignment: .leading, spacing: 14) {
                     TodayCompassCard().id("compass").cascade(2)
-                    ComingUp().cascade(4)
-                    BirthdaysCard().cascade(5)
+                    worthYourTime
                 }
                 VStack(alignment: .leading, spacing: 14) {
                     WatchlistCard().cascade(3)

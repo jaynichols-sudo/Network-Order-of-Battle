@@ -152,7 +152,7 @@ struct WideSplit<Content: View>: View {
                     })) {
                         Group {
                             if let first = path.first {
-                                RouteDestination(route: first, tab: tab, zoom: zoom).id(first)
+                                DetailPane(route: first, tab: tab, zoom: zoom).id(first)
                             } else {
                                 DetailPlaceholder(tab: tab)
                             }
@@ -170,6 +170,51 @@ struct WideSplit<Content: View>: View {
         }
         .environment(\.zoomNamespace, zoom)
         .environment(\.zoomTab, tab)
+        .readWidth($width)
+        .task(id: "\(width >= Wide.splitThreshold)-\(model.loaded)-\(model.results.count)") { openFirst() }
+    }
+
+    /// Like Mail, a wide window opens the first item instead of leaving the right pane blank.
+    private func openFirst() {
+        guard width >= Wide.splitThreshold, model.loaded, path.isEmpty else { return }
+        switch tab {
+        case .people: if let k = model.results.first?.k { model.paths[tab] = [.person(k)] }
+        case .companies: if let t = model.targets.first { model.paths[tab] = [.unit(t.name)] }
+        case .you: model.paths[tab] = [.pursuits]
+        default: break
+        }
+    }
+}
+
+/// What fills the right-hand pane. A person gets their profile and their details side by side,
+/// so a wide pane is used instead of one narrow column; screens built as lists keep a readable
+/// width and center, like System Settings.
+struct DetailPane: View {
+    let route: Route
+    let tab: AppTab
+    let zoom: Namespace.ID
+    @State private var width: CGFloat = 0
+
+    var body: some View {
+        Group {
+            switch route {
+            case .person(let k) where width >= 1000:
+                HStack(spacing: 0) {
+                    ProfileView(k: k)
+                        .frame(width: min(720, (width * 0.54).rounded()))
+                    Rectangle().fill(Theme.hairline).frame(width: 1)
+                    PersonAboutView(k: k)
+                        .frame(maxWidth: .infinity)
+                }
+            case .person:
+                RouteDestination(route: route, tab: tab, zoom: zoom)
+            default:
+                RouteDestination(route: route, tab: tab, zoom: zoom)
+                    .frame(maxWidth: 1060)
+                    .frame(maxWidth: .infinity)
+                    .background(Color(.systemGroupedBackground))
+            }
+        }
         .readWidth($width)
     }
 }
