@@ -4,7 +4,7 @@ import Observation
 /// Sends people, follow-ups and notes from Northfix to HubSpot.
 /// Sign-in is an access token the user pastes in (a HubSpot service key or a private app
 /// token). There's no Northfix server and no client secret on the device. The token lives
-/// in the keychain. Uses the CRM v3 objects API and v4 associations.
+/// in the keychain. Uses HubSpot's date-versioned REST APIs (see `apiVersion`).
 @MainActor
 @Observable
 final class HubSpot {
@@ -12,7 +12,64 @@ final class HubSpot {
     static let base = "https://api.hubapi.com"
     static let authMessage = "HubSpot didn’t accept your access token. It may have been revoked or rotated. Paste a new one in Settings."
 
-    // HubSpot-defined association types
+    /// HubSpot API version. Since March 30, 2026 HubSpot versions its REST APIs by date
+    /// (`/crm/objects/2026-09/contacts` instead of `/crm/v3/objects/contacts`). A new version
+    /// ships every March and September; each one is "Current" for six months and then
+    /// "Supported" (critical fixes only) for at least twelve more. The old v3/v4 paths stop
+    /// working in September 2027.
+    /// Revisit: when 2027-03 ships (expected March 2027), read its changelog, bump this and
+    /// re-check every path in `Path`. Do not let this fall more than 18 months behind.
+    /// https://developers.hubspot.com/docs/api-reference/legacy/migration-guide
+    /// https://developers.hubspot.com/blog/date-based-api-versioning-migration-playbook
+    static let apiVersion = "2026-09"
+
+    /// Every HubSpot path the app uses, built here and nowhere else.
+    /// Migrated from the legacy v3 objects / v4 associations paths on 2026-10-13. The request
+    /// and response bodies are unchanged for each of these endpoints; only the path moved.
+    enum Path {
+        /// Object type names HubSpot accepts in these paths ("contacts", "companies", "notes", "tasks").
+        /// `/crm/v3/objects/{type}` and `/crm/v3/objects/{type}/{id}` became `/crm/objects/{ver}/{type}[/{id}]`.
+        /// https://developers.hubspot.com/docs/api-reference/latest/crm/objects/contacts/guide
+        /// https://developers.hubspot.com/docs/api-reference/latest/crm/activities/notes/guide
+        /// https://developers.hubspot.com/docs/api-reference/latest/crm/activities/tasks/guide
+        static func objects(_ type: String, _ id: String? = nil) -> String {
+            let p = "/crm/objects/\(apiVersion)/\(type)"
+            return id.map { p + "/\($0)" } ?? p
+        }
+
+        /// `/crm/v3/objects/{type}/search` became `/crm/objects/{ver}/{type}/search`.
+        /// Body (filterGroups / filters / properties / limit) and response (results) are the same.
+        /// https://developers.hubspot.com/docs/api-reference/latest/crm/search-the-crm
+        static func search(_ type: String) -> String { objects(type) + "/search" }
+
+        /// List a record's associations to another object type.
+        /// `/crm/v4/objects/{from}/{id}/associations/{to}` became `/crm/objects/{ver}/{from}/{id}/associations/{to}`.
+        /// The response still lists `results[].toObjectId`. The 2026-09 guide doesn't document the
+        /// `limit` query parameter the v4 endpoint took, so callers shouldn't rely on it.
+        /// https://developers.hubspot.com/docs/api-reference/latest/crm/associations/associate-records/guide
+        static func associations(_ from: String, _ id: String, to: String) -> String {
+            objects(from, id) + "/associations/\(to)"
+        }
+
+        /// Create the default (unlabeled) association between two records.
+        /// `/crm/v4/objects/{from}/{id}/associations/default/{to}/{toId}` became
+        /// `/crm/objects/{ver}/{from}/{id}/associations/default/{to}/{toId}`.
+        /// https://developers.hubspot.com/docs/api-reference/latest/crm/associations/associate-records/guide
+        static func defaultAssociation(_ from: String, _ id: String, to: String, _ toId: String) -> String {
+            objects(from, id) + "/associations/default/\(to)/\(toId)"
+        }
+
+        /// One property definition. `/crm/v3/properties/{type}/{name}` became `/crm/properties/{ver}/{type}/{name}`.
+        /// https://developers.hubspot.com/docs/api-reference/latest/crm/properties/get-property
+        static func property(_ type: String, _ name: String) -> String { "/crm/properties/\(apiVersion)/\(type)/\(name)" }
+
+        /// Account details (portalId, uiDomain). `/account-info/v3/details` became `/account-info/{ver}/details`.
+        /// https://developers.hubspot.com/docs/api-reference/latest/account/account-information/get-account-details
+        static var accountDetails: String { "/account-info/\(apiVersion)/details" }
+    }
+
+    // HubSpot-defined association types (unchanged in 2026-09)
+    // https://developers.hubspot.com/docs/api-reference/latest/crm/associations/associate-records/guide
     static let contactToCompany = 279
     static let noteToContact = 202
     static let taskToContact = 204
@@ -76,13 +133,13 @@ final class HubSpot {
         guard !t.isEmpty else { throw SFError("Paste your HubSpot access token first.") }
         var a = Auth(token: t, portal: "", ui: "app.hubspot.com", linkedin: false)
         // the token must be able to read contacts
-        _ = try await call("GET", "/crm/v3/objects/contacts?limit=1", token: t)
-        if let info = try? await call("GET", "/account-info/v3/details", token: t) as? [String: Any] {
+        _ = try await call("GET", Path.objects("contacts") + "?limit=1", token: t)
+        if let info = try? await call("GET", Path.accountDetails, token: t) as? [String: Any] {
             if let n = info["portalId"] as? NSNumber { a.portal = n.stringValue } else if let s = info["portalId"] as? String { a.portal = s }
             if let ui = info["uiDomain"] as? String, !ui.isEmpty { a.ui = ui }
         }
         // the LinkedIn URL property isn't in every account
-        if (try? await call("GET", "/crm/v3/properties/contacts/hs_linkedin_url", token: t)) != nil { a.linkedin = true }
+        if (try? await call("GET", Path.property("contacts", "hs_linkedin_url"), token: t)) != nil { a.linkedin = true }
         auth = a
         Keychain.save(a, "hubspot")
     }
@@ -127,7 +184,7 @@ final class HubSpot {
     private func find(_ type: String, _ filters: [(String, String)], properties: [String] = []) async throws -> [String: Any]? {
         let f: [[String: Any]] = filters.map { ["propertyName": $0.0, "operator": "EQ", "value": $0.1] }
         let body: [String: Any] = ["filterGroups": [["filters": f]], "properties": properties, "limit": 1]
-        let res = try await call("POST", "/crm/v3/objects/\(type)/search", body) as? [String: Any]
+        let res = try await call("POST", Path.search(type), body) as? [String: Any]
         return (res?["results"] as? [[String: Any]])?.first
     }
 
@@ -163,7 +220,8 @@ final class HubSpot {
             }
             if let c = found, let id = Self.id(c["id"]) {
                 var company: String?
-                if let r = try? await call("GET", "/crm/v4/objects/contacts/\(id)/associations/companies?limit=1") as? [String: Any] {
+                // only the first result is used, so no `limit` here (see Path.associations)
+                if let r = try? await call("GET", Path.associations("contacts", id, to: "companies")) as? [String: Any] {
                     company = ((r["results"] as? [[String: Any]])?.first).flatMap { Self.id($0["toObjectId"]) }
                 }
                 link = Link(contact: id, company: company, synced: Day.today)
@@ -174,7 +232,7 @@ final class HubSpot {
             let co = try await find("companies", [("name", p.c)])
             companyId = Self.id(co?["id"])
             if companyId == nil && createAccounts {
-                let made = try await call("POST", "/crm/v3/objects/companies", ["properties": ["name": p.c]]) as? [String: Any]
+                let made = try await call("POST", Path.objects("companies"), ["properties": ["name": p.c]]) as? [String: Any]
                 companyId = Self.id(made?["id"])
             }
         }
@@ -184,13 +242,13 @@ final class HubSpot {
         if !linkedin.isEmpty { props["hs_linkedin_url"] = linkedin }
         if var l = link {
             do {
-                _ = try await call("PATCH", "/crm/v3/objects/contacts/\(l.contact)", ["properties": props])
+                _ = try await call("PATCH", Path.objects("contacts", l.contact), ["properties": props])
             } catch SFError.notFound {
                 links[p.k] = nil
                 return try await push(p, profileURL: profileURL)
             }
             if let c = companyId, c != l.company {
-                _ = try? await call("PUT", "/crm/v4/objects/contacts/\(l.contact)/associations/default/companies/\(c)")
+                _ = try? await call("PUT", Path.defaultAssociation("contacts", l.contact, to: "companies", c))
                 l.company = c
             }
             link = l
@@ -199,7 +257,7 @@ final class HubSpot {
             props["lastname"] = p.l.isEmpty ? "(unknown)" : p.l
             var body: [String: Any] = ["properties": props]
             if let c = companyId { body["associations"] = Self.assoc(c, Self.contactToCompany) }
-            let made = try await call("POST", "/crm/v3/objects/contacts", body) as? [String: Any]
+            let made = try await call("POST", Path.objects("contacts"), body) as? [String: Any]
             guard let id = Self.id(made?["id"]) else { throw SFError("HubSpot didn’t create the contact.") }
             link = Link(contact: id, company: companyId, synced: Day.today)
         }
@@ -208,18 +266,18 @@ final class HubSpot {
         // follow-up task
         let due = p.ed?.due ?? ""
         if !due.isEmpty && due != l.taskDue {
-            if let t = l.task, (try? await call("PATCH", "/crm/v3/objects/tasks/\(t)", ["properties": ["hs_timestamp": Self.timestamp(due), "hs_task_status": "NOT_STARTED"]])) != nil {
+            if let t = l.task, (try? await call("PATCH", Path.objects("tasks", t), ["properties": ["hs_timestamp": Self.timestamp(due), "hs_task_status": "NOT_STARTED"]])) != nil {
                 l.taskDue = due
             } else {
                 let task: [String: Any] = ["properties": ["hs_timestamp": Self.timestamp(due), "hs_task_subject": "Follow up with \(p.fullName)",
                                                           "hs_task_body": "Follow-up set in Northfix.", "hs_task_status": "NOT_STARTED", "hs_task_type": "TODO"],
                                            "associations": Self.assoc(l.contact, Self.taskToContact)]
-                let made = try await call("POST", "/crm/v3/objects/tasks", task) as? [String: Any]
+                let made = try await call("POST", Path.objects("tasks"), task) as? [String: Any]
                 l.task = Self.id(made?["id"])
                 l.taskDue = due
             }
         } else if due.isEmpty, let t = l.task, l.taskDue != nil {
-            _ = try? await call("PATCH", "/crm/v3/objects/tasks/\(t)", ["properties": ["hs_task_status": "COMPLETED"]])
+            _ = try? await call("PATCH", Path.objects("tasks", t), ["properties": ["hs_task_status": "COMPLETED"]])
             l.taskDue = nil
         }
 
@@ -231,11 +289,11 @@ final class HubSpot {
                 .map { "<p>" + String($0).replacingOccurrences(of: "&", with: "&amp;").replacingOccurrences(of: "<", with: "&lt;").replacingOccurrences(of: ">", with: "&gt;") + "</p>" }
                 .joined()
             let body = "<p><strong>Notes from Northfix</strong></p>" + html
-            if let n = l.note, (try? await call("PATCH", "/crm/v3/objects/notes/\(n)", ["properties": ["hs_note_body": body]])) != nil {
+            if let n = l.note, (try? await call("PATCH", Path.objects("notes", n), ["properties": ["hs_note_body": body]])) != nil {
                 l.noteHash = hash
             } else {
-                let made = try await call("POST", "/crm/v3/objects/notes", ["properties": ["hs_timestamp": ISO8601DateFormatter().string(from: Date()), "hs_note_body": body],
-                                                                             "associations": Self.assoc(l.contact, Self.noteToContact)]) as? [String: Any]
+                let made = try await call("POST", Path.objects("notes"), ["properties": ["hs_timestamp": ISO8601DateFormatter().string(from: Date()), "hs_note_body": body],
+                                                                          "associations": Self.assoc(l.contact, Self.noteToContact)]) as? [String: Any]
                 if let id = Self.id(made?["id"]) {
                     l.note = id
                     l.noteHash = hash
