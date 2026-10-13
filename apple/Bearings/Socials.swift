@@ -141,13 +141,18 @@ extension AppModel {
                 files[url.lastPathComponent] = String(decoding: data, as: UTF8.self)
             }
             guard !files.isEmpty else { show("No \(p.name) friends or followers in that file. Make sure the download includes Connections."); return }
-            struct Result: Decodable { var entries: Int; var matched: Int; var added: Int }
+            struct Range: Decodable { var from: String; var to: String }
+            struct Result: Decodable { var entries: Int; var matched: Int; var added: Int; var range: Range? }
             let r = try await engine.call("importSocial", [p.rawValue, files], as: Result.self)
             await saveFile("social", "social.json")
             socialRev += 1
             await refreshAll()
             Signature.done()
-            show("\(p.name): \(r.entries.formatted()) connections, \(r.matched.formatted()) already in your network")
+            if let range = r.range {
+                show("\(p.name): \(r.entries.formatted()) connections. This file only covers \(range.from) to \(range.to). For everyone, request it again with Date range set to All time.", seconds: 9)
+            } else {
+                show("\(p.name): \(r.entries.formatted()) connections, \(r.matched.formatted()) already in your network")
+            }
         } catch {
             show("Couldn’t read that \(p.name) file: \(error.localizedDescription)")
         }

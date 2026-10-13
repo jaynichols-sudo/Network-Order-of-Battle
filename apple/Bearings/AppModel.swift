@@ -1219,11 +1219,11 @@ final class AppModel {
 
     // MARK: toast
 
-    func show(_ message: String) {
+    func show(_ message: String, seconds: Double = 3) {
         toast = message
         let m = message
         Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 3_000_000_000)
+            try? await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
             if toast == m { toast = nil }
         }
     }

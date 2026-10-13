@@ -640,3 +640,16 @@ test('social import reads Meta HTML downloads (Facebook friends, Instagram follo
   const r2 = call('importSocial', 'instagram', {'connections/followers_and_following/followers_1.html': ig});
   assert.equal(r2.entries, 2);
 });
+
+test('social import: Facebook reads only friend and follower lists, and reports a limited date range', () => {
+  call('loadSample');
+  const page = (rows, extra = '') => `<html><body>${extra}${rows.map(([n, d]) => `<div class="_a6-p"><div><div>${n}</div><div>${d}</div></div></div>`).join('')}</body></html>`;
+  const range = '<div>Contains data you requested from</div><div>October 12, 2025 at 11:56 AM</div><div>to</div><div>October 12, 2026 at 11:56 AM</div>';
+  const r = call('importSocial', 'facebook', {
+    'x/connections/friends/your_friends.html': page([['Dana Whitfield', 'Mar 14, 2026 6:02:11 pm']], range),
+    'x/logged_information/activity_messages/people_and_friends.html': page([['Someone Reacted', 'Oct 04, 2026 11:39:30 am'], ['Another Person', 'Oct 05, 2026 1:00:00 pm']]),
+    'x/connections/friends/suggested_friends.html': page([['Suggested Guy', 'Oct 01, 2026 1:00:00 pm']]),
+  });
+  assert.equal(r.entries, 1, 'activity and suggestions are not friends');
+  assert.deepEqual(r.range, {from: 'October 12, 2025', to: 'October 12, 2026'});
+});

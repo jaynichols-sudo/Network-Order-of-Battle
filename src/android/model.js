@@ -510,6 +510,7 @@ export async function importSocial(platform, name, file){
   await saveFile('social', 'social.json');
   refreshAll();
   fx.success();
+  if (r.range) show(`${name}: ${r.entries} connections. This file only covers ${r.range.from} to ${r.range.to}. For everyone, request it again with Date range set to All time.`);
   return r;
 }
 export async function clearSocial(platform){
