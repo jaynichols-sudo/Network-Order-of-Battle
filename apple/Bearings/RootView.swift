@@ -66,9 +66,35 @@ struct RootView: View {
 
     @ViewBuilder
     private func stack<Content: View>(_ tab: AppTab, @ViewBuilder content: () -> Content) -> some View {
+        if tab == .home {
+            plainStack(tab, content: content)
+        } else {
+            WideSplit(tab: tab, zoom: zoom, content: content)
+        }
+    }
+
+    private func plainStack<Content: View>(_ tab: AppTab, @ViewBuilder content: () -> Content) -> some View {
         NavigationStack(path: Binding(get: { model.paths[tab] ?? [] }, set: { model.paths[tab] = $0 })) {
-            content()
-                .navigationDestination(for: Route.self) { route in
+            content().routes(tab: tab, zoom: zoom)
+        }
+        .environment(\.zoomNamespace, zoom)
+        .environment(\.zoomTab, tab)
+    }
+}
+
+extension View {
+    /// Every screen a tab can push.
+    func routes(tab: AppTab, zoom: Namespace.ID) -> some View {
+        navigationDestination(for: Route.self) { route in RouteDestination(route: route, tab: tab, zoom: zoom) }
+    }
+}
+
+struct RouteDestination: View {
+    let route: Route
+    let tab: AppTab
+    let zoom: Namespace.ID
+
+    var body: some View {
                     switch route {
                     case .person(let k):
                         ProfileView(k: k).navigationTransition(.zoom(sourceID: ZoomID.person(tab, k), in: zoom))
@@ -94,10 +120,102 @@ struct RootView: View {
                     case .opportunities: OpportunitiesView()
                     case .opportunity(let id): OpportunityView(id: id)
                     }
+    }
+}
+
+/// People, Companies and You on a wide window (Mac, iPad in landscape): the list stays on the
+/// left and whatever you open fills the right, like Mail or Notes. On a narrow window it's the
+/// usual push navigation. Either way the tab's path in the model is the one source of truth.
+struct WideSplit<Content: View>: View {
+    @Environment(AppModel.self) private var model
+    let tab: AppTab
+    let zoom: Namespace.ID
+    @ViewBuilder var content: Content
+    @State private var width: CGFloat = 0
+
+    private var path: [Route] { model.paths[tab] ?? [] }
+
+    var body: some View {
+        Group {
+            if width >= Wide.splitThreshold {
+                HStack(spacing: 0) {
+                    // the list: anything it opens goes to the right-hand pane instead of pushing here
+                    NavigationStack(path: Binding(get: { [] }, set: { new in
+                        if let r = new.last { model.paths[tab] = [r] }
+                    })) {
+                        content.routes(tab: tab, zoom: zoom)
+                    }
+                    .frame(width: Wide.listWidth(width))
+                    Rectangle().fill(Theme.hairline).frame(width: 1).ignoresSafeArea()
+                    NavigationStack(path: Binding(get: { Array(path.dropFirst()) }, set: { rest in
+                        if let first = path.first { model.paths[tab] = [first] + rest }
+                    })) {
+                        Group {
+                            if let first = path.first {
+                                RouteDestination(route: first, tab: tab, zoom: zoom).id(first)
+                            } else {
+                                DetailPlaceholder(tab: tab)
+                            }
+                        }
+                        .routes(tab: tab, zoom: zoom)
+                    }
+                    .frame(maxWidth: .infinity)
                 }
+                .environment(\.inSplit, true)
+            } else {
+                NavigationStack(path: Binding(get: { path }, set: { model.paths[tab] = $0 })) {
+                    content.routes(tab: tab, zoom: zoom)
+                }
+            }
         }
         .environment(\.zoomNamespace, zoom)
         .environment(\.zoomTab, tab)
+        .readWidth($width)
+    }
+}
+
+/// The right-hand pane before anything is picked.
+struct DetailPlaceholder: View {
+    @Environment(AppModel.self) private var model
+    let tab: AppTab
+
+    var body: some View {
+        VStack(spacing: 14) {
+            ZStack {
+                Circle().fill(Theme.amber.opacity(0.12)).frame(width: 120, height: 120)
+                Circle().strokeBorder(Theme.amber.opacity(0.35), style: StrokeStyle(lineWidth: 1, dash: [3, 5])).frame(width: 170, height: 170)
+                Image(systemName: icon).font(.system(size: 42, weight: .light)).foregroundStyle(Theme.amber)
+            }
+            .padding(.bottom, 6)
+            Text(title).font(Theme.serif(.title2, .semibold))
+            Text(line).font(Theme.geist(.subheadline)).foregroundStyle(Theme.text2)
+                .multilineTextAlignment(.center).frame(maxWidth: 360)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Theme.bg)
+    }
+
+    private var icon: String {
+        switch tab { case .people: return "person.crop.circle"; case .companies: return "building.2"; default: return "sparkles" }
+    }
+    private var title: String {
+        switch tab { case .people: return "Pick someone"; case .companies: return "Pick a company"; default: return "Pick something to open" }
+    }
+    private var line: String {
+        switch tab {
+        case .people: return "\(model.people.count.formatted()) people in your network. Choose one on the left to see where you stand."
+        case .companies: return "Choose a company or agency on the left to see who you know there and your ways in."
+        default: return "Your pursuits, intros, team and settings open here."
+        }
+    }
+}
+
+private struct InSplitKey: EnvironmentKey { static let defaultValue = false }
+extension EnvironmentValues {
+    /// True inside the two-pane layout, so screens can trim chrome they don't need there.
+    var inSplit: Bool {
+        get { self[InSplitKey.self] }
+        set { self[InSplitKey.self] = newValue }
     }
 }
 

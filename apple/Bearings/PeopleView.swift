@@ -6,6 +6,7 @@ struct PeopleView: View {
     @State private var showFilters = false
     @State private var pinning = false
 
+    @Environment(\.inSplit) private var inSplit
     var body: some View {
         @Bindable var model = model
         List {
@@ -27,6 +28,7 @@ struct PeopleView: View {
                     NavigationLink(value: Route.person(p.k)) {
                         PersonRow(person: p, lens: model.info.lens, zoom: zoom)
                     }
+                    .listRowBackground(inSplit && model.paths[.people]?.first == .person(p.k) ? Theme.amber.opacity(0.14) : nil)
                     .swipeActions(edge: .leading) {
                         Button {
                             Task { await model.toggleStar(p.k) }

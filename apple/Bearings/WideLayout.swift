@@ -5,13 +5,22 @@ import SwiftUI
 
 enum Wide {
     /// Below this width a screen keeps its single phone column.
-    static let threshold: CGFloat = 860
+    static let threshold: CGFloat = 800
     /// How wide a two-column page gets before it centers.
     static let page: CGFloat = 1240
     /// The gap between columns.
     static let gutter: CGFloat = 20
     /// The width of the single phone column.
     static let narrow: CGFloat = 680
+
+    /// From this width, People, Companies and You show their list and the open item side by side.
+    static let splitThreshold: CGFloat = 880
+    /// The list pane in that layout.
+    static func listWidth(_ total: CGFloat) -> CGFloat { min(440, max(340, (total * 0.36).rounded())) }
+    /// Today goes to three columns from here.
+    static let threeColumns: CGFloat = 1180
+    /// How wide the three-column Today gets before it centers.
+    static let wide: CGFloat = 1680
 
     /// The page width to use for a window this wide.
     static func pageWidth(_ window: CGFloat) -> CGFloat { window >= threshold ? page : narrow }
@@ -82,6 +91,36 @@ struct TwoColumns: Layout {
         let (l, r) = widths(bounds.width)
         var x = bounds.minX
         for (view, w) in zip(subviews, [l, r]) {
+            view.place(at: CGPoint(x: x, y: bounds.minY), anchor: .topLeading, proposal: ProposedViewSize(width: w, height: nil))
+            x += w + gutter
+        }
+    }
+}
+
+/// Splits the offered width into columns by `ratios`, top-aligned, like TwoColumns.
+struct Columns: Layout {
+    var ratios: [CGFloat]
+    var gutter: CGFloat = Wide.gutter
+
+    private func widths(_ total: CGFloat) -> [CGFloat] {
+        let usable = max(0, total - gutter * CGFloat(max(0, ratios.count - 1)))
+        let sum = ratios.reduce(0, +)
+        return ratios.map { (usable * $0 / max(sum, 0.0001)).rounded(.down) }
+    }
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let total = proposal.width ?? Wide.wide
+        let ws = widths(total)
+        var h: CGFloat = 0
+        for (view, w) in zip(subviews, ws) {
+            h = max(h, view.sizeThatFits(ProposedViewSize(width: w, height: nil)).height)
+        }
+        return CGSize(width: total, height: h)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        var x = bounds.minX
+        for (view, w) in zip(subviews, widths(bounds.width)) {
             view.place(at: CGPoint(x: x, y: bounds.minY), anchor: .topLeading, proposal: ProposedViewSize(width: w, height: nil))
             x += w + gutter
         }

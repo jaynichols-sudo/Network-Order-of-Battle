@@ -12,11 +12,11 @@ struct HomeView: View {
         ScrollViewReader { proxy in
         ScrollView {
             Group {
-                if width >= Wide.threshold { wideLayout } else { narrowLayout }
+                if width >= Wide.threeColumns { dashboardLayout } else if width >= Wide.threshold { wideLayout } else { narrowLayout }
             }
-            .padding(.horizontal, 16)
+            .padding(.horizontal, width >= Wide.threeColumns ? 28 : 16)
             .padding(.bottom, 24)
-            .frame(maxWidth: Wide.pageWidth(width))
+            .frame(maxWidth: width >= Wide.threeColumns ? Wide.wide : Wide.pageWidth(width))
             .frame(maxWidth: .infinity)
             .background(alignment: .top) {
                 // the drifting light behind the headline, at night only: by day the page is white
@@ -70,6 +70,40 @@ struct HomeView: View {
             BirthdaysCard().cascade(6).edgeSettle()
             worthYourTime
         }
+    }
+
+    /// A desktop-size window: a dashboard. What to do now, the network at a glance, and what's
+    /// moving at the accounts you watch, side by side, with the headline and quote sharing a row.
+    private var dashboardLayout: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            HStack(alignment: .bottom, spacing: 32) {
+                headerView(big: true).cascade(0, distance: 10)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                QuoteCard().cascade(1, distance: 10)
+                    .frame(maxWidth: 440, alignment: .leading)
+                    .padding(.bottom, 12)
+                AccountButton().padding(.bottom, 12)
+            }
+            progress
+            Columns(ratios: [0.38, 0.33, 0.29]) {
+                VStack(alignment: .leading, spacing: 14) {
+                    DailyFiveCard(picks: picks).cascade(2)
+                    banner.cascade(3)
+                    TodayChips().cascade(4, distance: 10)
+                    worthYourTime
+                }
+                VStack(alignment: .leading, spacing: 14) {
+                    TodayCompassCard().id("compass").cascade(2)
+                    ComingUp().cascade(4)
+                    BirthdaysCard().cascade(5)
+                }
+                VStack(alignment: .leading, spacing: 14) {
+                    WatchlistCard().cascade(3)
+                    OpportunitiesCard().cascade(4)
+                }
+            }
+        }
+        .padding(.top, 6)
     }
 
     /// A big window: the work on the left, the network at a glance on the right.
@@ -152,7 +186,9 @@ struct HomeView: View {
         return date
     }
 
-    private var header: some View {
+    private var header: some View { headerView(big: false) }
+
+    private func headerView(big: Bool) -> some View {
         HStack(alignment: .top, spacing: 12) {
             VStack(alignment: .leading, spacing: 4) {
                 Text(subline)
@@ -160,14 +196,14 @@ struct HomeView: View {
                     .tracking(1.2)
                     .foregroundStyle(Theme.text2)
                 headlineText
-                    .font(Theme.serif(.title))
+                    .font(Theme.serif(big ? .largeTitle : .title))
                     .tracking(-0.5)
                     .fixedSize(horizontal: false, vertical: true)
                     .contentTransition(.numericText(countsDown: true))
                     .animation(Motion.spring, value: headline)
             }
             Spacer(minLength: 0)
-            AccountButton()
+            if !big { AccountButton() }
         }
         .padding(.horizontal, 6)
         .padding(.top, 8)

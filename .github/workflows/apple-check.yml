@@ -78,12 +78,23 @@ jobs:
           # built without signing: an ad-hoc signature lets it launch here
           codesign --force --deep --sign - "$MAC" >/dev/null 2>&1 || echo "ad-hoc signing failed"
           mkdir -p shots
+          # a real desktop size instead of the runner's 1024x768 default, when the display allows it
+          brew install displayplacer >/dev/null 2>&1 || true
+          if command -v displayplacer >/dev/null; then
+            displayplacer list > dp.txt 2>&1 || true
+            id=$(grep -m1 "Persistent screen id:" dp.txt | awk '{print $4}')
+            for res in 1920x1200 1920x1080 1680x1050 1440x900; do
+              if grep -q "res:$res" dp.txt; then displayplacer "id:$id res:$res origin:(0,0) degree:0" && echo "display set to $res" && break; fi
+            done
+            echo "::notice title=Display::$(grep -E 'Resolution:|res:' dp.txt | head -3 | tr '\n' ' ')"
+          fi
+          system_profiler SPDisplaysDataType | grep -i resolution || true
           mshot() { # name args...
             name=$1; shift
             if [ -n "${{ inputs.only }}" ] && ! echo "mac-$name" | grep -Eq "${{ inputs.only }}"; then return 0; fi
             pkill -x Bearings >/dev/null 2>&1 || true
             sleep 1
-            open -n -F "$MAC" --args -onboarded YES "$@" || { echo "launch failed: $name"; return 0; }
+            open -n -F "$MAC" --args -onboarded YES -macFill YES "$@" || { echo "launch failed: $name"; return 0; }
             sleep 12
             screencapture -x "shots/mac-$name.png" || echo "screencapture failed: $name"
           }
@@ -98,6 +109,8 @@ jobs:
           mshot 09-you -startTab you
           mshot 10-team -startTab you -demoOpen team
           mshot 11-opportunities -demoOpen opportunities
+          mshot 12-people -startTab people
+          mshot 13-companies -startTab companies
           pkill -x Bearings >/dev/null 2>&1 || true
           ls -la shots | grep mac- || true
       - name: UI tests

@@ -132,8 +132,19 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
 enum MacWindow {
     static func configure() {
         #if targetEnvironment(macCatalyst)
+        let defaults = UserDefaults.standard
         for case let scene as UIWindowScene in UIApplication.shared.connectedScenes {
             scene.sizeRestrictions?.minimumSize = CGSize(width: 960, height: 660)
+            // The first time, open big enough for the dashboard and two-pane layouts instead of
+            // a phone-like window; after that macOS remembers whatever size you choose.
+            // -macFill YES (screenshots) always fills the screen.
+            let fill = defaults.bool(forKey: "macFill")
+            guard fill || !defaults.bool(forKey: "macSized") else { continue }
+            defaults.set(true, forKey: "macSized")
+            let screen = scene.screen.bounds
+            let size = fill ? screen.size : CGSize(width: min(screen.width * 0.86, 1600), height: min(screen.height * 0.86, 1050))
+            let frame = CGRect(x: (screen.width - size.width) / 2, y: (screen.height - size.height) / 2, width: size.width, height: size.height)
+            scene.requestGeometryUpdate(.Mac(systemFrame: frame)) { _ in }
         }
         #endif
     }
