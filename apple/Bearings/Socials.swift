@@ -118,6 +118,7 @@ extension AppModel {
 
     /// Reads a data download (zip or JSON) and merges it in. Only the friends and followers files are read.
     func importSocial(_ p: SocialPlatform, url: URL) async {
+        show("Reading your \(p.name) file…")
         let access = url.startAccessingSecurityScopedResource()
         defer { if access { url.stopAccessingSecurityScopedResource() } }
         do {
@@ -165,6 +166,9 @@ struct SocialsView: View {
     @Environment(AppModel.self) private var model
     @State private var d = SocialsData.empty
     @State private var importing: SocialPlatform?
+    /// Which network the open file picker is for. Kept apart from `importing`, which the picker
+    /// clears as it closes, before it hands over the file.
+    @State private var pickingFor: SocialPlatform?
     @State private var filter: String = "all"
     @State private var showing: SocialsData.Entry?
 
@@ -211,7 +215,10 @@ struct SocialsView: View {
         .navigationBarTitleDisplayMode(.inline)
         .task(id: "\(model.socialRev)-\(model.info.rev)") { d = await model.socials() }
         .fileImporter(isPresented: Binding(get: { importing != nil }, set: { if !$0 { importing = nil } }), allowedContentTypes: [.zip, .json, .html]) { r in
-            if case .success(let url) = r, let p = importing { Task { await model.importSocial(p, url: url); d = await model.socials() } }
+            guard case .success(let url) = r, let chosen = pickingFor else { return }
+            // a download from a different app than the button says still goes to the right place
+            let p = SocialPlatform.detect(url) ?? chosen
+            Task { await model.importSocial(p, url: url); d = await model.socials() }
         }
         .sheet(item: $showing) { e in SocialPersonSheet(e: e).environment(AppModel.shared) }
     }
@@ -254,7 +261,7 @@ struct SocialsView: View {
                     Text(n > 0 ? "\(n.formatted()) connections" : "Not added yet").font(Theme.geist(.caption)).foregroundStyle(.secondary)
                 }
                 Spacer()
-                Button(n > 0 ? "Update" : "Add file") { importing = p }.buttonStyle(PillButtonStyle(kind: n > 0 ? .soft : .primary))
+                Button(n > 0 ? "Update" : "Add file") { pickingFor = p; importing = p }.buttonStyle(PillButtonStyle(kind: n > 0 ? .soft : .primary))
             }
             if n == 0 {
                 DisclosureGroup {
