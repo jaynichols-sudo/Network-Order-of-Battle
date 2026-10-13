@@ -34,6 +34,11 @@ extension View {
         onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width.wrappedValue = $0 }
     }
 
+    /// Keeps `size` set to this view's size.
+    func readSize(_ size: Binding<CGSize>) -> some View {
+        onGeometryChange(for: CGSize.self) { $0.size } action: { size.wrappedValue = $0 }
+    }
+
     /// Larger type on the Mac, where the iPad-scaled interface otherwise reads small.
     @ViewBuilder func macTextSize() -> some View {
         #if targetEnvironment(macCatalyst)
@@ -132,18 +137,33 @@ struct Columns: Layout {
 /// Cards flow into whichever column is shortest, like a Pinterest board, so a wide window
 /// has no empty column when some cards have nothing to show. Cards with no content take no room.
 struct Masonry: Layout {
+    /// The most columns to use. Fewer are used when the content wouldn't reach `fillHeight`.
     var columns: Int
+    /// The height worth filling (the window), so a short day doesn't end halfway down the screen.
+    var fillHeight: CGFloat = 0
+    /// Columns never get wider than this, however few there are.
+    var maxColumnWidth: CGFloat = 820
     var spacing: CGFloat = 14
     var gutter: CGFloat = Wide.gutter
 
-    private func columnWidth(_ total: CGFloat) -> CGFloat {
-        let n = CGFloat(max(1, columns))
+    private func columnWidth(_ total: CGFloat, _ n: Int) -> CGFloat {
+        let n = CGFloat(max(1, n))
         return ((total - gutter * (n - 1)) / n).rounded(.down)
     }
 
-    private func arrange(_ total: CGFloat, _ subviews: Subviews) -> (points: [CGPoint?], height: CGFloat) {
-        let w = columnWidth(total)
-        var heights = Array(repeating: CGFloat(0), count: max(1, columns))
+    /// How many columns: the most that still fill the window, within the width limit.
+    private func pick(_ total: CGFloat, _ subviews: Subviews) -> Int {
+        let fewest = max(1, min(columns, Int((total / maxColumnWidth).rounded(.up))))
+        guard fillHeight > 0, columns > fewest else { return columns }
+        for n in stride(from: columns, through: fewest, by: -1) {
+            if arrange(total, n, subviews).height >= fillHeight * 0.88 { return n }
+        }
+        return fewest
+    }
+
+    private func arrange(_ total: CGFloat, _ n: Int, _ subviews: Subviews) -> (points: [CGPoint?], height: CGFloat) {
+        let w = columnWidth(total, n)
+        var heights = Array(repeating: CGFloat(0), count: max(1, n))
         var points: [CGPoint?] = []
         for view in subviews {
             let h = view.sizeThatFits(ProposedViewSize(width: w, height: nil)).height
@@ -157,12 +177,13 @@ struct Masonry: Layout {
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
         let total = proposal.width ?? Wide.wide
-        return CGSize(width: total, height: arrange(total, subviews).height)
+        return CGSize(width: total, height: arrange(total, pick(total, subviews), subviews).height)
     }
 
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        let w = columnWidth(bounds.width)
-        let points = arrange(bounds.width, subviews).points
+        let n = pick(bounds.width, subviews)
+        let w = columnWidth(bounds.width, n)
+        let points = arrange(bounds.width, n, subviews).points
         for (view, p) in zip(subviews, points) {
             let at = p.map { CGPoint(x: bounds.minX + $0.x, y: bounds.minY + $0.y) } ?? CGPoint(x: bounds.minX, y: bounds.minY)
             view.place(at: at, anchor: .topLeading, proposal: ProposedViewSize(width: w, height: nil))

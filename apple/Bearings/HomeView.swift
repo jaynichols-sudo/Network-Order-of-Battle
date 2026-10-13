@@ -7,6 +7,7 @@ struct HomeView: View {
     @State private var picks: [WeeklyPick] = []
     @State private var picksLoaded = false
     @State private var width: CGFloat = 0
+    @State private var viewport: CGSize = .zero
 
     var body: some View {
         ScrollViewReader { proxy in
@@ -37,6 +38,7 @@ struct HomeView: View {
         }
         }
         .readWidth($width)
+        .readSize($viewport)
         .background(Theme.bg)
         .navigationTitle("Today")
         .toolbar(.hidden, for: .navigationBar)
@@ -85,7 +87,8 @@ struct HomeView: View {
                 AccountButton().padding(.bottom, 12)
             }
             progress
-            Masonry(columns: width >= Wide.fourColumns ? 4 : 3) {
+            // fill the window: the header takes about 150 points, the cards get the rest
+            Masonry(columns: width >= Wide.fourColumns ? 4 : 3, fillHeight: max(0, viewport.height - 150)) {
                 VStack(alignment: .leading, spacing: 12) {
                     DailyFiveCard(picks: picks)
                     TodayChips()

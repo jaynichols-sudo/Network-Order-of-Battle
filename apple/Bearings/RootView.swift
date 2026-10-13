@@ -204,7 +204,7 @@ struct WideSplit<Content: View>: View {
         switch tab {
         case .people: if let k = model.results.first?.k { model.paths[tab] = [.person(k)] }
         case .companies: if let t = model.targets.first { model.paths[tab] = [.unit(t.name)] }
-        case .you: model.paths[tab] = [.pursuits]
+        case .you: model.paths[tab] = [.catchup]
         default: break
         }
     }
