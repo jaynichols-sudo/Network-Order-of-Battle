@@ -140,14 +140,14 @@ struct WideSplit<Content: View>: View {
             if width >= Wide.splitThreshold {
                 HStack(spacing: 0) {
                     // the list: anything it opens goes to the right-hand pane instead of pushing here
-                    NavigationStack(path: Binding(get: { [] }, set: { new in
+                    NavigationStack(path: Binding<[Route]>(get: { [] }, set: { new in
                         if let r = new.last { model.paths[tab] = [r] }
                     })) {
                         content.routes(tab: tab, zoom: zoom)
                     }
                     .frame(width: Wide.listWidth(width))
                     Rectangle().fill(Theme.hairline).frame(width: 1).ignoresSafeArea()
-                    NavigationStack(path: Binding(get: { Array(path.dropFirst()) }, set: { rest in
+                    NavigationStack(path: Binding<[Route]>(get: { Array(path.dropFirst()) }, set: { rest in
                         if let first = path.first { model.paths[tab] = [first] + rest }
                     })) {
                         Group {
@@ -163,7 +163,7 @@ struct WideSplit<Content: View>: View {
                 }
                 .environment(\.inSplit, true)
             } else {
-                NavigationStack(path: Binding(get: { path }, set: { model.paths[tab] = $0 })) {
+                NavigationStack(path: Binding<[Route]>(get: { path }, set: { model.paths[tab] = $0 })) {
                     content.routes(tab: tab, zoom: zoom)
                 }
             }
