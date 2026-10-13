@@ -137,6 +137,35 @@ struct PersonLinks: Decodable, Hashable {
     var salesNav: String
 }
 
+/// Email with someone, from the mail sync: only who wrote to whom, the subject and the day.
+/// Never a body. `events` are the last five, newest first; `more` is how many older ones there are.
+struct PersonMail: Decodable, Hashable {
+    struct Event: Decodable, Hashable {
+        var kind = "", date = "", subject = ""
+        var mine: Bool { kind == "email-out" }
+        enum K: String, CodingKey { case kind, date, subject }
+        init(from d: Decoder) throws {
+            let c = try d.container(keyedBy: K.self)
+            kind = c.lenient(String.self, .kind) ?? ""; date = c.lenient(String.self, .date) ?? ""; subject = c.lenient(String.self, .subject) ?? ""
+        }
+    }
+    var lastIn = "", lastOut = "", subjectIn = "", subjectOut = ""
+    var n90 = 0, more = 0
+    var events: [Event] = []
+
+    /// The latest email either way, if any.
+    var latest: Event? { events.first }
+
+    enum K: String, CodingKey { case lastIn, lastOut, subjectIn, subjectOut, n90, more, events }
+    init(from d: Decoder) throws {
+        let c = try d.container(keyedBy: K.self)
+        lastIn = c.lenient(String.self, .lastIn) ?? ""; lastOut = c.lenient(String.self, .lastOut) ?? ""
+        subjectIn = c.lenient(String.self, .subjectIn) ?? ""; subjectOut = c.lenient(String.self, .subjectOut) ?? ""
+        n90 = c.lenientInt(.n90) ?? 0; more = c.lenientInt(.more) ?? 0
+        events = c.lenient([Event].self, .events) ?? []
+    }
+}
+
 struct Person: Decodable, Identifiable, Hashable {
     var k: String
     var f: String, l: String, name: String
@@ -145,6 +174,8 @@ struct Person: Decodable, Identifiable, Hashable {
     var group: String, color: String, indColor: String, indShort: String
     var band: String, score: Int
     var isNew: Bool, moved: Bool, waiting: Bool, cooling: Bool, due: Bool, anniv: Bool
+    /// They emailed last, recently, and you haven't written back. `waiting` covers this too.
+    var mailWaiting: Bool
     /// Keep-in-touch: overdue in their circle, last time you were in touch, and when you're next due.
     var over: Bool, touch: String, next: String
     var circle: KeepCircle? { ed.flatMap { KeepCircle(rawValue: $0.circle) } }
@@ -155,6 +186,8 @@ struct Person: Decodable, Identifiable, Hashable {
     var links: PersonLinks?
     /// Where else you're connected (from your social downloads); filled on the full profile.
     var social: PersonSocial?
+    /// Your email with them (headers only); filled on the full profile.
+    var mail: PersonMail?
 
     var id: String { k }
     var starred: Bool { ed?.star ?? false }
@@ -169,7 +202,7 @@ struct Person: Decodable, Identifiable, Hashable {
     var shade: Double { Double(k.unicodeScalars.reduce(UInt32(7)) { ($0 &* 31) &+ $1.value } % 100) / 100 }
     var subtitle: String { [p, c].filter { !$0.isEmpty }.joined(separator: " · ") }
 
-    enum K: String, CodingKey { case k, f, l, name, u, e, c, p, d, cl, group, color, indColor, indShort, band, score, isNew, moved, waiting, cooling, due, anniv, over, touch, next, x, jc, fs, pv, rx, ed, links, social }
+    enum K: String, CodingKey { case k, f, l, name, u, e, c, p, d, cl, group, color, indColor, indShort, band, score, isNew, moved, waiting, mailWaiting, cooling, due, anniv, over, touch, next, x, jc, fs, pv, rx, ed, links, social, mail }
     init(from dec: Decoder) throws {
         let c = try dec.container(keyedBy: K.self)
         k = try c.decode(String.self, forKey: .k)
@@ -181,7 +214,7 @@ struct Person: Decodable, Identifiable, Hashable {
         group = c.lenient(String.self, .group) ?? ""; color = c.lenient(String.self, .color) ?? "#8F89A8"
         indColor = c.lenient(String.self, .indColor) ?? "#8F89A8"; indShort = c.lenient(String.self, .indShort) ?? ""
         band = c.lenient(String.self, .band) ?? "none"; score = c.lenientInt(.score) ?? 0
-        isNew = c.lenientBool(.isNew); moved = c.lenientBool(.moved); waiting = c.lenientBool(.waiting)
+        isNew = c.lenientBool(.isNew); moved = c.lenientBool(.moved); waiting = c.lenientBool(.waiting); mailWaiting = c.lenientBool(.mailWaiting)
         cooling = c.lenientBool(.cooling); due = c.lenientBool(.due); anniv = c.lenientBool(.anniv)
         over = c.lenientBool(.over); touch = c.lenient(String.self, .touch) ?? ""; next = c.lenient(String.self, .next) ?? ""
         x = c.lenient(String.self, .x); jc = c.lenient(String.self, .jc); fs = c.lenient(String.self, .fs)
@@ -190,6 +223,7 @@ struct Person: Decodable, Identifiable, Hashable {
         ed = c.lenient(Edit.self, .ed)
         links = c.lenient(PersonLinks.self, .links)
         social = c.lenient(PersonSocial.self, .social)
+        mail = c.lenient(PersonMail.self, .mail)
     }
 }
 

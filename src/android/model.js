@@ -49,7 +49,7 @@ export function norm(p){
   p.cl = Object.assign({}, CL0, p.cl || {});
   p.band = p.band || 'none'; p.score = p.score || 0; p.touch = p.touch || ''; p.next = p.next || '';
   p.color = p.color || '#8F89A8'; p.indColor = p.indColor || '#8F89A8'; p.indShort = p.indShort || '';
-  for (const f of ['isNew', 'moved', 'waiting', 'cooling', 'due', 'anniv', 'over']) p[f] = !!p[f];
+  for (const f of ['isNew', 'moved', 'waiting', 'mailWaiting', 'cooling', 'due', 'anniv', 'over']) p[f] = !!p[f];
   p.starred = !!(p.ed && p.ed.star);
   p.full = `${p.f} ${p.l}`.trim();
   p.initials = ((p.f[0] || '?') + (p.l[0] || '')).toUpperCase();

@@ -50,6 +50,8 @@ struct TimelineSection: View {
         let color: Color
         let title: String
         var detail = ""
+        /// Order among events on the same day; higher sorts later.
+        var rank = 0
     }
 
     var body: some View {
@@ -105,6 +107,7 @@ struct TimelineSection: View {
             out.append(Event(id: "touched", date: t, icon: "checkmark.bubble.fill", color: Theme.good, title: "You were in touch"))
         }
         out.append(contentsOf: notes(p))
+        out.append(contentsOf: mail(p))
         if let x = p.rx {
             if !x.t.isEmpty {
                 out.append(Event(id: "last", date: x.t, icon: x.dir == "i" ? "arrow.down.left" : "arrow.up.right", color: x.dir == "i" ? Theme.amber : Theme.good,
@@ -131,7 +134,22 @@ struct TimelineSection: View {
         if !p.d.isEmpty {
             out.append(Event(id: "conn", date: p.d, icon: "link", color: Theme.accent, title: "Connected on LinkedIn"))
         }
-        return out.sorted { $0.date > $1.date }
+        return out.sorted { $0.date != $1.date ? $0.date > $1.date : $0.rank < $1.rank }
+    }
+
+    /// Email with them, headers only: the last five, then one line for the rest.
+    private static func mail(_ p: Person) -> [Event] {
+        guard let m = p.mail else { return [] }
+        var out: [Event] = []
+        for (i, e) in m.events.prefix(5).enumerated() where !e.date.isEmpty {
+            out.append(Event(id: "mail\(i)", date: e.date, icon: "envelope", color: e.mine ? Theme.good : Theme.amber,
+                             title: e.mine ? "Email to \(p.f)" : "Email from \(p.f)", detail: e.subject.isEmpty ? "" : "“\(e.subject)”"))
+        }
+        if m.more > 0, let oldest = out.last {
+            out.append(Event(id: "mailmore", date: oldest.date, icon: "envelope", color: .secondary,
+                             title: "and \(m.more.formatted()) more \(m.more == 1 ? "email" : "emails")", rank: 1))
+        }
+        return out
     }
 
     /// Notes written as "2026-10-02 (meeting): text", one per line.

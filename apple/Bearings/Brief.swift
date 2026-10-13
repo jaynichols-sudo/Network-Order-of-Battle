@@ -33,7 +33,13 @@ enum Brief {
         } else {
             f.append("We have never messaged on LinkedIn.")
         }
-        if p.waiting { f.append("They are waiting on my reply.") }
+        if let m = p.mail {
+            if !m.lastOut.isEmpty { f.append("I last emailed them \(Day.ago(m.lastOut))\(m.subjectOut.isEmpty ? "" : ", subject “\(m.subjectOut)”").") }
+            if !m.lastIn.isEmpty { f.append("They last emailed me \(Day.ago(m.lastIn))\(m.subjectIn.isEmpty ? "" : ", subject “\(m.subjectIn)”").") }
+            if m.n90 > 0 { f.append("Emails between us in the last 90 days: \(m.n90).") }
+        }
+        if p.mailWaiting { f.append("They are waiting on my email reply.") }
+        else if p.waiting { f.append("They are waiting on my reply.") }
         if let jc = p.jc, !jc.isEmpty {
             f.append("They started a new role around \(Day.nice(jc)).")
             if let was = p.pv?.first { f.append("Before that: \(was.p.isEmpty ? "a role" : was.p) at \(was.c).") }
@@ -57,8 +63,12 @@ enum Brief {
         } else {
             a = "You haven’t messaged \(p.f) yet; connected \(Day.nice(p.d))."
         }
+        if let m = p.mail, let e = m.latest, !e.date.isEmpty, e.date >= (p.rx?.t ?? "") {
+            a += " \(e.mine ? "You emailed \(p.f)" : "\(p.f) emailed you") \(Day.ago(e.date))\(e.subject.isEmpty ? "" : ": “\(e.subject)”")."
+        }
         var b = ""
-        if p.waiting { b = "They’re waiting on your reply." }
+        if p.mailWaiting { b = "They’re waiting on your email reply." }
+        else if p.waiting { b = "They’re waiting on your reply." }
         else if p.moved { b = "New role\(p.c.isEmpty ? "" : " at \(p.c)"): a natural moment to say congratulations." }
         else if p.over, let c = p.circle { b = "Overdue for your \(c.title.lowercased()). A quick hello keeps it warm." }
         else if p.cooling { b = "You used to talk often; worth a check-in before it goes cold." }
@@ -69,7 +79,7 @@ enum Brief {
     private static let style = "Use only the facts given and never invent details, names, dates or events. Write plain, warm, direct English. Do not use em dashes."
 
     static func ai(_ p: Person, model: AppModel) async -> String? {
-        let key = "\(p.k)|\(p.touch)|\(p.rx?.t ?? "")|\(p.ed?.updated ?? "")"
+        let key = "\(p.k)|\(p.touch)|\(p.rx?.t ?? "")|\(p.ed?.updated ?? "")|\(p.mail?.latest?.date ?? "")"
         if let hit = cache[key] { return hit }
         let prompt = "Facts about someone in my network:\n\(facts(p, model: model))\n\nIn at most two short sentences, say where things stand with them and the single best reason to reach out now. Speak to me as \"you\"."
         guard let out = await respond(prompt, instructions: "You help a busy professional keep up with their network. " + style) else { return nil }
@@ -119,7 +129,7 @@ struct BriefCard: View {
                 .contentTransition(.opacity)
                 .animation(.smooth, value: aiText)
         }
-        .task(id: person.k + person.touch + (person.rx?.t ?? "") + (person.ed?.updated ?? "")) {
+        .task(id: person.k + person.touch + (person.rx?.t ?? "") + (person.ed?.updated ?? "") + (person.mail?.latest?.date ?? "")) {
             guard Brief.aiAvailable else { return }
             loading = true
             aiText = await Brief.ai(person, model: model)
