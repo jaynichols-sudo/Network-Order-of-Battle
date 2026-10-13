@@ -1,0 +1,19 @@
+booted
+boot finished
+installed
+light-01-today ok
+light-02-people ok
+light-03-profile ok
+light-04-companies ok
+light-05-compass ok
+light-06-map ok
+light-07-intro ok
+light-08-paywall ok
+dark-01-today ok
+dark-02-people ok
+dark-03-profile ok
+dark-04-companies ok
+dark-05-compass ok
+dark-06-map ok
+dark-07-intro ok
+dark-08-paywall ok
