@@ -3,6 +3,7 @@ import SwiftUI
 struct RootView: View {
     @Environment(AppModel.self) private var model
     @Namespace private var zoom
+    @Environment(\.horizontalSizeClass) private var sizeClass
 
     var body: some View {
         @Bindable var model = model
@@ -19,6 +20,7 @@ struct RootView: View {
             Tab(AppTab.you.title, systemImage: AppTab.you.icon, value: AppTab.you) {
                 stack(.you) { YouView() }
             }
+            if sizeClass == .regular {
             TabSection("Workspace") {
                 Tab(AppTab.explore.title, systemImage: AppTab.explore.icon, value: AppTab.explore) {
                     stack(.explore) { ExploreView() }
@@ -46,6 +48,7 @@ struct RootView: View {
                 .defaultVisibility(.hidden, for: .tabBar)
             }
             .defaultVisibility(.hidden, for: .tabBar)
+            }
         }
         .tabViewStyle(.sidebarAdaptable)
         .modifier(ModernTabBar())
