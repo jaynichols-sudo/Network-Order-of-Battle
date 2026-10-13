@@ -41,6 +41,17 @@ struct MailToken: Codable {
     var address: String
 }
 
+/// One connected mailbox. You can connect several Gmail and several Outlook accounts.
+struct MailAccount: Codable, Identifiable, Hashable {
+    var id: String            // provider + address
+    var provider: MailProvider
+    var address: String
+    var token: MailToken
+
+    static func == (a: MailAccount, b: MailAccount) -> Bool { a.id == b.id }
+    func hash(into h: inout Hasher) { h.combine(id) }
+}
+
 struct MailRow: Encodable {
     var name: String
     var email: String
@@ -53,7 +64,8 @@ struct MailRow: Encodable {
 final class MailSync {
     static let shared = MailSync()
 
-    var connected: [MailProvider: String] = [:]
+    /// Every connected mailbox, in the order they were added.
+    var accounts: [MailAccount] = []
     var lastSync: Date? = UserDefaults.standard.object(forKey: "mail.lastSync") as? Date
     var lastMatched: Int = UserDefaults.standard.integer(forKey: "mail.lastMatched")
     var busy = false
@@ -63,10 +75,22 @@ final class MailSync {
     private let anchor = Anchor()
 
     init() {
-        for p in MailProvider.allCases { if let t = Keychain.load(MailToken.self, "mail." + p.rawValue) { connected[p] = t.address } }
+        accounts = Keychain.load([MailAccount].self, "mail.accounts") ?? []
+        // one account per provider, from before several were allowed
+        for p in MailProvider.allCases {
+            if let t = Keychain.load(MailToken.self, "mail." + p.rawValue) {
+                let a = MailAccount(id: p.rawValue + ":" + t.address.lowercased(), provider: p, address: t.address, token: t)
+                if !accounts.contains(a) { accounts.append(a) }
+                Keychain.delete("mail." + p.rawValue)
+            }
+        }
+        if !accounts.isEmpty { saveAccounts() }
     }
 
-    var anyConnected: Bool { !connected.isEmpty }
+    var anyConnected: Bool { !accounts.isEmpty }
+    func accounts(for p: MailProvider) -> [MailAccount] { accounts.filter { $0.provider == p } }
+
+    private func saveAccounts() { Keychain.save(accounts, "mail.accounts") }
 
     // MARK: sign in
 
@@ -82,7 +106,7 @@ final class MailSync {
                 .init(name: "redirect_uri", value: p.redirect), .init(name: "scope", value: p.scope),
                 .init(name: "state", value: state), .init(name: "code_challenge", value: challenge),
                 .init(name: "code_challenge_method", value: "S256"),
-            ] + (p == .gmail ? [.init(name: "access_type", value: "offline"), .init(name: "prompt", value: "consent")] : [.init(name: "prompt", value: "select_account")])
+            ] + (p == .gmail ? [.init(name: "access_type", value: "offline"), .init(name: "prompt", value: "consent select_account")] : [.init(name: "prompt", value: "select_account")])
             let callback: URL = try await withCheckedThrowingContinuation { cont in
                 let s = ASWebAuthenticationSession(url: c.url!, callbackURLScheme: p.scheme) { url, error in
                     if let url { cont.resume(returning: url); return }
@@ -101,8 +125,10 @@ final class MailSync {
             guard let code = get("code") else { throw MailError("\(p.name) didn’t send a sign-in code.") }
             var tok = try await tokenRequest(p, ["grant_type": "authorization_code", "code": code, "code_verifier": verifier, "redirect_uri": p.redirect])
             tok.address = try await address(p, tok.access)
-            Keychain.save(tok, "mail." + p.rawValue)
-            connected[p] = tok.address
+            let a = MailAccount(id: p.rawValue + ":" + tok.address.lowercased(), provider: p, address: tok.address, token: tok)
+            accounts.removeAll { $0.id == a.id }
+            accounts.append(a)
+            saveAccounts()
             Haptic.success()
             await sync(model: model, force: true)
         } catch is CancellationError {
@@ -111,10 +137,10 @@ final class MailSync {
         }
     }
 
-    func disconnect(_ p: MailProvider, model: AppModel) async {
-        Keychain.delete("mail." + p.rawValue)
-        connected[p] = nil
-        if connected.isEmpty {
+    func disconnect(_ a: MailAccount, model: AppModel) async {
+        accounts.removeAll { $0.id == a.id }
+        saveAccounts()
+        if accounts.isEmpty {
             // forget what email told us, so turning it off really turns it off
             _ = try? await model.engine.call("clearMail", as: [String: Int].self)
             await model.saveFile("edits", "edits.json")
@@ -133,14 +159,13 @@ final class MailSync {
         defer { busy = false }
         let since = lastSync.map { $0.addingTimeInterval(-2 * 86400) } ?? Date().addingTimeInterval(-75 * 86400)
         var rows: [MailRow] = []
-        for (p, _) in connected {
+        for a in accounts {
             do {
-                var tok = try await fresh(p)
-                if p == .outlook { rows += try await outlook(tok.access, me: tok.address, since: since) }
+                let tok = try await fresh(a)
+                if a.provider == .outlook { rows += try await outlook(tok.access, me: tok.address, since: since) }
                 else { rows += try await gmail(tok.access, me: tok.address, since: since) }
-                tok = Keychain.load(MailToken.self, "mail." + p.rawValue) ?? tok
             } catch {
-                note = "\(p.name): \(error.localizedDescription)"
+                note = "\(a.provider.name) (\(a.address)): \(error.localizedDescription)"
             }
         }
         guard !rows.isEmpty else { if note.isEmpty { markSynced(0) }; return }
@@ -281,13 +306,13 @@ final class MailSync {
         return j["emailAddress"] as? String ?? ""
     }
 
-    private func fresh(_ p: MailProvider) async throws -> MailToken {
-        guard var t = Keychain.load(MailToken.self, "mail." + p.rawValue) else { throw MailError("Not connected.") }
+    private func fresh(_ a: MailAccount) async throws -> MailToken {
+        var t = a.token
         if t.expires > Date().addingTimeInterval(120) { return t }
-        let n = try await tokenRequest(p, ["grant_type": "refresh_token", "refresh_token": t.refresh])
+        let n = try await tokenRequest(a.provider, ["grant_type": "refresh_token", "refresh_token": t.refresh])
         t.access = n.access; t.expires = n.expires
         if !n.refresh.isEmpty { t.refresh = n.refresh }
-        Keychain.save(t, "mail." + p.rawValue)
+        if let i = accounts.firstIndex(where: { $0.id == a.id }) { accounts[i].token = t; saveAccounts() }
         return t
     }
 
@@ -355,18 +380,19 @@ struct MailSettingsSection: View {
 
     var body: some View {
         Section {
-            ForEach(MailProvider.allCases) { p in
-                if let who = mail.connected[p] {
-                    HStack {
-                        Label { VStack(alignment: .leading, spacing: 2) { Text(p.name); Text(who).font(.caption).foregroundStyle(.secondary) } } icon: { Image(systemName: p.icon) }
-                        Spacer()
-                        Button("Disconnect", role: .destructive) { Task { await mail.disconnect(p, model: model) } }
-                            .buttonStyle(.borderless)
-                    }
-                } else {
-                    Button { Task { await mail.connect(p, model: model) } } label: { Label("Connect \(p.name)", systemImage: p.icon) }
-                        .disabled(!p.available || mail.busy)
+            ForEach(mail.accounts) { a in
+                HStack {
+                    Label { VStack(alignment: .leading, spacing: 2) { Text(a.address); Text(a.provider.name).font(.caption).foregroundStyle(.secondary) } } icon: { Image(systemName: a.provider.icon) }
+                    Spacer()
+                    Button("Remove", role: .destructive) { Task { await mail.disconnect(a, model: model) } }
+                        .buttonStyle(.borderless)
                 }
+            }
+            ForEach(MailProvider.allCases) { p in
+                Button { Task { await mail.connect(p, model: model) } } label: {
+                    Label(mail.accounts(for: p).isEmpty ? "Connect \(p.name)" : "Add another \(p.name) account", systemImage: mail.accounts(for: p).isEmpty ? p.icon : "plus.circle")
+                }
+                .disabled(!p.available || mail.busy)
             }
             if mail.anyConnected {
                 Button { Task { await mail.sync(model: model, force: true) } } label: {
@@ -385,7 +411,7 @@ struct MailSettingsSection: View {
             Text("Email")
         } footer: {
             Text(MailProvider.allCases.contains { $0.available }
-                 ? "Only who wrote to whom, the subject and the date are read. Never the body. Northfix uses this to show your last emails on each profile and to spot who’s waiting on you. Nothing goes to a Northfix server."
+                 ? "Connect as many Gmail and Outlook accounts as you use. Only who wrote to whom, the subject and the date are read. Never the body. Northfix uses this to show your last emails on each profile and to spot who’s waiting on you. Nothing goes to a Northfix server."
                  : "Email isn’t switched on in this version yet.")
         }
     }
