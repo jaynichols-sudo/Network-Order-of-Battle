@@ -132,9 +132,17 @@ struct TeamView: View {
     }
 
     private var planLine: String {
-        if team.readOnly { return "Read-only: the free trial has ended" }
+        if team.readOnly {
+            if team.onAppStorePlan { return "Read-only: the App Store subscription has ended" }
+            if team.plan == "canceled" { return "Read-only: the subscription was canceled" }
+            return "Read-only: the free trial has ended"
+        }
         if team.plan == "active" { return "Team plan" }
         if team.plan == "past_due" { return "Team plan: payment is overdue" }
+        if team.onAppStorePlan {
+            guard let renews = team.renewsAt else { return "Team plan, App Store" }
+            return "Team plan, App Store, renews " + renews.formatted(date: .abbreviated, time: .omitted)
+        }
         if let end = team.trialEnds { let d = max(0, Calendar.current.dateComponents([.day], from: Date(), to: end).day ?? 0); return "Free trial, \(d) \(d == 1 ? "day" : "days") left" }
         return "Free trial"
     }
@@ -153,7 +161,7 @@ struct TeamView: View {
                 }
             }
             if let e = team.lastError { Text(e).font(Theme.geist(.footnote)).foregroundStyle(Theme.needs) }
-            if team.isOwner && !team.demo { BillingRow() }
+            if team.isOwner && !team.demo { BillingRow(onChange: { _ = try? await team.refresh() }) }
         }
         .padding(16).card()
     }
@@ -480,34 +488,142 @@ struct InviteSheet: View {
     }
 }
 
-/// Owners: the plan, and buying seats on the web.
+/// Owners: the plan, and the two ways to pay for it.
+///
+/// The App Store plan (Northfix Team, up to 5 seats, one yearly subscription) is bought right
+/// here with StoreKit, then the signed transaction goes to the team server. Teams of six or
+/// more, or teams that need an invoice, subscribe per seat on the web (Stripe). Both are
+/// offered once the trial is ending or ended, or when a plan has lapsed.
 struct BillingRow: View {
     @Environment(\.openURL) private var openURL
+    var onChange: () async -> Void = {}
     @State private var info: TeamSync.Billing?
     @State private var seats = 5
+    @State private var busy = false
+    @State private var note: String?
     @State private var error: String?
+    private var pro: Pro { Pro.shared }
+
+    /// The plans are offered when the trial has a week or less left, or has ended, or the team
+    /// is canceled, or its App Store subscription has lapsed.
+    private func needsPlan(_ b: TeamSync.Billing) -> Bool {
+        switch b.plan {
+        case "trial": return b.trialEnds.map { $0.timeIntervalSinceNow < 7 * 86400 } ?? false
+        case "canceled": return true
+        case "team5": return b.renewsAt.map { $0 < Date() } ?? true
+        default: return false
+        }
+    }
+
+    /// Whether there's anything to show, so the row doesn't draw a lone divider.
+    private func hasContent(_ b: TeamSync.Billing) -> Bool {
+        if b.plan == "active" || b.plan == "past_due" { return b.canCheckout }
+        if b.plan == "team5", let r = b.renewsAt, r > Date() { return true }
+        return needsPlan(b) && (b.canSubscribeOnAppStore || b.canCheckout)
+    }
 
     var body: some View {
         Group {
-            if let b = info, b.canCheckout {
-                VStack(alignment: .leading, spacing: 8) {
+            if let b = info, hasContent(b) {
+                VStack(alignment: .leading, spacing: 10) {
                     Theme.line.frame(height: 1)
-                    if b.plan == "active" {
-                        Button("Manage seats and billing") { open { try await TeamSync.shared.portalURL() } }.buttonStyle(PillButtonStyle(kind: .soft))
-                    } else {
-                        Stepper("\(seats) seats", value: $seats, in: max(1, b.used)...200)
-                        Button("Subscribe on the web") { open { try await TeamSync.shared.checkoutURL(seats: seats) } }.buttonStyle(PillButtonStyle(kind: .primary))
-                        Text("Billed yearly per seat. Everyone on the team gets Northfix Pro.").font(Theme.geist(.caption)).foregroundStyle(Theme.text2)
+                    if b.plan == "active" || b.plan == "past_due" {
+                        if b.canCheckout {
+                            Button("Manage seats and billing") { open { try await TeamSync.shared.portalURL() } }.buttonStyle(PillButtonStyle(kind: .soft))
+                        }
+                    } else if b.plan == "team5", let renews = b.renewsAt, renews > Date() {
+                        Text("App Store plan: up to \(Pro.team5Seats) seats. Renews \(renews.formatted(date: .long, time: .omitted)).")
+                            .font(Theme.geist(.footnote)).foregroundStyle(Theme.text2)
+                        HStack(spacing: 8) {
+                            Button("Manage subscription") { if let u = URL(string: "https://apps.apple.com/account/subscriptions") { openURL(u) } }
+                                .buttonStyle(PillButtonStyle(kind: .soft))
+                            if b.canCheckout {
+                                Button("Need more seats?") { open { try await TeamSync.shared.checkoutURL(seats: max(seats, Pro.team5Seats + 1)) } }
+                                    .buttonStyle(PillButtonStyle(kind: .soft))
+                            }
+                        }
+                        if b.canCheckout {
+                            Text("Teams of 6 or more subscribe per seat on the web. Cancel the App Store subscription once the web plan is on.")
+                                .font(Theme.geist(.caption)).foregroundStyle(Theme.text2)
+                        }
+                    } else if needsPlan(b) {
+                        Text("Keep your team going").font(Theme.geist(.subheadline, .semibold))
+                        if b.canSubscribeOnAppStore {
+                            Button { subscribe() } label: {
+                                VStack(spacing: 2) {
+                                    Text(busy ? "One moment…" : "Subscribe on the App Store")
+                                    Text("Up to \(Pro.team5Seats) seats, \(pro.price(Pro.team5)) a year").font(Theme.geist(.caption))
+                                }
+                                .frame(maxWidth: .infinity, minHeight: 50)
+                            }
+                            .buttonStyle(PillButtonStyle(kind: .primary))
+                            .disabled(busy || pro.product(Pro.team5) == nil)
+                            .accessibilityHint("Buys a yearly subscription for a team of up to \(Pro.team5Seats) through your Apple Account")
+                            if pro.product(Pro.team5) == nil {
+                                Text("The App Store plan isn’t available to buy yet.").font(Theme.geist(.caption)).foregroundStyle(Theme.text2)
+                            }
+                            Button("Restore purchases") { restore() }.font(Theme.geist(.footnote, .medium)).foregroundStyle(Theme.primary).disabled(busy)
+                            Text("Everyone on the team gets Northfix Pro. The subscription renews yearly until you cancel it in the App Store settings on your device. Payment is charged to your Apple Account.")
+                                .font(Theme.geist(.caption)).foregroundStyle(Theme.text2)
+                        }
+                        if b.canCheckout {
+                            if b.canSubscribeOnAppStore { Theme.line.frame(height: 1) }
+                            Text("For teams of 6 or more, or if you need an invoice").font(Theme.geist(.footnote, .semibold))
+                            Stepper("\(seats) seats", value: $seats, in: max(1, b.used)...200)
+                            Button("Subscribe on the web") { open { try await TeamSync.shared.checkoutURL(seats: seats) } }.buttonStyle(PillButtonStyle(kind: .soft))
+                            Text("Billed yearly per seat. Everyone on the team gets Northfix Pro.").font(Theme.geist(.caption)).foregroundStyle(Theme.text2)
+                        }
                     }
+                    if let note { Text(note).font(Theme.geist(.footnote)).foregroundStyle(Theme.text2) }
                     if let error { Text(error).font(Theme.geist(.footnote)).foregroundStyle(Theme.needs) }
                 }
             }
         }
-        .task { info = try? await TeamSync.shared.billing(); seats = max(info?.used ?? 5, 5) }
+        .task { await load() }
+    }
+
+    private func load() async {
+        info = try? await TeamSync.shared.billing()
+        seats = max(info?.used ?? 5, 5)
     }
 
     private func open(_ f: @escaping () async throws -> URL?) {
         Task { do { if let u = try await f() { openURL(u) } } catch { self.error = error.localizedDescription } }
+    }
+
+    /// Buy on the App Store, then tell the team server.
+    private func subscribe() {
+        busy = true; note = nil; error = nil
+        Task {
+            do {
+                if let jws = await pro.buyTeamStarter() {
+                    try await TeamSync.shared.applyAppStorePlan(jws)
+                    await load(); await onChange()
+                    Haptic.success()
+                    note = "Your team is on the App Store plan."
+                }
+            } catch { self.error = error.localizedDescription }
+            busy = false
+        }
+    }
+
+    /// A subscription bought on another device, or before the team was made.
+    private func restore() {
+        busy = true; note = nil; error = nil
+        Task {
+            await pro.restore()
+            if pro.hasTeamStarter, let jws = pro.teamStarterJWS {
+                do {
+                    try await TeamSync.shared.applyAppStorePlan(jws)
+                    await load(); await onChange()
+                    Haptic.success()
+                    note = "Your team is on the App Store plan."
+                } catch { self.error = error.localizedDescription }
+            } else {
+                note = pro.teamStarterJWS == nil ? "No Northfix Team subscription was found for this Apple Account." : "The Northfix Team subscription on this Apple Account has ended."
+            }
+            busy = false
+        }
     }
 }
 

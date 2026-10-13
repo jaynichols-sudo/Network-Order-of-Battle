@@ -73,6 +73,8 @@ final class TeamSync {
         var seats: Int
         var trialEnds: Date?
         var readOnly: Bool
+        /// When the App Store plan's paid period ends (plan "team5").
+        var renewsAt: Date?
     }
     private struct Secret: Codable { var token: String; var key: String }
 
@@ -101,6 +103,10 @@ final class TeamSync {
     var readOnly: Bool { saved?.readOnly ?? false }
     var plan: String { saved?.plan ?? "trial" }
     var trialEnds: Date? { saved?.trialEnds ?? (demo ? Date().addingTimeInterval(23 * 86400) : nil) }
+    /// For the App Store plan: when the current paid year ends and the subscription renews.
+    var renewsAt: Date? { saved?.renewsAt }
+    /// Billed through the App Store (Northfix Team, up to 5 seats).
+    var onAppStorePlan: Bool { plan == "team5" }
     var myName: String { saved?.myName ?? "" }
     var myTitle: String { saved?.myTitle ?? "" }
     /// Everyone on an active team gets Northfix Pro.
@@ -202,7 +208,7 @@ final class TeamSync {
             guard let token = r?["token"] as? String, let team = (r?["team"] as? [String: Any])?["id"] as? String,
                   let me = (r?["member"] as? [String: Any])?["id"] as? String else { throw TeamError.server("The team server sent something unexpected.") }
             secret = Secret(token: token, key: key)
-            saved = Saved(teamId: team, memberId: me, role: "owner", myName: myName, myTitle: myTitle, lastSync: nil, teamName: teamName, plan: "trial", seats: 5, trialEnds: nil, readOnly: false)
+            saved = Saved(teamId: team, memberId: me, role: "owner", myName: myName, myTitle: myTitle, lastSync: nil, teamName: teamName, plan: "trial", seats: 5, trialEnds: nil, readOnly: false, renewsAt: nil)
             persist()
         } catch { secret = nil; throw error }
     }
@@ -232,7 +238,7 @@ final class TeamSync {
             guard let token = r?["token"] as? String, let team = (r?["team"] as? [String: Any])?["id"] as? String,
                   let member = r?["member"] as? [String: Any], let me = member["id"] as? String else { throw TeamError.server("The team server sent something unexpected.") }
             secret = Secret(token: token, key: key)
-            saved = Saved(teamId: team, memberId: me, role: member["role"] as? String ?? "member", myName: myName, myTitle: myTitle, lastSync: nil, teamName: "", plan: "trial", seats: 5, trialEnds: nil, readOnly: false)
+            saved = Saved(teamId: team, memberId: me, role: member["role"] as? String ?? "member", myName: myName, myTitle: myTitle, lastSync: nil, teamName: "", plan: "trial", seats: 5, trialEnds: nil, readOnly: false, renewsAt: nil)
             persist()
         } catch { secret = nil; throw error }
     }
@@ -246,6 +252,7 @@ final class TeamSync {
         saved?.plan = t["plan"] as? String ?? "trial"
         saved?.seats = t["seats"] as? Int ?? 5
         saved?.trialEnds = (t["trialEnds"] as? Double).map { Date(timeIntervalSince1970: $0 / 1000) }
+        saved?.renewsAt = (t["renewsAt"] as? Double).map { Date(timeIntervalSince1970: $0 / 1000) }
         saved?.readOnly = t["readOnly"] as? Bool ?? false
         if let role = (r["me"] as? [String: Any])?["role"] as? String { saved?.role = role }
         let date = { (v: Any?) in (v as? Double).map { Date(timeIntervalSince1970: $0 / 1000) } }
@@ -307,14 +314,43 @@ final class TeamSync {
         rev += 1
     }
 
-    struct Billing { var plan: String; var seats: Int; var used: Int; var trialEnds: Date?; var canCheckout: Bool }
+    struct Billing {
+        var plan: String; var seats: Int; var used: Int; var trialEnds: Date?; var renewsAt: Date?
+        /// Stripe is set up on the server and I'm the owner.
+        var canCheckout: Bool
+        /// The App Store plan can be bought or restored for this team (owner, and not billed through Stripe).
+        var canSubscribeOnAppStore: Bool
+    }
     func billing() async throws -> Billing {
         let r = try await call("GET", "v1/billing") as? [String: Any] ?? [:]
+        let date = { (v: Any?) in (v as? Double).map { Date(timeIntervalSince1970: $0 / 1000) } }
         return Billing(plan: r["plan"] as? String ?? "trial", seats: r["seats"] as? Int ?? 5, used: r["used"] as? Int ?? 1,
-                       trialEnds: (r["trialEnds"] as? Double).map { Date(timeIntervalSince1970: $0 / 1000) }, canCheckout: r["canCheckout"] as? Bool ?? false)
+                       trialEnds: date(r["trialEnds"]), renewsAt: date(r["renewsAt"]),
+                       canCheckout: r["canCheckout"] as? Bool ?? false, canSubscribeOnAppStore: r["canSubscribeOnAppStore"] as? Bool ?? false)
     }
     func checkoutURL(seats: Int) async throws -> URL? { URL(string: (try await call("POST", "v1/billing/checkout", ["seats": seats]) as? [String: Any])?["url"] as? String ?? "") }
     func portalURL() async throws -> URL? { URL(string: (try await call("POST", "v1/billing/portal", [:]) as? [String: Any])?["url"] as? String ?? "") }
+
+    /// Tells the team server about a Team Starter purchase (the signed StoreKit transaction).
+    /// The server checks it against Apple's certificates and puts the team on the App Store
+    /// plan: 5 seats, renewing when the subscription does.
+    func applyAppStorePlan(_ jws: String) async throws {
+        _ = try await call("POST", "v1/billing/apple", ["transaction": jws])
+        try? await refresh()
+    }
+
+    /// Owners: when the server says the team is read-only, or the App Store plan it knows
+    /// about has lapsed, send the latest transaction again. That's how a renewal reaches the
+    /// server, and how a trial that ended picks up a purchase made on another device.
+    private func renewAppStorePlanIfNeeded() async {
+        guard isOwner, plan != "active", plan != "past_due" else { return }
+        let lapsed = readOnly || (onAppStorePlan && (renewsAt.map { $0 < Date() } ?? true))
+        guard lapsed else { return }
+        await Pro.shared.refreshTeamStarter()
+        guard Pro.shared.hasTeamStarter, let jws = Pro.shared.teamStarterJWS else { return }
+        if let known = renewsAt, let mine = Pro.shared.teamStarterExpires, mine <= known { return } // nothing newer to tell it
+        try? await applyAppStorePlan(jws)
+    }
 
     // MARK: sync
 
@@ -331,6 +367,7 @@ final class TeamSync {
         defer { busy = false }
         do {
             try await refresh()
+            await renewAppStorePlanIfNeeded()
             let key = try keyData()
             if !readOnly && !model.info.isSample {
                 let mine = try await model.engine.call("teamShare", [myName.isEmpty ? "A teammate" : myName], as: String.self)

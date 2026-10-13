@@ -26,6 +26,7 @@ async function fakeStripe(req) {
 async function start(bindings = {}, extra = {}) {
   const mf = new Miniflare({
     modules: true,
+    modulesRules: [{type: 'ESModule', include: ['**/*.js']}],
     scriptPath: new URL('worker.js', here).pathname,
     compatibilityDate: '2026-07-01',
     d1Databases: ['DB'],
@@ -278,7 +279,7 @@ test('billing returns 501 when Stripe is not set up', async () => {
   const {call} = plain;
   const owner = await newTeam(call);
   const b = await call('GET', '/v1/billing', {token: owner.token});
-  assert.deepEqual(b.data, {plan: 'trial', seats: 5, used: 1, trialEnds: b.data.trialEnds, canCheckout: false});
+  assert.deepEqual(b.data, {plan: 'trial', seats: 5, used: 1, trialEnds: b.data.trialEnds, renewsAt: null, canCheckout: false, canSubscribeOnAppStore: true});
   assert.equal((await call('POST', '/v1/billing/checkout', {token: owner.token, body: {seats: 5}})).status, 501);
   assert.equal((await call('POST', '/v1/billing/portal', {token: owner.token})).status, 501);
   const w = await call('POST', '/stripe/webhook', {raw: '{}'});
@@ -358,4 +359,201 @@ test('billing done page', async () => {
   assert.equal(r.status, 200);
   assert.match(r.data, /You're all set\./);
   assert.match(r.data, /Go back to Northfix\./);
+});
+
+// ---------- App Store starter plan ----------
+
+// A worker whose Apple verifier is a stub: it trusts the JWS payload as long as the bundle
+// and product match, and refuses a payload with `refuse` set. Real verification is covered
+// in apple.test.mjs.
+const STUB_ENTRY = `import {createWorker} from './worker.js';
+import {AppleVerifyError} from './apple.js';
+export default createWorker({verifyApple: async (jws, {bundleId, productIds, allowSandbox}) => {
+  const payload = JSON.parse(atob(jws.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+  if (payload.refuse) throw new AppleVerifyError(payload.refuse, 'stub');
+  if (payload.bundleId !== bundleId) throw new AppleVerifyError('That purchase belongs to a different app.', 'bundle');
+  if (!productIds.includes(payload.productId)) throw new AppleVerifyError("That purchase isn't a Northfix Team subscription.", 'product');
+  if (payload.environment !== 'Production' && !(allowSandbox && payload.environment === 'Sandbox')) throw new AppleVerifyError("That's a test purchase, not a real one.", 'environment');
+  return payload;
+}});`;
+async function startWithStub(bindings = {}) {
+  const read = (f) => readFile(new URL(f, here), 'utf8');
+  return start(bindings, {
+    scriptPath: undefined,
+    modulesRoot: here.pathname,
+    modules: [
+      {type: 'ESModule', path: `${here.pathname}entry.js`, contents: STUB_ENTRY},
+      {type: 'ESModule', path: `${here.pathname}worker.js`, contents: await read('worker.js')},
+      {type: 'ESModule', path: `${here.pathname}apple.js`, contents: await read('apple.js')},
+      {type: 'ESModule', path: `${here.pathname}migrate.js`, contents: await read('migrate.js')},
+    ],
+  });
+}
+const apple = await startWithStub();
+after(async () => { await apple.mf.dispose(); });
+
+// A JWS-shaped token whose payload is `claims`; the stub verifier reads only the payload.
+function fakeJWS(claims) {
+  const part = (o) => Buffer.from(JSON.stringify(o)).toString('base64url');
+  return `${part({alg: 'ES256', x5c: []})}.${part(claims)}.${Buffer.from('sig').toString('base64url')}`;
+}
+const inAYear = () => Date.now() + 365 * 86400000;
+const team5 = (extra = {}) => ({bundleId: 'com.jaynichols.networkoob', productId: 'com.jaynichols.networkoob.team5', environment: 'Production', originalTransactionId: '2000000001', transactionId: '2000000009', expiresDate: inAYear(), ...extra});
+
+test('App Store: subscribing moves a trial to team5 with 5 seats and a renewal date', async () => {
+  const {call, db} = apple;
+  const owner = await newTeam(call);
+  const inv = await invite(call, owner.token);
+  const m = (await joinWith(call, inv.code)).data;
+
+  // Owner only, and the transaction is required.
+  assert.equal((await call('POST', '/v1/billing/apple', {token: m.token, body: {transaction: fakeJWS(team5())}})).status, 403);
+  assert.equal((await call('POST', '/v1/billing/apple', {token: owner.token, body: {}})).status, 400);
+  assert.equal((await call('POST', '/v1/billing/apple', {token: owner.token, body: {transaction: 'x'.repeat(20001)}})).status, 413);
+
+  // Refused transactions leave the team alone and say why in plain English.
+  for (const [claims, re] of [
+    [team5({bundleId: 'com.example.other'}), /different app/],
+    [team5({productId: 'com.jaynichols.networkoob.pro.yearly'}), /isn't a Northfix Team subscription/],
+    [team5({environment: 'Sandbox'}), /test purchase/],
+    [team5({expiresDate: Date.now() - 1000}), /has ended/],
+    [team5({refuse: "The App Store didn't confirm that subscription."}), /didn't confirm/],
+  ]) {
+    const r = await call('POST', '/v1/billing/apple', {token: owner.token, body: {transaction: fakeJWS(claims)}});
+    assert.equal(r.status, 402, JSON.stringify(r.data));
+    assert.match(r.data.error, re);
+    assert.doesNotMatch(r.data.error, /—/);
+  }
+  assert.equal((await db.prepare('SELECT plan FROM teams WHERE id = ?').bind(owner.team.id).first()).plan, 'trial');
+
+  // A good one.
+  const expires = inAYear();
+  const ok = await call('POST', '/v1/billing/apple', {token: owner.token, body: {transaction: fakeJWS(team5({expiresDate: expires}))}});
+  assert.equal(ok.status, 200, JSON.stringify(ok.data));
+  assert.deepEqual(ok.data, {plan: 'team5', seats: 5, renewsAt: expires});
+  const row = await db.prepare('SELECT * FROM teams WHERE id = ?').bind(owner.team.id).first();
+  assert.equal(row.plan, 'team5');
+  assert.equal(row.seats, 5);
+  assert.equal(row.apple_transaction_id, '2000000001');
+  assert.equal(row.apple_expires, expires);
+  const view = await call('GET', '/v1/team', {token: m.token});
+  assert.equal(view.data.team.plan, 'team5');
+  assert.equal(view.data.team.renewsAt, expires);
+  assert.equal(view.data.team.readOnly, false);
+  const b = await call('GET', '/v1/billing', {token: owner.token});
+  assert.equal(b.data.renewsAt, expires);
+  assert.equal(b.data.canSubscribeOnAppStore, true);
+  assert.ok((await call('GET', '/v1/audit', {token: owner.token})).data.some((e) => e.kind === 'billing' && e.target === `team5:${expires}`));
+
+  // The same subscription can't pay for a second team.
+  const second = await newTeam(call);
+  const dup = await call('POST', '/v1/billing/apple', {token: second.token, body: {transaction: fakeJWS(team5())}});
+  assert.equal(dup.status, 409);
+  assert.match(dup.data.error, /already pays for another team/);
+
+  // Renewal: the app sends the latest transaction again and the date moves forward.
+  const later = expires + 365 * 86400000;
+  assert.equal((await call('POST', '/v1/billing/apple', {token: owner.token, body: {transaction: fakeJWS(team5({transactionId: '2000000010', expiresDate: later}))}})).status, 200);
+  assert.equal((await db.prepare('SELECT apple_expires FROM teams WHERE id = ?').bind(owner.team.id).first()).apple_expires, later);
+});
+
+test('App Store: a lapsed team5 plan is read-only until the renewal arrives', async () => {
+  const {call, db} = apple;
+  const owner = await newTeam(call);
+  const mine = {originalTransactionId: '2000000500'};
+  assert.equal((await call('POST', '/v1/billing/apple', {token: owner.token, body: {transaction: fakeJWS(team5(mine))}})).status, 200);
+  await db.prepare('UPDATE teams SET apple_expires = ? WHERE id = ?').bind(Date.now() - 1000, owner.team.id).run();
+  const view = await call('GET', '/v1/team', {token: owner.token});
+  assert.equal(view.data.team.readOnly, true);
+  assert.equal((await call('PUT', '/v1/share', {token: owner.token, body: {body: blob()}})).status, 402);
+  assert.equal((await call('POST', '/v1/invites', {token: owner.token, body: {}})).status, 402);
+  // The renewed transaction brings it back.
+  assert.equal((await call('POST', '/v1/billing/apple', {token: owner.token, body: {transaction: fakeJWS(team5({...mine, expiresDate: inAYear()}))}})).status, 200);
+  assert.equal((await call('GET', '/v1/team', {token: owner.token})).data.team.readOnly, false);
+  assert.equal((await call('PUT', '/v1/share', {token: owner.token, body: {body: blob()}})).status, 200);
+});
+
+test('App Store: seat limit, teams on Stripe, and sandbox when allowed', async () => {
+  const {call, db} = apple;
+  // Six people already: the starter plan doesn't fit.
+  const owner = await newTeam(call);
+  await db.prepare('UPDATE teams SET seats = 10 WHERE id = ?').bind(owner.team.id).run();
+  const inv = await invite(call, owner.token);
+  for (let i = 0; i < 5; i++) assert.equal((await joinWith(call, inv.code)).status, 200);
+  const big = await call('POST', '/v1/billing/apple', {token: owner.token, body: {transaction: fakeJWS(team5({originalTransactionId: '3'}))}});
+  assert.equal(big.status, 409);
+  assert.match(big.data.error, /covers up to 5/);
+  assert.equal((await db.prepare('SELECT seats FROM teams WHERE id = ?').bind(owner.team.id).first()).seats, 10);
+
+  // A team billed through Stripe manages billing there.
+  const stripeTeam = await newTeam(call);
+  await db.prepare("UPDATE teams SET plan = 'active', seats = 12 WHERE id = ?").bind(stripeTeam.team.id).run();
+  const web = await call('POST', '/v1/billing/apple', {token: stripeTeam.token, body: {transaction: fakeJWS(team5({originalTransactionId: '4'}))}});
+  assert.equal(web.status, 409);
+  assert.match(web.data.error, /billed on the web/);
+  assert.equal((await call('GET', '/v1/billing', {token: stripeTeam.token})).data.canSubscribeOnAppStore, false);
+
+  // Sandbox purchases are refused unless APPLE_ALLOW_SANDBOX is set.
+  const sandbox = await startWithStub({APPLE_ALLOW_SANDBOX: 'true'});
+  try {
+    const t = await newTeam(sandbox.call);
+    assert.equal((await sandbox.call('POST', '/v1/billing/apple', {token: t.token, body: {transaction: fakeJWS(team5({environment: 'Sandbox'}))}})).status, 200);
+  } finally { await sandbox.mf.dispose(); }
+});
+
+// The teams table before the App Store plan existed. A worker instance brings it forward
+// before its first request, keeping every row.
+const OLD_TEAMS_TABLE = `CREATE TABLE IF NOT EXISTS teams (
+  id TEXT PRIMARY KEY,
+  name_enc TEXT NOT NULL,
+  created INTEGER NOT NULL,
+  plan TEXT NOT NULL DEFAULT 'trial' CHECK (plan IN ('trial', 'active', 'past_due', 'canceled')),
+  seats INTEGER NOT NULL DEFAULT 5,
+  trial_ends INTEGER NOT NULL,
+  stripe_customer TEXT,
+  stripe_sub TEXT
+)`;
+
+test('App Store: an older database is migrated on the first request', async () => {
+  const mf = new Miniflare({
+    modules: true, modulesRules: [{type: 'ESModule', include: ['**/*.js']}], scriptPath: new URL('worker.js', here).pathname,
+    compatibilityDate: '2026-07-01', d1Databases: ['DB'],
+  });
+  try {
+    const db = await mf.getD1Database('DB');
+    // The old schema: the old teams table, then everything else from schema.sql.
+    await db.prepare(OLD_TEAMS_TABLE).run();
+    const rest = schema.replace(/--.*$/gm, '').split(';').map((s) => s.trim()).filter((s) => s && !/^CREATE TABLE IF NOT EXISTS teams\b/.test(s));
+    for (const s of rest) await db.prepare(s).run();
+    await db.prepare("INSERT INTO teams (id, name_enc, created, plan, seats, trial_ends, stripe_customer, stripe_sub) VALUES ('t1', 'enc', 1, 'active', 12, 2, 'cus_1', 'sub_1')").run();
+    const before = await db.prepare("SELECT sql FROM sqlite_master WHERE name = 'teams'").first();
+    assert.doesNotMatch(before.sql, /team5/);
+
+    const res = await mf.dispatchFetch('http://team.test/health');
+    assert.equal(res.status, 200);
+
+    const after = await db.prepare("SELECT sql FROM sqlite_master WHERE name = 'teams'").first();
+    assert.match(after.sql, /'team5'/);
+    assert.match(after.sql, /apple_transaction_id TEXT/);
+    assert.match(after.sql, /apple_expires INTEGER/);
+    const row = await db.prepare('SELECT * FROM teams WHERE id = ?').bind('t1').first();
+    assert.deepEqual(row, {id: 't1', name_enc: 'enc', created: 1, plan: 'active', seats: 12, trial_ends: 2, stripe_customer: 'cus_1', stripe_sub: 'sub_1', apple_transaction_id: null, apple_expires: null});
+    await db.prepare("UPDATE teams SET plan = 'team5' WHERE id = 't1'").run(); // the widened CHECK allows it
+    const {results: indexes} = await db.prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'teams'").all();
+    const names = indexes.map((i) => i.name);
+    assert.ok(names.includes('teams_stripe_sub') && names.includes('teams_apple_transaction'), names.join(','));
+    // Running again changes nothing.
+    assert.equal((await mf.dispatchFetch('http://team.test/health')).status, 200);
+    assert.equal((await db.prepare("SELECT sql FROM sqlite_master WHERE name = 'teams'").first()).sql, after.sql);
+  } finally { await mf.dispose(); }
+});
+
+test('migrate.js describes the same teams table as schema.sql', async () => {
+  const {TEAMS_TABLE} = await import('../migrate.js');
+  const normalize = (s) => s.replace(/\s+/g, ' ').trim();
+  const fromSchema = schema.replace(/--.*$/gm, '').split(';').map(normalize).find((s) => s.startsWith('CREATE TABLE IF NOT EXISTS teams'));
+  assert.equal(normalize(TEAMS_TABLE), fromSchema);
+  // On a fresh database, the worker still adds the App Store index on its first request.
+  const idx = await plain.db.prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND name = 'teams_apple_transaction'").first();
+  assert.ok(idx);
 });
