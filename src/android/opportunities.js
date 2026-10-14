@@ -168,7 +168,8 @@ registerRoute('opportunities', () => {
     mount(body){ this.update(body); refreshOpportunities().then(ch => { if (ch && body.isConnected) this.update(body); }); },
     update(body){
       if (!available()){
-        body.innerHTML = empty('building', 'Add your SAM.gov key', 'Northfix can show new SAM.gov notices at the agencies where you know people. It uses your own free SAM.gov key.', '<button type="button" class="btn prominent" data-a="settings">Open SAM.gov settings</button>');
+        body.innerHTML = empty('building', 'Add your SAM.gov key', 'Northfix can show new SAM.gov notices at the agencies where you know people. It uses your own free SAM.gov key.', '<button type="button" class="btn prominent" data-a="settings">Open SAM.gov settings</button>')
+          + `<div class="card list top12"><button type="button" class="row act" data-a="recompetes">${icon('calClock')}<span>Recompetes and teaming partners</span>${icon('chevR', 'chev')}</button></div><p class="foot">No key needed. Contract data from USASpending.gov. Only the agency name is sent.</p>`;
         return;
       }
       const m = match();
@@ -183,12 +184,15 @@ registerRoute('opportunities', () => {
         ${kinds.length > 1 ? `<div class="tchips opp-kinds">${[['all', 'All types']].concat(kinds).map(([c, l]) => `<button type="button" class="tchip ${view.kind === c ? 'on' : ''}" data-a="kind" data-v="${c}">${esc(l)}${c !== 'all' ? ` <span class="mono">· ${fmt(m.types[c])}</span>` : ''}</button>`).join('')}</div>` : ''}
         ${rows.length ? `<div class="card list">${rows.map(o => oppRow(o)).join('')}</div>` : `<p class="foot">${m.total ? 'Nothing at agencies you know with these filters.' : 'No notices yet. Use Check now.'}</p>`}
         <p class="foot">${isSample() ? 'These are sample notices with made-up numbers, matched to the sample network. Add your own SAM.gov key in Settings to see real ones.' : `Northfix checks SAM.gov at most every 6 hours, straight from this phone, and matches notices to the people you know here. Nothing goes to a Northfix server.${last}`}</p>
-        <div class="btn-row left">${isSample() ? '' : `<button type="button" class="btn small" data-a="check">${icon('refresh')}Check now</button>`}<button type="button" class="btn small" data-a="settings">${icon('gear')}SAM.gov settings</button></div>`;
+        <div class="btn-row left">${isSample() ? '' : `<button type="button" class="btn small" data-a="check">${icon('refresh')}Check now</button>`}<button type="button" class="btn small" data-a="settings">${icon('gear')}SAM.gov settings</button></div>
+        <div class="card list top12"><button type="button" class="row act" data-a="recompetes">${icon('calClock')}<span>Recompetes and teaming partners</span>${icon('chevR', 'chev')}</button></div>
+        <p class="foot">Contracts ending soon at the agencies you work, and who holds them. Contract data from USASpending.gov. Only the agency name is sent.</p>`;
     },
     handlers: {
       opp: id => { fx.tap(); push('opportunity', id); },
       kind(v, t){ fx.select(); view.kind = v; view.update(t.closest('.page-body')); },
       settings: () => openSamSettings(),
+      recompetes: () => { fx.tap(); push('recompetes'); },
       async check(_, t){ const body = t.closest('.page-body'); t.disabled = true; await refreshOpportunities(true); view.update(body); },
     },
   };

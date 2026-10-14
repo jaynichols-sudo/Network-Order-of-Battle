@@ -116,6 +116,7 @@ function personView(k, part){
     menu: () => [
       {label: 'Add meeting notes', icon: 'notePlus', run: () => open('notes', k)},
       {label: 'Write a message', icon: 'pencil', run: () => open('message', k)},
+      {label: 'Call plan', icon: 'checklist', run: () => open('callPlan', k)},
       {label: 'In this role since…', icon: 'calClock', run: () => open('roleSince', k)},
       ...(part === 'main' ? [{label: 'Details, location and notes', icon: 'text', run: () => push('personDetails', k)}] : []),
     ],
@@ -152,7 +153,7 @@ function personView(k, part){
           ${ed.due ? `<div class="due-line"><span>${ed.due <= Day.today() ? '<b class="violet">Follow up now.</b> ' : ''}You planned to follow up on ${esc(Day.nice(ed.due))}.</span><button type="button" class="pill-btn soft" data-a="dueDone">Done</button></div>` : ''}</section>`;
       if (part === 'main'){
         body.innerHTML = `<div class="prof">${header}${memoryCard(k)}${brief}${timeline(p)}
-          <section class="card list"><button type="button" class="row act more-row" data-a="details">${icon('text')}<span>Details, location and notes</span>${icon('chevR', 'chev')}</button></section>
+          <section class="card list"><button type="button" class="row act more-row" data-a="callPlan">${icon('checklist')}<span>Call plan</span>${icon('chevR', 'chev')}</button><button type="button" class="row act more-row" data-a="details">${icon('text')}<span>Details, location and notes</span>${icon('chevR', 'chev')}</button></section>
           ${isSample() ? '<p class="foot">Sample data: changes aren’t saved.</p>' : ''}</div>`;
         body.scrollTop = st0;
         return;
@@ -216,6 +217,7 @@ function personView(k, part){
       ...enrichHandlers(k),
       unit: v => openUnit(v),
       details: () => push('personDetails', k),
+      callPlan: () => { fx.tap(); open('callPlan', k); },
       roleSince: () => open('roleSince', k),
       ways: v => open('intro', v),
       message: () => open('message', k),

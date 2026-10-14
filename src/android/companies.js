@@ -53,6 +53,12 @@ function industries(){
 /* ---------- the federal map ---------- */
 const FOCUS = [['all', 'Everything'], ['energy', 'Energy'], ['water', 'Water'], ['defense', 'Defense'], ['cyber', 'Cyber'], ['transport', 'Transportation'], ['infrastructure', 'Infrastructure'], ['intel', 'Intelligence']];
 let fedMap = null;
+/** "Oct 2026", from the engine's "2026-10". */
+function fedAsOf(){
+  let v = ''; try { v = M.api.federalAsOf() || ''; } catch { return ''; }
+  const m = /^(\d{4})-(\d{2})/.exec(v); if (!m) return '';
+  return new Date(+m[1], +m[2] - 1, 1).toLocaleDateString('en-US', {month: 'short', year: 'numeric'});
+}
 function federal(){
   const hasTeam = M.api.teamList().length > 0, withTeam = hasTeam && fedTeam;
   const m = fedMap = M.api.agencyCoverage(withTeam);
@@ -77,6 +83,7 @@ function federal(){
       ${withTeam ? `<p class="small muted">You alone: ${alone}</p>` : ''}
       <div class="stack-bar" style="display:flex;height:10px;border-radius:5px;overflow:hidden;background:var(--hairline);margin:10px 0"><i style="width:${pct(t.covered)}%;background:var(--good)"></i><i style="width:${pct(t.thin)}%;background:var(--amber)"></i></div>
       <p class="small muted"><i class="dot" style="background:var(--good)"></i> ${t.covered} covered &nbsp; <i class="dot" style="background:var(--amber)"></i> ${t.thin} thin &nbsp; <i class="dot" style="background:var(--text3)"></i> ${t.none} not connected</p></div>
+    ${fedAsOf() ? `<p class="foot fed-asof">${esc(`Federal map updated ${fedAsOf()}`)}</p>` : ''}
     ${hasTeam ? `<div class="card list fed-team-toggle"><label class="toggle-row"><span>Include my team</span><input type="checkbox" class="switch" data-ch="fedTeam" ${withTeam ? 'checked' : ''}></label></div>` : ''}
     ${segmented('fedFilter', [['gaps', 'Gaps'], ['none', 'Not connected'], ['thin', 'Thin'], ['covered', 'Covered'], ['all', 'All']], fedFilter)}
     <div class="row-between" style="margin:8px 4px"><button type="button" class="link" data-a="fedFocus">${esc((FOCUS.find(f => f[0] === fedFocus) || FOCUS[0])[1])}</button><button type="button" class="link" data-a="fedDept">${esc(fedDept || 'All departments')}</button></div>
