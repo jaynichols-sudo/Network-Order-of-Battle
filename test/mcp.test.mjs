@@ -7,6 +7,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
+import http from 'node:http';
 import { sampleNetwork } from '../src/core.js';
 
 const SERVER = path.resolve('mcp/server.mjs');
@@ -74,12 +75,13 @@ test('initialize, tools/list and ping follow MCP', async () => {
     assert.deepEqual((await s.request('ping')).result, {});
     const list = (await s.request('tools/list')).result.tools;
     const names = list.map(t => t.name).sort();
-    assert.deepEqual(names, ['agency_coverage', 'network_summary', 'person', 'pursuit', 'pursuits', 'search_people', 'waiting_on_me', 'ways_in', 'weekly_five', 'who_changed_jobs']);
+    assert.deepEqual(names, ['agency_coverage', 'call_plan', 'cold_seats', 'log_note', 'network_summary', 'person', 'pipeline', 'pursuit', 'pursuits', 'recompetes', 'search_people',
+      'teaming_partners', 'waiting_on_me', 'ways_in', 'weekly_five', 'who_changed_jobs']);
     for (const t of list){
       assert.match(t.name, /^[a-z_]+$/);
       assert.ok(t.description.length > 40, t.name);
       assert.equal(t.inputSchema.type, 'object');
-      assert.equal(t.annotations.readOnlyHint, true);
+      assert.equal(t.annotations.readOnlyHint, t.name !== 'log_note', t.name);
     }
     const bad = await s.request('no/such/method');
     assert.equal(bad.error.code, -32601);
@@ -193,4 +195,71 @@ test('the server never writes to the network folder', async () => {
     await s.tool('network_summary');
   } finally { s.stop(); }
   assert.deepEqual(fs.readdirSync(dir).sort().map(f => [f, fs.statSync(path.join(dir, f)).mtimeMs]), before);
+});
+
+test('capture tools: pipeline, cold seats, call plan, recompetes and teaming partners', async () => {
+  const dir = path.join(root, 'capture'); writeSample(dir, {pro: true});
+  const net = JSON.parse(fs.readFileSync(path.join(dir, 'network.json'), 'utf8'));
+  const leidos = net.rows.find(r => /Leidos/.test(r.c || ''));
+  const end = new Date(Date.now() + 200 * 864e5).toISOString().slice(0, 10);
+  // a stand-in for USASpending.gov that records what it was sent
+  const bodies = [];
+  const srv = http.createServer((req, res) => {
+    let b = ''; req.on('data', c => { b += c; }); req.on('end', () => {
+      bodies.push(JSON.parse(b));
+      res.setHeader('Content-Type', 'application/json');
+      res.end(JSON.stringify({page_metadata: {hasNext: false}, results: [{'Award ID': 'HC102824C0001', 'Recipient Name': 'LEIDOS, INC.', 'End Date': end, 'Award Amount': 25000000,
+        'Awarding Sub Agency': 'Defense Information Systems Agency', 'Awarding Office': 'IT CONTRACTING DIVISION', Description: 'ENTERPRISE SERVICES', generated_internal_id: 'CONT_AWD_HC102824C0001'}]}));
+    });
+  });
+  await new Promise(r => srv.listen(0, '127.0.0.1', r));
+  const s = start({NORTHFIX_DATA: dir, NORTHFIX_STATE: path.join(root, 'state-capture'), NORTHFIX_USASPENDING_URL: `http://127.0.0.1:${srv.address().port}/`});
+  try {
+    await s.request('initialize', {protocolVersion: '2025-06-18', capabilities: {}, clientInfo: {name: 'test', version: '1'}});
+    const pl = await s.tool('pipeline');
+    assert.match(text(pl), /Open pipeline: 1 pursuit, \$2M/);
+    assert.equal(pl.structuredContent.open.value, 2000000);
+    const cs = await s.tool('cold_seats');
+    assert.equal(cs.structuredContent.ok, true);
+    const disa = net.rows.find(r => /Defense Information Systems Agency/.test(r.c || ''));
+    const cp = await s.tool('call_plan', {name_or_key: disa.k, pursuit: 'zero trust'});
+    assert.equal(cp.structuredContent.seat, 'Program manager');
+    assert.match(text(cp), /Goal: /);
+    const rc = await s.tool('recompetes', {agencies: ['DISA'], months: 12});
+    assert.equal(rc.structuredContent.count, 1, text(rc));
+    assert.equal(rc.structuredContent.recompetes[0].incumbent, 'Leidos, Inc.');
+    assert.match(text(rc), /USASpending/);
+    assert.deepEqual(bodies[0].filters.agencies, [{type: 'awarding', tier: 'subtier', name: 'Defense Information Systems Agency'}]);
+    assert.ok(!JSON.stringify(bodies).includes(disa.l), 'nothing personal is sent');
+    const tp = await s.tool('teaming_partners', {agency: 'DISA'});
+    assert.equal(tp.structuredContent.partners[0].company, 'Leidos, Inc.');
+    if (leidos) assert.ok(tp.structuredContent.partners[0].known >= 1);
+  } finally { s.stop(); srv.close(); }
+});
+
+test('log_note leaves notes in ai-inbox.json and changes nothing else', async () => {
+  const dir = path.join(root, 'inbox'); writeSample(dir, {pro: true});
+  const before = fs.readdirSync(dir).sort().map(f => [f, fs.statSync(path.join(dir, f)).mtimeMs]);
+  const s = start({NORTHFIX_DATA: dir, NORTHFIX_STATE: path.join(root, 'state-inbox')});
+  let k;
+  try {
+    await s.request('initialize', {protocolVersion: '2025-06-18', capabilities: {}, clientInfo: {name: 'test', version: '1'}});
+    k = (await s.tool('search_people', {query: 'DISA', limit: 1})).structuredContent.people[0].key;
+    const r = await s.tool('log_note', {name_or_key: k, note: 'Talked about the zero trust gateway. Send the brief.'});
+    assert.equal(r.structuredContent.saved, true);
+    await s.tool('log_note', {name_or_key: k, note: 'Second note.'});
+    const none = await s.tool('log_note', {name_or_key: 'Nobody Atall', note: 'x'});
+    assert.equal(none.structuredContent.saved, false);
+  } finally { s.stop(); }
+  const inbox = JSON.parse(fs.readFileSync(path.join(dir, 'ai-inbox.json'), 'utf8'));
+  assert.equal(inbox.notes.length, 2);
+  assert.equal(inbox.notes[0].k, k);
+  assert.deepEqual(fs.readdirSync(dir).filter(f => f !== 'ai-inbox.json').sort().map(f => [f, fs.statSync(path.join(dir, f)).mtimeMs]), before);
+  // the app files them with the engine
+  new Function(fs.readFileSync('apple/Bearings/Resources/engine.js', 'utf8'))();
+  const call = (name, ...args) => JSON.parse(globalThis.Bearings.call(name, JSON.stringify(args))).ok;
+  const texts = {}; for (const f of ['network', 'edits', 'targets', 'pursuits']) texts[f] = fs.readFileSync(path.join(dir, f + '.json'), 'utf8');
+  call('loadFiles', texts, null);
+  assert.equal(call('applyInbox', JSON.stringify(inbox)).filed, 2);
+  assert.match(call('person', k).ed.note, /\(Claude\): Talked about the zero trust gateway/);
 });

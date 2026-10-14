@@ -1,8 +1,10 @@
 #!/usr/bin/env node
 // Northfix for AI tools: a local MCP server that answers questions about your own
 // network, on your own Mac. It reads the files the Northfix app saves in your iCloud
-// Drive (read-only) and runs the same engine the apps use. Nothing is sent anywhere:
-// the only way out is the stdio pipe to the AI app that started it.
+// Drive and runs the same engine the apps use. Nothing about your network is sent anywhere:
+// the only way out is the stdio pipe to the AI app that started it. Recompetes and teaming
+// partners ask USASpending.gov for public contract data, sending only agency names. The one
+// write is ai-inbox.json, where log_note leaves notes for the app to file.
 //
 // Zero dependencies. MCP over stdio: JSON-RPC 2.0, one message per line.
 import fs from 'node:fs';
@@ -10,11 +12,14 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-export const VERSION = '1.0.0';
+export const VERSION = '1.1.0';
 const PROTOCOLS = ['2025-06-18', '2025-03-26', '2024-11-05'];
 const FREE_DAILY = 3;
 const FREE_TOOLS = new Set(['network_summary']);
 const FILES = ['network', 'edits', 'review', 'targets', 'industries', 'team', 'prospects', 'pursuits', 'history', 'social'];
+// Notes logged from an AI app wait here until Northfix opens and files them. It's the only file
+// this tool writes in the network folder; the app deletes it once the notes are filed.
+const INBOX = 'ai-inbox.json';
 
 /* ---------- the engine ---------- */
 // The build inlines the engine as text (__NORTHFIX_ENGINE__). From the repo, it's the
@@ -115,7 +120,7 @@ function isPro(){
     return true;
   } catch { return false; }
 }
-// The count of free questions lives on this Mac, outside your network folder (which stays read-only).
+// The count of free questions lives on this Mac, outside your network folder.
 function stateFile(){
   const custom = process.env.NORTHFIX_STATE;
   const dir = usable(custom) ? expand(custom) : process.platform === 'darwin'
@@ -152,6 +157,9 @@ const lower = s => s ? s[0].toLowerCase() + s.slice(1) : '';
 /* ---------- tools ---------- */
 const str = (description, extra) => Object.assign({type: 'string', description}, extra || {});
 const RO = {readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false};
+// Recompetes and teaming partners ask USASpending.gov (public data, agency names only). Logging a
+// note is the one write, and it only adds a file the app picks up (see INBOX below).
+const ANNOTATIONS = {recompetes: {openWorldHint: true}, teaming_partners: {openWorldHint: true}, log_note: {readOnlyHint: false, idempotentHint: false}};
 export const TOOLS = [
   {name: 'search_people', title: 'Search your network',
     description: 'Find people in the user’s own LinkedIn network with a plain-English question or keywords, for example “colonels at Fort Liberty”, “who do I know at Duke Energy”, “contracting officers at NAVFAC”, “who used to be at Leidos”. Returns up to 25 matching people with title, company and how close the user is to each.',
@@ -178,12 +186,31 @@ export const TOOLS = [
     description: 'The user’s pursuits (bids and deals they track in Northfix): stage, due date, value, and how many decision-maker seats they know someone in.',
     inputSchema: {type: 'object', properties: {}}},
   {name: 'pursuit', title: 'One pursuit',
-    description: 'One pursuit in detail: each decision-maker seat (executive sponsor, program manager, contracting officer, mission owner, security lead, technical lead), who fills it, suggestions for empty seats, and the warmest ways in.',
+    description: 'One pursuit in detail: each decision-maker seat (executive sponsor, program manager, contracting officer, mission owner, security lead, technical lead) and industry seat (incumbent, teaming partner), who fills it, who owns it on the team, which seats are going cold, suggestions for empty seats, the win chance and the warmest ways in.',
     inputSchema: {type: 'object', properties: {name: str('The pursuit’s name, or part of it.')}, required: ['name']}},
+  {name: 'pipeline', title: 'Pipeline',
+    description: 'The user’s pursuits as a pipeline: open value and value weighted by win chance, by stage, what is due this quarter, and won and lost history with the win rate. Optionally includes teammates’ shared pursuits.',
+    inputSchema: {type: 'object', properties: {include_team: {type: 'boolean', description: 'Include pursuits shared by teammates on a Northfix Team (default false).'}}}},
+  {name: 'cold_seats', title: 'Cold seats',
+    description: 'Decision-maker seats on open pursuits due soon where the user has not been in touch with the person in the seat for 60 days or more.',
+    inputSchema: {type: 'object', properties: {}}},
+  {name: 'call_plan', title: 'Call plan',
+    description: 'Facts for a short plan before talking to someone: their role, closeness, last contact, notes, recent changes, and their seat on a pursuit, plus a simple plan (goal, opener, questions, next step). Use the facts to write a better plan if asked.',
+    inputSchema: {type: 'object', properties: {name_or_key: str('A person’s name, or the key from another tool’s result.'), pursuit: str('Optional: the pursuit this call is about.')}, required: ['name_or_key']}},
+  {name: 'recompetes', title: 'Recompetes',
+    description: 'Federal contracts ending soon at the agencies the user works (their watchlist and pursuits, or the agencies named), from USASpending.gov public data: the incumbent, value, end date, and who the user knows at the agency and at the incumbent. Only agency names are sent to USASpending.gov.',
+    inputSchema: {type: 'object', properties: {agencies: {type: 'array', items: {type: 'string'}, description: 'Optional: agencies or commands to look at, for example ["DISA", "NAVFAC"]. Defaults to the watchlist and open pursuits.'},
+      months: {type: 'integer', minimum: 3, maximum: 36, description: 'How far ahead to look, in months (default 24).'}}}},
+  {name: 'teaming_partners', title: 'Teaming partners',
+    description: 'Companies that win contracts at an agency, from USASpending.gov public data, biggest first, with who the user and their team know at each. Only the agency name is sent to USASpending.gov.',
+    inputSchema: {type: 'object', properties: {agency: str('An agency or command, for example “DISA”.')}, required: ['agency']}},
+  {name: 'log_note', title: 'Log a note',
+    description: 'Adds a dated note to one person in the user’s Northfix network, for example after a call. Northfix files it the next time the app opens on this Mac. Only use when the user asks to save a note.',
+    inputSchema: {type: 'object', properties: {name_or_key: str('A person’s name, or the key from another tool’s result.'), note: str('The note, in plain words. Up to 480 characters.')}, required: ['name_or_key', 'note']}},
   {name: 'network_summary', title: 'Network summary',
     description: 'A short overview of the user’s network: how many people, companies and industries, who’s senior, how many are waiting on a reply or changed jobs, and the watchlist. Always free.',
     inputSchema: {type: 'object', properties: {}}},
-].map(t => Object.assign(t, {annotations: Object.assign({title: t.title}, RO)}));
+].map(t => Object.assign(t, {annotations: Object.assign({title: t.title}, RO, ANNOTATIONS[t.name] || {})}));
 
 function findPerson(q){
   const s = String(q || '').trim();
@@ -197,6 +224,22 @@ function findPerson(q){
   if (pool.length === 1) return {k: pool[0].k};
   if (pool.length) return {choices: pool.slice(0, 10).map(p => brief(p.k))};
   return {choices: []};
+}
+
+/** Runs the engine's USASpending searches from this Mac. Only agency names leave it. */
+async function fetchAwards(names, months){
+  const reqs = call('awardRequests', names, months);
+  const ok = [], errors = [];
+  await Promise.all(reqs.map(async r => {
+    try {
+      // NORTHFIX_USASPENDING_URL points tests at a local stand-in
+      const url = usable(process.env.NORTHFIX_USASPENDING_URL) ? process.env.NORTHFIX_USASPENDING_URL : r.url;
+      const res = await fetch(url, {method: 'POST', headers: {'Content-Type': 'application/json', Accept: 'application/json'}, body: JSON.stringify(r.body), signal: AbortSignal.timeout(20000)});
+      const page = call('awardPage', await res.text());
+      if (page.error) errors.push(page.error); else ok.push({agencyId: r.agencyId, items: page.items});
+    } catch { errors.push('USASpending.gov didn’t answer. Check the internet connection and try again.'); }
+  }));
+  return {ok, errors: [...new Set(errors)], asked: reqs.map(r => r.short)};
 }
 
 const handlers = {
@@ -313,15 +356,91 @@ const handlers = {
     if (!list.length) return {text: ps.length ? `No pursuit called “${name}”. Your pursuits: ${ps.map(p => p.name).join(', ')}.` : 'No pursuits yet. Add one in Northfix (Pursuits).', data: {found: false, pursuits: ps.map(p => p.name)}};
     if (list.length > 1) return {text: `Several pursuits match: ${list.map(p => p.name).join(', ')}. Which one?`, data: {found: false, pursuits: list.map(p => p.name)}};
     const p = call('pursuit', list[0].id);
-    const seats = p.roleList.map(r => ({role: r.role, people: r.people.map(x => brief(x.k)).filter(Boolean), suggestions: r.suggest.map(x => brief(x.k)).filter(Boolean)}));
+    const seats = p.roleList.map(r => ({role: r.role, side: r.side, people: r.people.map(x => brief(x.k)).filter(Boolean), suggestions: r.suggest.map(x => brief(x.k)).filter(Boolean),
+      companies: r.companies || [], owner: r.owner || '', cold: !!r.cold}));
     const best = (p.best || []).map(b => brief(b.k, b.why)).filter(Boolean);
-    const data = {name: p.name, agency: p.agency, stage: p.stage, due: p.due, daysLeft: p.days, value: p.value, note: p.note || '', knownAtAgency: p.known, seats, bestWaysIn: best};
+    const data = {name: p.name, agency: p.agency, stage: p.stage, due: p.due, daysLeft: p.days, value: p.value, winChance: p.pwin, incumbent: p.incumbent || '', partners: p.partners || [],
+      note: p.note || '', knownAtAgency: p.known, seats, bestWaysIn: best};
     const t = [`${p.name}${p.agency ? ` at ${p.agency}` : ''}: ${p.stage}${p.due ? `, due ${nice(p.due)}${p.days != null ? ` (${p.days >= 0 ? p.days + ' days left' : -p.days + ' days ago'})` : ''}` : ''}${p.value ? `, ${p.value}` : ''}.`,
       `Seats filled: ${p.filled} of ${p.roles}. You know ${n(p.known)} ${p.known === 1 ? 'person' : 'people'} at ${p.agency || 'the agency'}.`];
-    for (const s of seats) t.push(`- ${s.role}: ${s.people.length ? s.people.map(b => b.name + (b.title ? ` (${b.title})` : '')).join(', ') : s.suggestions.length ? `empty. Could be ${s.suggestions.map(b => b.name + (b.title ? ` (${b.title})` : '')).join(', ')}` : 'empty'}`);
+    t.push(`Win chance: ${p.pwin}%.${data.incumbent ? ` Incumbent: ${data.incumbent}.` : ''}${data.partners.length ? ` Teaming partners: ${data.partners.join(', ')}.` : ''}`);
+    for (const s of seats) t.push(`- ${s.role}: ${s.people.length ? s.people.map(b => b.name + (b.title ? ` (${b.title})` : '')).join(', ') + (s.cold ? ' (going cold)' : '') : s.suggestions.length ? `empty. Could be ${s.suggestions.map(b => b.name + (b.title ? ` (${b.title})` : '')).join(', ')}` : 'empty'}${s.owner ? `. Owner: ${s.owner}` : ''}`);
     if (best.length) t.push('Warmest ways in:', ...best.map(line));
     if (data.note) t.push(`Your note: ${data.note}`);
     return {text: t.join('\n'), data};
+  },
+  pipeline({include_team}){
+    const pl = call('pipeline', !!include_team);
+    const data = {open: pl.open, won: pl.won, lost: pl.lost, winRate: pl.winRate, dueThisQuarter: pl.dueThisQuarter,
+      stages: pl.stages.map(x => ({stage: x.stage, count: x.count, value: x.value, weighted: x.weighted})), unpriced: pl.unpriced, includesTeam: pl.withTeam,
+      pursuits: pl.rows.map(r => ({name: r.name, owner: r.owner, agency: r.agency, stage: r.stage, due: r.due, value: r.value, winChance: r.pwin, weighted: r.weighted}))};
+    if (!pl.rows.length) return {text: 'No pursuits yet. Add one in Northfix (Pursuits) to build a pipeline.', data};
+    const t = [`Open pipeline: ${pl.open.count} ${pl.open.count === 1 ? 'pursuit' : 'pursuits'}, ${pl.open.valueText} (${pl.open.weightedText} weighted by win chance).`,
+      ...pl.stages.filter(x => x.count && x.stage !== 'Won' && x.stage !== 'Lost').map(x => `- ${x.stage}: ${x.count}, ${x.valueText} (${x.weightedText} weighted)`),
+      `Due in the next 90 days: ${pl.dueThisQuarter.count}, ${pl.dueThisQuarter.weightedText} weighted.`,
+      `Won ${pl.won.count} (${pl.won.valueText}), lost ${pl.lost.count} (${pl.lost.valueText})${pl.winRate != null ? `. Win rate ${pl.winRate}%` : ''}.`];
+    if (pl.unpriced) t.push(`${pl.unpriced} ${pl.unpriced === 1 ? 'pursuit has' : 'pursuits have'} no value set, so ${pl.unpriced === 1 ? 'it isn’t' : 'they aren’t'} counted.`);
+    return {text: t.join('\n'), data};
+  },
+  cold_seats(){
+    const cs = call('coldSeats');
+    const data = {count: cs.length, seats: cs.map(c => Object.assign(brief(c.k) || {name: c.name}, {pursuit: c.pursuit, seat: c.role, dueInDays: c.daysLeft, daysSinceContact: c.days}))};
+    if (!cs.length) return {text: 'No cold seats. Everyone seated on an open pursuit due soon has heard from the user in the last 60 days.', data};
+    return {text: [`${cs.length} ${cs.length === 1 ? 'seat is' : 'seats are'} going cold:`, ...cs.map(c => `- ${c.name}, ${c.role.toLowerCase()} on ${c.pursuit}${c.daysLeft != null ? ` (due in ${c.daysLeft} days)` : ''}: ${c.days == null ? 'never in touch' : 'last in touch ' + c.days + ' days ago'}`)].join('\n'), data};
+  },
+  call_plan({name_or_key, pursuit}){
+    const f = findPerson(name_or_key);
+    if (!f.k){
+      if (!f.choices.length) return {text: `No one called “${name_or_key}” in your network.`, data: {found: false, choices: []}};
+      return {text: listText(`Several people match “${name_or_key}”. Which one?`, f.choices), data: {found: false, choices: f.choices}};
+    }
+    let pid = null;
+    if (pursuit){ const q = String(pursuit).toLowerCase(); const hit = call('pursuits').find(p => p.id === pursuit || p.name.toLowerCase().includes(q)); if (hit) pid = hit.id; }
+    const cp = call('callPlan', f.k, pid);
+    return {text: [`Call plan for ${cp.name}${cp.pursuit ? ` (${cp.pursuit}${cp.seat ? ', ' + cp.seat.toLowerCase() : ''})` : ''}:`, cp.plan, '', 'Facts:', ...cp.facts.map(x => `- ${x}`)].join('\n'),
+      data: {name: cp.name, pursuit: cp.pursuit, seat: cp.seat, facts: cp.facts, plan: cp.plan}};
+  },
+  async recompetes({agencies, months}){
+    const m = Math.min(36, Math.max(3, +months || 24));
+    const pages = await fetchAwards(Array.isArray(agencies) ? agencies : [], m);
+    const rc = call('recompetes', pages.ok, {months: m, limit: 25});
+    const items = rc.items.map(x => ({title: x.title, agency: x.agency, office: x.office, incumbent: x.incumbent, value: x.amountText, ends: x.end, daysLeft: x.days,
+      knownAtAgency: x.known, knownAtIncumbent: x.incumbentKnown, people: x.people.map(p => brief(p.k)).filter(Boolean), incumbentPeople: x.incumbentPeople.map(p => brief(p.k)).filter(Boolean), link: x.link}));
+    const data = {months: m, count: rc.total, value: rc.valueText, recompetes: items, agencies: pages.asked, errors: pages.errors};
+    if (!pages.asked.length) return {text: 'Name an agency, or add agencies to the watchlist or pursuits in Northfix first.', data};
+    if (!items.length) return {text: `No contracts ending in the next ${m} months at ${pages.asked.join(', ')}${pages.errors.length ? `. ${pages.errors[0]}` : ''}.`, data};
+    return {text: [`${rc.total} ${rc.total === 1 ? 'contract ends' : 'contracts end'} in the next ${m} months at ${pages.asked.join(', ')} (${rc.valueText} in all). Top ${items.length}:`,
+      ...items.map(x => `- ${x.title} (${x.agency}): ${x.incumbent || 'unknown incumbent'}, ${x.value}, ends ${nice(x.ends)}. You know ${x.knownAtAgency} at ${x.agency} and ${x.knownAtIncumbent} at the incumbent.`),
+      ...(pages.errors.length ? [pages.errors[0]] : []), 'Source: USASpending.gov.'].join('\n'), data};
+  },
+  async teaming_partners({agency}){
+    const a = String(agency || '').trim();
+    if (a.length < 2) throw new Error('Name an agency or command.');
+    const pages = await fetchAwards([a], 24);
+    const tp = call('teamingPartners', pages.ok, {agency: a, limit: 20});
+    const items = tp.items.map(x => ({company: x.name, awards: x.awards, value: x.amountText, endingThisYear: x.ending, known: x.known, warm: x.warm,
+      people: x.people.map(p => brief(p.k)).filter(Boolean), teammates: x.team.map(t => ({teammate: t.owner, name: t.name, title: t.p, closeness: BAND[t.b || 'none']}))}));
+    const data = {agency: tp.agency, partners: items, errors: pages.errors};
+    if (!tp.agency) return {text: `“${a}” isn’t on the federal map. Try its short name, like DISA or NAVFAC.`, data};
+    if (!items.length) return {text: `No contract data came back for ${tp.agency.short}${pages.errors.length ? `. ${pages.errors[0]}` : ''}.`, data};
+    return {text: [`Companies winning at ${tp.agency.short}, with who you know:`, ...items.map(x => `- ${x.company}: ${x.awards} ${x.awards === 1 ? 'award' : 'awards'}, ${x.value}. ${x.known ? `You know ${x.known}${x.people[0] ? ', like ' + x.people[0].name : ''}` : x.teammates.length ? `${x.teammates[0].teammate} knows ${x.teammates[0].name}` : 'No one yet'}.`),
+      'Source: USASpending.gov.'].join('\n'), data};
+  },
+  log_note({name_or_key, note}){
+    const text = String(note || '').replace(/\s+/g, ' ').trim().slice(0, 480);
+    if (!text) throw new Error('Say what the note should say.');
+    const f = findPerson(name_or_key);
+    if (!f.k){
+      if (!f.choices.length) return {text: `No one called “${name_or_key}” in your network. Nothing saved.`, data: {saved: false, choices: []}};
+      return {text: listText(`Several people match “${name_or_key}”. Which one? Nothing saved yet.`, f.choices), data: {saved: false, choices: f.choices}};
+    }
+    const file = path.join(state.dir, INBOX);
+    let list = [];
+    try { const j = JSON.parse(fs.readFileSync(file, 'utf8')); if (Array.isArray(j.notes)) list = j.notes; } catch { /* first note */ }
+    list.push({k: f.k, text, at: new Date().toISOString()});
+    fs.writeFileSync(file, JSON.stringify({kind: 'northfix-ai-inbox', v: 1, notes: list.slice(-200)}));
+    const who = state.people.get(f.k);
+    return {text: `Saved for ${who ? who.name : 'them'}. Northfix files the note the next time it opens on this Mac.`, data: {saved: true, key: f.k, pending: list.length}};
   },
   network_summary(){
     const info = call('info'), pay = call('payoff'), h = call('home', {});
@@ -339,7 +458,7 @@ const handlers = {
   },
 };
 
-export function runTool(name, args){
+export async function runTool(name, args){
   if (!handlers[name]) return {isError: true, content: [{type: 'text', text: `Unknown tool ${name}.`}]};
   const problem = ensureLoaded();
   if (problem) return {content: [{type: 'text', text: problem}], structuredContent: {ok: false, reason: problem}};
@@ -347,7 +466,7 @@ export function runTool(name, args){
     if (usage().used >= FREE_DAILY) return {content: [{type: 'text', text: LIMIT_TEXT}], structuredContent: {ok: false, reason: 'free_limit', freeDaily: FREE_DAILY}};
   }
   try {
-    const r = handlers[name](args || {});
+    const r = await handlers[name](args || {});
     let text = r.text;
     if (!FREE_TOOLS.has(name) && !isPro()){
       const used = spend(), left = Math.max(0, FREE_DAILY - used);
@@ -360,7 +479,7 @@ export function runTool(name, args){
 }
 
 /* ---------- MCP over stdio ---------- */
-const INSTRUCTIONS = 'Northfix answers questions about the user’s own professional network (their LinkedIn connections, with their notes, messages and follow-ups), from files on this Mac. Use it for who they know at a company or agency, warm intro paths, who is waiting on a reply, recent job changes, federal coverage and pursuits. Everything is read-only.';
+const INSTRUCTIONS = 'Northfix answers questions about the user’s own professional network (their LinkedIn connections, with their notes, messages and follow-ups), from files on this Mac. Use it for who they know at a company or agency, warm intro paths, who is waiting on a reply, recent job changes, federal coverage, pursuits and the pipeline, call plans, and recompetes and teaming partners from USASpending.gov public contract data. Everything is read-only except log_note, which saves a note only when the user asks. Nothing about the user’s network is sent anywhere; recompetes and teaming partners send only agency names to USASpending.gov.';
 function reply(id, result){ send({jsonrpc: '2.0', id, result}); }
 function fail(id, code, message){ send({jsonrpc: '2.0', id, error: {code, message}}); }
 function send(o){ process.stdout.write(JSON.stringify(o) + '\n'); }
@@ -384,7 +503,7 @@ export function handle(msg){
     case 'tools/call': {
       const name = params && params.name;
       if (!handlers[name]) return fail(id, -32602, `Unknown tool: ${name}`);
-      return reply(id, runTool(name, params.arguments));
+      return runTool(name, params.arguments).then(r => reply(id, r), e => fail(id, -32603, (e && e.message) || 'Internal error'));
     }
     case 'resources/list': return reply(id, {resources: []});
     case 'resources/templates/list': return reply(id, {resourceTemplates: []});

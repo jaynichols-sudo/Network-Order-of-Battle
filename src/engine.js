@@ -1051,6 +1051,22 @@ function tagAttendees(keys, event){
   return {tagged: n};
 }
 
+/* ---------- notes from AI apps ---------- */
+// Notes the AI connector (mcp/server.mjs) left in ai-inbox.json. The app hands the file's text
+// here when it opens, saves edits, then deletes the file.
+function applyInbox(text){
+  let d; try { d = typeof text === 'string' ? JSON.parse(text) : text; } catch { d = null; }
+  const list = d && Array.isArray(d.notes) ? d.notes : [];
+  let filed = 0;
+  const people = new Set();
+  for (const n of list.slice(0, 200)){
+    if (!n || !S.byK.has(n.k) || !n.text) continue;
+    addNote(n.k, String(n.text).slice(0, 480), 'Claude');
+    filed++; people.add(n.k);
+  }
+  return {filed, people: [...people]};
+}
+
 /* ---------- recompetes and teaming partners (src/awards.js) ---------- */
 // Contract awards from USASpending.gov: what ends soon at the agencies you work, who holds it,
 // and who you know at the agency and at the incumbent. The apps fetch; this matches.
@@ -2200,7 +2216,7 @@ function constants(){
 const api = {load, loadSample, loadFiles, clearNotes, clusters, placeClues, setCompanyLocation, companyPlaces, messages, matchAttendees, alsoAt, setLens, info, people, person, search, facets, home, payoff, targets, unit, addTargetCandidates, toggleTarget, setTargetNote, orgs,
   industries, industry, setCompanyIndustry, setCompanyLink, ranks, deck, deckCount, reviewed, radar, compass, startFromContacts, introPaths, weekly, touch, setCircle, setEdit, followUp, markReplied, addNote,
   importTexts, importSnapshot, yearInReview, teamPack, teamShare, addTeamPack, setTeamShares, removeTeamPack, teamList, teamOverview, demoTeamShares, matchEnrichment, readNotes, memory, applyMail, clearMail, addProspects, clearProspects, addPursuit, updatePursuit, removePursuit, assignRole, setSeatOwner, pursuits, pursuit, coldSeats, pipeline, pursuitSheet, callPlan, matchAttendeeList, tagAttendees,
-  awardRequests, awardPage, demoAwardPages, recompetes, pursueAward, teamingPartners, federalAsOf: () => FEDERAL_AS_OF, moves, setRoleSince, quickLog, addIntro, setIntro, intros, trend, snapshot, targetChanges, ask, importSocial, clearSocial, socials, agencyCoverage, matchOpportunities, opportunityFilters, opportunityRequests, opportunityPage, demoOpportunities, markOpportunitiesSeen, orgChart, structureFor, setReportsTo, backup, restore, exportCSV, reminders, watch, constants, quote,
+  applyInbox, awardRequests, awardPage, demoAwardPages, recompetes, pursueAward, teamingPartners, federalAsOf: () => FEDERAL_AS_OF, moves, setRoleSince, quickLog, addIntro, setIntro, intros, trend, snapshot, targetChanges, ask, importSocial, clearSocial, socials, agencyCoverage, matchOpportunities, opportunityFilters, opportunityRequests, opportunityPage, demoOpportunities, markOpportunitiesSeen, orgChart, structureFor, setReportsTo, backup, restore, exportCSV, reminders, watch, constants, quote,
   flightInfo, flightInfos, feedTrips, eventTrips, icsEvents};
 // Every call goes through here: JSON string in, JSON string out, errors as {error}.
 globalThis.Bearings = {

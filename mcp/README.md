@@ -11,10 +11,15 @@ Ask things like:
 - "How well am I covered at the Department of Energy?"
 - "Where do we stand on the NAVFAC pursuit? Which seats are empty?"
 - "Tell me about Dana Whitfield before my call."
+- "Give me a call plan for the DISA contracting officer."
+- "Which DISA contracts end in the next year, and who do I know at the incumbents?"
+- "Who wins work at NAVFAC that I could team with?"
+- "What's my weighted pipeline this quarter?"
+- "Save a note on Dana: wants the zero trust brief by Friday."
 
 ## Tools
 
-All tools are read-only.
+All tools are read-only except `log_note`, which saves a note only when you ask.
 
 | Tool | What it answers |
 | --- | --- |
@@ -26,7 +31,13 @@ All tools are read-only.
 | `who_changed_jobs(days?)` | Recent job changes, with new and previous role (default 90 days) |
 | `agency_coverage(filter?)` | The federal map: covered, thin or no one yet, by department or agency |
 | `pursuits()` | Your pursuits, with stage, due date and seats filled |
-| `pursuit(name)` | One pursuit: each decision-maker seat, who fills it, suggestions, warmest ways in |
+| `pursuit(name)` | One pursuit: each decision-maker and industry seat, who fills and owns it, cold seats, suggestions, win chance, warmest ways in |
+| `pipeline(include_team?)` | Open value, weighted by win chance, by stage; due this quarter; won and lost history and win rate |
+| `cold_seats()` | Seats on open pursuits due soon where you haven't been in touch for 60 days |
+| `call_plan(name_or_key, pursuit?)` | Facts and a short plan before a call: goal, opener, questions, next step |
+| `recompetes(agencies?, months?)` | Contracts ending soon at your agencies, from USASpending.gov: incumbent, value, end date, who you know at the agency and the incumbent |
+| `teaming_partners(agency)` | Companies that win work at an agency, from USASpending.gov, with who you and your team know at each |
+| `log_note(name_or_key, note)` | Saves a dated note on a person. Northfix files it the next time it opens on your Mac |
 | `network_summary()` | A short overview of your network. Always free |
 
 Each answer comes back as short text for the AI to read, plus the same facts as structured data.
@@ -80,13 +91,15 @@ For other apps, look for "MCP servers", "connectors" or "tools" in settings and 
 
 - `--data /path/to/folder` or the `NORTHFIX_DATA` environment variable: read the network from another folder (it should hold `network.json`). By default the server looks in Northfix's iCloud Drive folder, `~/Library/Mobile Documents/iCloud~com~jaynichols~networkoob/Documents`, then the app's local folder for when iCloud is off, `~/Library/Containers/com.jaynichols.networkoob/Data/Library/Application Support/NetworkOOB`. macOS may ask once whether to allow access to the second one.
 - `NORTHFIX_STATE`: where the free plan's daily count is kept. Default `~/Library/Application Support/Northfix AI/`.
+- `NORTHFIX_USASPENDING_URL`: for testing only. Sends USASpending.gov searches to another address.
 
 ## Privacy
 
 - **Answered on your Mac.** The server reads your Northfix files on this Mac and works out the answer there, with the same engine the Northfix apps use.
-- **Nothing goes to Northfix.** There's no Northfix server involved, no account and no analytics. The server makes no network connections at all.
+- **Nothing goes to Northfix.** There's no Northfix server involved, no account and no analytics.
+- **Only agency names go to USASpending.gov.** `recompetes` and `teaming_partners` ask USASpending.gov, the federal government's public spending site, for contract awards. The request holds the agency name and dates, never anyone from your network. Every other tool makes no network connections at all.
 - **Your AI app sees only the answers.** It gets the answer to each question you ask, nothing more. It never gets your whole network file. What your AI app does with an answer is covered by that app's own privacy policy. For example, Claude Desktop sends your chat, including tool answers, to Anthropic to reply.
-- **Read-only.** The server never changes your network, notes or follow-ups. The one file it writes is the free plan's daily count, outside your Northfix folder.
+- **Read-only, except notes you ask to save.** The server never changes your network, notes or follow-ups. `log_note` writes `ai-inbox.json` in your Northfix folder; the app files those notes on the right people when it next opens on your Mac, then deletes the file. The only other file it writes is the free plan's daily count, outside your Northfix folder.
 - Answers can include the email address on a contact when it's in your own data, because it's your data.
 
 ## Northfix Pro
