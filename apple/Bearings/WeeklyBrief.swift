@@ -199,6 +199,10 @@ struct WeeklyBriefView: View {
                     }
                 }
                 .buttonStyle(.plain)
+                if w.kind == "seat" {
+                    Label("Pursuit seat going cold", systemImage: "thermometer.snowflake")
+                        .font(Theme.geist(.caption, .semibold)).foregroundStyle(Theme.info)
+                }
                 Text(w.why).font(Theme.geist(.body)).fixedSize(horizontal: false, vertical: true)
                 if !isDone {
                     HStack(spacing: 10) {

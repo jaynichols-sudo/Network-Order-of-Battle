@@ -75,6 +75,41 @@ final class CloudStore: @unchecked Sendable {
         return .data(text)
     }
 
+    /// Reads a file only when it's already on this device. An iCloud placeholder (not downloaded
+    /// yet) counts as absent, so nothing waits on a download.
+    func readIfLocal(_ name: String) async -> String? {
+        await withCheckedContinuation { c in
+            queue.async {
+                let (dir, _) = self.base()
+                let url = dir.appendingPathComponent(name)
+                guard FileManager.default.fileExists(atPath: url.path) else { c.resume(returning: nil); return }
+                var text: String?
+                var err: NSError?
+                NSFileCoordinator(filePresenter: nil).coordinate(readingItemAt: url, options: [], error: &err) { u in
+                    text = try? String(contentsOf: u, encoding: .utf8)
+                }
+                c.resume(returning: text)
+            }
+        }
+    }
+
+    /// Deletes one file, if it's there.
+    func remove(_ name: String) async {
+        await withCheckedContinuation { (c: CheckedContinuation<Void, Never>) in
+            queue.async {
+                let (dir, _) = self.base()
+                let url = dir.appendingPathComponent(name)
+                guard FileManager.default.fileExists(atPath: url.path) else { c.resume(); return }
+                self.lastOwnWrite = Date()
+                var err: NSError?
+                NSFileCoordinator(filePresenter: nil).coordinate(writingItemAt: url, options: .forDeleting, error: &err) { u in
+                    try? FileManager.default.removeItem(at: u)
+                }
+                c.resume()
+            }
+        }
+    }
+
     func write(_ name: String, _ text: String) async throws {
         try await withCheckedThrowingContinuation { (c: CheckedContinuation<Void, Error>) in
             queue.async {

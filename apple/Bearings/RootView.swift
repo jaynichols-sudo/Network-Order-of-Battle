@@ -144,6 +144,10 @@ struct RouteDestination: View {
                     case .socials: SocialsView()
                     case .opportunities: OpportunitiesView()
                     case .opportunity(let id): OpportunityView(id: id)
+                    case .pipeline: PipelineView()
+                    case .recompetes: AwardsView(mode: "recompetes")
+                    case .recompete(let id): RecompeteView(id: id)
+                    case .teaming: AwardsView(mode: "teaming")
                     }
     }
 }

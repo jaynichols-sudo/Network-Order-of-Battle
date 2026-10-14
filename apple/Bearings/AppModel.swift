@@ -64,6 +64,10 @@ enum Route: Hashable {
     case socials
     case opportunities
     case opportunity(String)
+    case pipeline
+    case recompetes
+    case recompete(String)
+    case teaming
 }
 
 enum CompaniesMode: String, CaseIterable, Identifiable {
@@ -411,6 +415,7 @@ final class AppModel {
         } catch {
             errorNote = "Your saved network didn’t load (\(error.localizedDescription)). Close and reopen the app to try again."
         }
+        await fileAIInbox()
         if case .data(let t) = await store.read("events.json"), let t, let d = t.data(using: .utf8),
            let list = try? JSONDecoder().decode([NetEvent].self, from: d) {
             events = list
@@ -432,6 +437,18 @@ final class AppModel {
             contactsMatched = f.matched ?? 0
         }
         await refreshAll()
+    }
+
+    /// Notes an AI app left through the Northfix connector (mcp/server.mjs writes ai-inbox.json
+    /// next to network.json). Filed on each person's timeline, saved, then the file is deleted.
+    /// A file iCloud hasn't downloaded yet is left for the next load.
+    private func fileAIInbox() async {
+        guard !info.isSample, let text = await store.readIfLocal("ai-inbox.json") else { return }
+        struct Filed: Decodable { var filed: Int; var people: [String]? }
+        guard let r = try? await engine.call("applyInbox", [text], as: Filed.self) else { return }
+        if r.filed > 0 { await saveFile("edits", "edits.json") }
+        await store.remove("ai-inbox.json")
+        if r.filed > 0 { show("Filed \(r.filed) \(r.filed == 1 ? "note" : "notes") from Claude") }
     }
 
     func loadSample() async {
@@ -948,6 +965,8 @@ final class AppModel {
             tab = .companies
         case "backup":
             Task { await backup() }
+        case "pursuit":
+            if let id = a.id, !id.isEmpty { paths[tab, default: []].append(.pursuit(id)) } else { paths[tab, default: []].append(.pursuits) }
         default: break
         }
     }

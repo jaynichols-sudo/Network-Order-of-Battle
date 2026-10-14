@@ -16,11 +16,31 @@ struct PursuitSummary: Decodable, Identifiable, Hashable {
     var roles: Int
     var warm: Int
     var people: Int
+    var pwin: Int?
+    var pwinSet: Bool?
+    var amount: Double?
+    var weighted: Double?
+    var incumbent: String?
+    var cold: Int?
 }
 
 struct PursuitDetail: Decodable {
-    struct Mini: Decodable, Hashable, Identifiable { var k: String; var name: String; var p: String; var band: String; var score: Int; var id: String { k } }
-    struct Role: Decodable, Hashable, Identifiable { var role: String; var people: [Mini]; var suggest: [Mini]; var id: String { role } }
+    struct Mini: Decodable, Hashable, Identifiable { var k: String; var name: String; var p: String; var band: String; var score: Int; var last: String?; var id: String { k } }
+    struct Role: Decodable, Hashable, Identifiable {
+        var role: String
+        var people: [Mini]
+        var suggest: [Mini]
+        /// "government" or "industry" (Incumbent, Teaming partner).
+        var side: String?
+        /// For an industry seat: the companies it's filled from.
+        var companies: [String]?
+        var hint: String?
+        var owner: String?
+        var cold: Bool?
+        var coldDays: Int?
+        var id: String { role }
+        var isIndustry: Bool { side == "industry" }
+    }
     struct Best: Decodable, Hashable, Identifiable { var k: String; var why: String; var id: String { k } }
     var id: String
     var name: String
@@ -37,6 +57,15 @@ struct PursuitDetail: Decodable {
     var roleList: [Role]
     var known: Int
     var best: [Best]
+    var pwin: Int?
+    var pwinSet: Bool?
+    var amount: Double?
+    var weighted: Double?
+    var incumbent: String?
+    var cold: Int?
+    var partners: [String]?
+    var owners: [String: String]?
+    var teammates: [String]?
 }
 
 extension AppModel {
@@ -68,7 +97,13 @@ extension AppModel {
         await savePursuits()
     }
 
-    private func savePursuits() async {
+    /// Which teammate owns the relationship in one seat. An empty name clears it.
+    func setSeatOwner(_ id: String, role: String, owner: String) async {
+        _ = try? await engine.call("setSeatOwner", [id, role, owner], as: PursuitSummaryLite?.self)
+        await savePursuits()
+    }
+
+    func savePursuits() async {
         await saveFile("pursuits", "pursuits.json")
         pursuitsRev += 1
         await writePursuitGlance()
@@ -104,8 +139,21 @@ struct PursuitsView: View {
                     Button("Add a pursuit") { adding = true }.buttonStyle(PillButtonStyle(kind: .primary))
                 }
             } else {
-                ForEach(list) { p in
-                    NavigationLink(value: Route.pursuit(p.id)) { row(p) }
+                Section {
+                    NavigationLink(value: Route.pipeline) {
+                        HStack(spacing: 12) {
+                            Image(systemName: "chart.bar.xaxis").foregroundStyle(Theme.accent).frame(width: 28)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Pipeline").font(Theme.geist(.headline))
+                                Text(pipelineLine).font(Theme.geist(.footnote)).foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                }
+                Section {
+                    ForEach(list) { p in
+                        NavigationLink(value: Route.pursuit(p.id)) { row(p) }
+                    }
                 }
             }
         }
@@ -115,6 +163,13 @@ struct PursuitsView: View {
         .task(id: "\(model.pursuitsRev)-\(model.info.rev)") { list = await model.pursuits() }
     }
 
+    private var pipelineLine: String {
+        let open = list.filter { $0.stage != "Won" && $0.stage != "Lost" }
+        let weighted = open.reduce(0.0) { $0 + ($1.weighted ?? 0) }
+        let base = "\(open.count) open"
+        return weighted > 0 ? base + ", \(Money.text(weighted)) weighted" : base
+    }
+
     private func row(_ p: PursuitSummary) -> some View {
         HStack(spacing: 12) {
             ProgressRing(done: p.filled, total: p.roles, size: 36, line: 4)
@@ -122,8 +177,11 @@ struct PursuitsView: View {
                 Text(p.name).font(Theme.geist(.headline))
                 Text([p.agency, p.stage, PursuitDue.text(p.days)].filter { !$0.isEmpty }.joined(separator: " · "))
                     .font(Theme.geist(.footnote)).foregroundStyle(.secondary)
-                Text("\(p.filled) of \(p.roles) seats known\(p.warm > 0 ? " · \(p.warm) warm" : "")")
-                    .font(Theme.geist(.caption)).foregroundStyle(p.filled < 3 ? Theme.needs : Theme.good)
+                HStack(spacing: 6) {
+                    Text("\(p.filled) of \(p.roles) seats known\(p.warm > 0 ? " · \(p.warm) warm" : "")")
+                        .font(Theme.geist(.caption)).foregroundStyle(p.filled < 3 ? Theme.needs : Theme.good)
+                    if let c = p.cold, c > 0 { ColdBadge(text: c == 1 ? "1 cold" : "\(c) cold") }
+                }
             }
         }
         .padding(.vertical, 4)
@@ -147,6 +205,12 @@ struct PursuitView: View {
     @State private var d: PursuitDetail?
     @State private var picking: String?
     @State private var note = ""
+    @State private var incumbent = ""
+    @State private var partners = ""
+    @State private var pwinText = ""
+    @State private var fieldsLoaded = false
+    @State private var planning: CallPlanTarget?
+    @State private var sharing = false
 
     var body: some View {
         List {
@@ -161,6 +225,9 @@ struct PursuitView: View {
                                 Text("\(d.filled) of \(d.roles) seats known").font(Theme.geist(.subheadline, .semibold))
                                 Text([PursuitDue.text(d.days), d.value, "\(d.known) people you know at \(d.agency)"].filter { !$0.isEmpty }.joined(separator: " · "))
                                     .font(Theme.geist(.footnote)).foregroundStyle(.secondary)
+                                if d.pwin != nil {
+                                    Text(winLine(d)).font(Theme.geist(.footnote)).foregroundStyle(.secondary)
+                                }
                             }
                         }
                         Picker("Stage", selection: Binding(get: { d.stage }, set: { v in Task { await model.updatePursuit(id, ["stage": v]); await load() } })) {
@@ -171,11 +238,52 @@ struct PursuitView: View {
                     .padding(.vertical, 4)
                 }
                 Section {
-                    ForEach(d.roleList) { r in roleRow(r) }
+                    ForEach(d.roleList.filter { !$0.isIndustry }) { r in roleRow(r, d) }
                 } header: {
                     Text("Who decides")
                 } footer: {
                     Text("Suggestions come from titles at \(d.agency). Tap one to put them in the seat.")
+                }
+                let industry = d.roleList.filter { $0.isIndustry }
+                if !industry.isEmpty {
+                    Section {
+                        ForEach(industry) { r in roleRow(r, d) }
+                    } header: {
+                        Text("Industry")
+                    } footer: {
+                        Text("Who holds the work today, and who you’d bid it with.")
+                    }
+                }
+                Section {
+                    LabeledContent("Incumbent") {
+                        TextField("Incumbent", text: $incumbent, prompt: Text("Like Leidos"))
+                            .multilineTextAlignment(.trailing)
+                            .onSubmit { saveFields() }
+                    }
+                    LabeledContent("Teaming partners") {
+                        TextField("Teaming partners", text: $partners, prompt: Text("Comma separated"))
+                            .multilineTextAlignment(.trailing)
+                            .onSubmit { saveFields() }
+                    }
+                    LabeledContent("Win chance") {
+                        HStack(spacing: 2) {
+                            TextField("Win chance", text: $pwinText, prompt: Text(d.pwinSet == true ? "" : "\(d.pwin ?? 0)"))
+                                .keyboardType(.numberPad)
+                                .multilineTextAlignment(.trailing)
+                                .frame(maxWidth: 70)
+                                .onSubmit { saveFields() }
+                            Text("%").foregroundStyle(.secondary)
+                        }
+                    }
+                    if !pwinText.isEmpty || incumbent != (d.incumbent ?? "") || partners != (d.partners ?? []).joined(separator: ", ") {
+                        Button("Save") { saveFields() }.font(Theme.geist(.subheadline, .semibold))
+                    }
+                } header: {
+                    Text("Capture")
+                } footer: {
+                    Text(d.pwinSet == true
+                         ? "Clear the win chance to go back to the typical one for the stage."
+                         : "Leave win chance empty to use the typical one for \(d.stage): \(d.pwin ?? 0)%.")
                 }
                 if !d.best.isEmpty {
                     Section("Warmest ways in") {
@@ -197,6 +305,14 @@ struct PursuitView: View {
                         .onSubmit { save() }
                 }
                 Section {
+                    Button { shareSheet() } label: {
+                        HStack {
+                            Label("Share one-pager (PDF)", systemImage: "doc.richtext")
+                            Spacer()
+                            if sharing { ProgressView() }
+                        }
+                    }
+                    .disabled(sharing)
                     NavigationLink(value: Route.org(d.agency)) { Label("Org chart for \(d.agency)", systemImage: "rectangle.3.group") }
                     Button(role: .destructive) { Task { await model.removePursuit(id); dismiss() } } label: { Label("Delete pursuit", systemImage: "trash") }
                 }
@@ -207,16 +323,31 @@ struct PursuitView: View {
         .navigationTitle(d?.name ?? "Pursuit")
         .navigationBarTitleDisplayMode(.inline)
         .task(id: "\(model.pursuitsRev)-\(model.info.edits)") { await load() }
-        .onDisappear { save() }
+        .onDisappear { save(); saveFields() }
         .sheet(item: Binding(get: { picking.map { IntroFinderView.Wrapped(id: $0) } }, set: { picking = $0?.id })) { w in
             PersonPicker { k in Task { await model.assignRole(id, role: w.id, k: k, on: true); await load() } }
                 .environment(AppModel.shared)
         }
+        .sheet(item: $planning) { t in CallPlanSheet(k: t.k, pursuitId: t.pursuitId).environment(AppModel.shared) }
+    }
+
+    private func winLine(_ d: PursuitDetail) -> String {
+        var s = "\(d.pwin ?? 0)% win chance"
+        if d.pwinSet != true { s += ", typical for \(d.stage)" }
+        let w = d.weighted ?? 0
+        if w > 0 { s += " · " + Money.text(w) + " weighted" }
+        return s
     }
 
     private func load() async {
         d = await model.pursuit(id)
         if note.isEmpty { note = d?.note ?? "" }
+        if !fieldsLoaded, let d {
+            incumbent = d.incumbent ?? ""
+            partners = (d.partners ?? []).joined(separator: ", ")
+            pwinText = d.pwinSet == true ? "\(d.pwin ?? 0)" : ""
+            fieldsLoaded = true
+        }
     }
 
     private func save() {
@@ -224,10 +355,45 @@ struct PursuitView: View {
         Task { await model.updatePursuit(id, ["note": note]) }
     }
 
-    @ViewBuilder private func roleRow(_ r: PursuitDetail.Role) -> some View {
+    /// Saves the incumbent, partners and win chance, when they changed.
+    private func saveFields() {
+        guard let d, fieldsLoaded else { return }
+        var patch: [String: String] = [:]
+        let inc = incumbent.trimmingCharacters(in: .whitespacesAndNewlines)
+        if inc != (d.incumbent ?? "") { patch["incumbent"] = inc }
+        let parts = partners.split(separator: ",").map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+        if parts != (d.partners ?? []) { patch["partners"] = parts.joined(separator: ", ") }
+        let digits = pwinText.filter(\.isNumber)
+        let wasSet = d.pwinSet == true ? "\(d.pwin ?? 0)" : ""
+        if let n = Int(digits) {
+            let v = String(min(100, max(0, n)))
+            if v != wasSet { patch["pwin"] = v }
+            if v != pwinText { pwinText = v }
+        } else if !wasSet.isEmpty {
+            patch["pwin"] = ""
+            pwinText = ""
+        }
+        guard !patch.isEmpty else { return }
+        Task { await model.updatePursuit(id, patch); await load() }
+    }
+
+    private func shareSheet() {
+        sharing = true
+        Task {
+            if let s = await model.pursuitSheet(id), let url = PursuitSheetDocument.pdf(s) {
+                model.shareFile = ShareFile(url: url)
+            } else {
+                model.show("Couldn’t make the one-pager")
+            }
+            sharing = false
+        }
+    }
+
+    @ViewBuilder private func roleRow(_ r: PursuitDetail.Role, _ d: PursuitDetail) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Text(r.role).font(Theme.geist(.subheadline, .semibold))
+                if r.cold == true { ColdBadge(text: "Cold") }
                 Spacer()
                 if r.people.isEmpty {
                     Text("Empty seat").font(Theme.geist(.caption, .semibold)).foregroundStyle(Theme.needs)
@@ -237,15 +403,52 @@ struct PursuitView: View {
                     .buttonStyle(.borderless)
                     .accessibilityLabel("Add someone as \(r.role)")
             }
-            ForEach(r.people) { m in
-                HStack {
-                    if let p = model.person(m.k) {
-                        Button { model.open(.person(m.k)) } label: { PersonRow(person: p, lens: model.info.lens) }.buttonStyle(.plain)
+            if let cos = r.companies, !cos.isEmpty {
+                Text("At \(cos.joined(separator: ", "))").font(Theme.geist(.footnote)).foregroundStyle(.secondary)
+            }
+            if let h = r.hint, !h.isEmpty {
+                Text(h).font(Theme.geist(.footnote)).foregroundStyle(Theme.text3)
+            }
+            if r.cold == true {
+                Text(r.coldDays.map { "No contact in \($0) days." } ?? "You haven’t been in touch yet.")
+                    .font(Theme.geist(.caption)).foregroundStyle(Theme.info)
+            }
+            if let mates = d.teammates, !mates.isEmpty {
+                let owner = r.owner ?? ""
+                Menu {
+                    Button { Task { await model.setSeatOwner(id, role: r.role, owner: ""); await load() } } label: {
+                        if owner.isEmpty { Label("No owner", systemImage: "checkmark") } else { Text("No owner") }
                     }
-                    Spacer()
-                    Button { Task { await model.assignRole(id, role: r.role, k: m.k, on: false); await load() } } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(.tertiary) }
-                        .buttonStyle(.borderless)
-                        .accessibilityLabel("Remove \(m.name)")
+                    ForEach(mates, id: \.self) { m in
+                        Button { Task { await model.setSeatOwner(id, role: r.role, owner: m); await load() } } label: {
+                            if owner == m { Label(m, systemImage: "checkmark") } else { Text(m) }
+                        }
+                    }
+                } label: {
+                    Label(owner.isEmpty ? "Assign an owner" : "Owner: \(owner)", systemImage: "person.crop.circle.badge.checkmark")
+                        .font(Theme.geist(.caption, .semibold))
+                }
+                .buttonStyle(.borderless)
+            }
+            ForEach(r.people) { m in
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack {
+                        if let p = model.person(m.k) {
+                            Button { model.open(.person(m.k)) } label: { PersonRow(person: p, lens: model.info.lens) }.buttonStyle(.plain)
+                        }
+                        Spacer()
+                        Button { Task { await model.assignRole(id, role: r.role, k: m.k, on: false); await load() } } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(.tertiary) }
+                            .buttonStyle(.borderless)
+                            .accessibilityLabel("Remove \(m.name)")
+                    }
+                    HStack(spacing: 12) {
+                        Button { planning = CallPlanTarget(k: m.k, pursuitId: id) } label: { Label("Call plan", systemImage: "list.bullet.clipboard") }
+                            .buttonStyle(.borderless)
+                            .font(Theme.geist(.caption, .semibold))
+                        if let last = m.last, !last.isEmpty {
+                            Text("Last in touch \(Day.ago(last))").font(Theme.geist(.caption)).foregroundStyle(.secondary)
+                        }
+                    }
                 }
             }
             if !r.suggest.isEmpty {
@@ -271,6 +474,20 @@ struct PursuitView: View {
             }
         }
         .padding(.vertical, 4)
+    }
+}
+
+/// A small "Cold" pill for a pursuit seat no one has been in touch with lately.
+struct ColdBadge: View {
+    var text = "Cold"
+
+    var body: some View {
+        Label(text, systemImage: "thermometer.snowflake")
+            .font(Theme.geist(.caption2, .semibold))
+            .foregroundStyle(Theme.info)
+            .padding(.horizontal, 7).padding(.vertical, 2)
+            .background(Theme.infoSoft, in: Capsule())
+            .accessibilityLabel(text == "Cold" ? "Cold seat" : "\(text) seats")
     }
 }
 

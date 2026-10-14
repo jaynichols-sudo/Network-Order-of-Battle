@@ -93,6 +93,14 @@ enum Brief {
         return await respond(prompt, instructions: "You write messages a professional will send under their own name. " + style)
     }
 
+    /// A call plan from the engine's prompt (callPlan), written on this device. Nil without Apple Intelligence.
+    static func callPlan(_ prompt: String, key: String) async -> String? {
+        if let hit = cache["plan|" + key] { return hit }
+        guard let out = await respond(prompt, instructions: "You help a business development professional get ready for a call. " + style) else { return nil }
+        cache["plan|" + key] = out
+        return out
+    }
+
     private static func respond(_ prompt: String, instructions: String) async -> String? {
         #if canImport(FoundationModels)
         if #available(iOS 26.0, *) {
