@@ -129,7 +129,7 @@ test('tools answer from the saved network (Pro)', async () => {
     assert.equal(ps.structuredContent.pursuits.length, 1);
     const p = await s.tool('pursuit', {name: 'zero trust'});
     assert.equal(p.structuredContent.name, 'DISA zero trust gateway');
-    assert.equal(p.structuredContent.seats.length, 6);
+    assert.equal(p.structuredContent.seats.length, 8);
     assert.match(text(p), /Program manager/);
     assert.ok(!/free plan/.test(text(p)), 'Pro answers carry no free-plan note');
   } finally { s.stop(); }

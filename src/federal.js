@@ -8,11 +8,15 @@
 //   tags     what the agency touches, for the "your focus" filter:
 //            energy, water, defense, cyber, transport, intel, infrastructure, health, finance, science
 //
-// Keep names current; an agency that is renamed keeps its old name as an alias.
+// Keep names current; an agency that is renamed keeps its old name as an alias. Review it with
+// each release and move FEDERAL_AS_OF forward; the apps show it under the federal map.
+// Oct 2026: Department of War (the Defense Department's second name since Sept 2025) added.
+
+export const FEDERAL_AS_OF = '2026-10';
 
 export const FEDERAL = [
   // Department of Defense: leadership and services
-  ['Defense', 'Office of the Secretary of Defense', 'OSD', ['OSD', 'OUSD', 'Office of the Secretary of Defense', 'Pentagon', 'Under Secretary of Defense'], ['defense']],
+  ['Defense', 'Office of the Secretary of Defense', 'OSD', ['OSD', 'OUSD', 'Office of the Secretary of Defense', 'Pentagon', 'Under Secretary of Defense', 'Department of War', 'War Department', 'Office of the Secretary of War', 'Under Secretary of War'], ['defense']],
   ['Defense', 'DoD Chief Information Officer', 'DoD CIO', ['DoD CIO', 'DOD CIO', 'Department of Defense Chief Information Officer'], ['defense', 'cyber']],
   ['Defense', 'Joint Staff', 'Joint Staff', ['Joint Staff', 'Joint Chiefs of Staff'], ['defense']],
   ['Defense', 'Chief Digital and AI Office', 'CDAO', ['CDAO', 'Chief Digital and Artificial Intelligence Office'], ['defense', 'cyber']],

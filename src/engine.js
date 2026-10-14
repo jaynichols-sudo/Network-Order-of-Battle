@@ -9,9 +9,10 @@ import {
 } from './core.js';
 import { parseQuery, matchNL } from './nlq.js';
 import { findAgency, officeOf } from './agencies.js';
-import {compileFederal} from './federal.js';
+import {compileFederal, FEDERAL_AS_OF} from './federal.js';
 import { matchOpportunities as matchOpps, opportunityFilters, opportunityRequests as oppRequests, opportunityPage, demoOpportunities as demoOpps, markSeen, agencyFor } from './opportunities.js';
 import { parseFlight, parseICS, tripsFromEvents, tripsFromFeed } from './flights.js';
+import { awardRequests as awardReqs, awardPage, awardAgency, demoAwards as demoAwardList, dollars, money, AWARD_LINK } from './awards.js';
 import { INDUSTRIES, indColor, indShort, setIndustryOverrides, companyKey, UNCLASSIFIED, GOV_IND } from './industry.js';
 
 /* ---------- state ---------- */
@@ -470,6 +471,8 @@ function cards(opts){
   if (due.length) out.push({tone: 'violet', icon: 'bell', title: `${fmt(due.length)} ${due.length === 1 ? 'follow-up' : 'follow-ups'} due`, body: `You planned to reach out to ${names(due, 2)}.`, people: keys(due), act: {kind: 'filter', sig: ['due']}});
   const waiting = A.filter(r => isWaiting(r) || isMailWaiting(r)).sort((a, b) => lastTouch(b).localeCompare(lastTouch(a)));
   if (waiting.length) out.push({tone: 'coral', icon: 'arrowshape.turn.up.left', title: `${fmt(waiting.length)} ${waiting.length === 1 ? 'person is' : 'people are'} waiting on your reply`, body: `They wrote last and you haven’t answered: ${waiting.slice(0, 2).map(r => fullName(r) + (isWaiting(r) ? '' : ' (by email)')).join(', ')}${waiting.length > 2 ? ` and ${fmt(waiting.length - 2)} more` : ''}.`, people: keys(waiting), act: {kind: 'filter', sig: ['waiting']}});
+  const cs = coldSeats();
+  if (cs.length){ const c = cs[0]; out.push({tone: 'sky', icon: 'thermometer.snowflake', title: `${fmt(cs.length)} pursuit ${cs.length === 1 ? 'seat is' : 'seats are'} going cold`, body: `${c.name} (${c.role.toLowerCase()} on ${c.pursuit}) ${c.days == null ? 'hasn’t heard from you yet' : 'last heard from you ' + c.days + ' days ago'}${c.daysLeft != null ? `, and it’s due in ${c.daysLeft} days` : ''}.`, people: [...new Set(cs.map(x => x.k))], act: {kind: 'pursuit', id: c.pursuitId}}); }
   const cooling = A.filter(r => isCooling(r)).sort((a, b) => b.wm.score - a.wm.score || a.cl.lv - b.cl.lv);
   if (cooling.length) out.push({tone: 'sky', icon: 'snowflake', title: `${fmt(cooling.length)} good ${cooling.length === 1 ? 'relationship is' : 'relationships are'} going cold`, body: `You used to talk regularly but it’s been a while: ${cooling.slice(0, 2).map(r => `${fullName(r)} (${ago(r.rx.t)})`).join(', ')}${cooling.length > 2 ? ` and ${fmt(cooling.length - 2)} more` : ''}.`, people: keys(cooling), act: {kind: 'filter', sig: ['cold']}});
   const moved = A.filter(r => r.movedNow).sort(bySenior), senMoved = moved.filter(r => r.cl.lv <= 2);
@@ -771,6 +774,7 @@ function weekly(skip){
   take(A.filter(isMailWaiting).sort((a, b) => b.ed.mail.t.localeCompare(a.ed.mail.t)), 'reply', r => `Emailed you ${ago(r.ed.mail.t)}${r.ed.mail.s ? ' about “' + r.ed.mail.s + '”' : ''} and is waiting on a reply.`, 2);
   take(A.filter(isOverdue).sort((a, b) => CIRCLES[a.ed.circle] - CIRCLES[b.ed.circle]), 'circle', r => `In your ${({inner: 'inner circle', key: 'key relationships', wide: 'wider network'})[r.ed.circle]}; ${lastTouch(r) ? 'last in touch ' + ago(lastTouch(r)) : 'not in touch yet'}.`, 2);
   take(A.filter(isDue).sort((a, b) => a.ed.due.localeCompare(b.ed.due)), 'due', r => `You planned to follow up ${r.ed.due < TODAY ? 'on ' + niceDate(r.ed.due) : 'today'}.`, 2);
+  { const cs = new Map(); for (const c of coldSeats()) if (!cs.has(c.k)) cs.set(c.k, c); take(A.filter(r => cs.has(r.k)), 'seat', r => { const c = cs.get(r.k); return `In the ${c.role.toLowerCase()} seat on ${c.pursuit}${c.daysLeft != null ? ', due in ' + c.daysLeft + ' days' : ''}. ${c.days == null ? 'You haven’t been in touch yet.' : 'Last in touch ' + c.days + ' days ago.'}`; }, 2); }
   take(A.filter(r => r.movedNow).sort(bySenior), 'congrats', r => `New role${r.p ? ' as ' + r.p : ''}${r.c ? ' at ' + r.c : ''}. A good moment to say congratulations.`, 2);
   take(A.filter(isCooling).sort((a, b) => b.wm.score - a.wm.score), 'cold', r => `You used to talk often; last message ${ago(r.rx.t)}.`, 2);
   { const nudge = new Map(introNudges().map(x => [x.via, x])); take(A.filter(r => nudge.has(r.k)), 'intro', r => { const x = nudge.get(r.k); return `You asked for an intro to ${x.to}${x.co ? ' at ' + x.co : ''} ${ago(x.at)}. A friendly nudge?`; }, 1); }
@@ -793,23 +797,39 @@ const PURSUIT_ROLES = [
   ['Mission owner', /operations|\bops\b|mission|division chief|branch chief|commander|site lead|plant|facilit/i],
   ['Security lead', /\bISSM\b|\bISSO\b|\bCISO\b|cyber|security|information assurance|\bRMF\b|authoriz|\bAO\b/i],
   ['Technical lead', /engineer|architect|technical|\bCTO\b|\bIT\b|systems|network|infrastructure|\bOT\b|\bICS\b|SCADA/i],
+  // the industry side: who holds the work today, and who you'd bid it with. Filled from the
+  // companies named on the pursuit, not from the agency.
+  ['Incumbent', null, 'incumbent'],
+  ['Teaming partner', null, 'partners'],
 ];
 const STAGES = ['Tracking', 'Pursuing', 'Proposal', 'Submitted', 'Won', 'Lost'];
+// What a pursuit at each stage usually wins, when no one has set a number.
+const STAGE_PWIN = {Tracking: 10, Pursuing: 25, Proposal: 40, Submitted: 50, Won: 100, Lost: 0};
+const isOpen = p => STAGES.indexOf(p.stage) < 4;
 const coHit = q => {
   const want = coKey(q);
   return c => { const k = coKey(c); return want.length >= 2 && !!k && (k === want || (want.length >= 4 && (k.startsWith(want + ' ') || k.includes(' ' + want + ' ') || k.endsWith(' ' + want)))); };
 };
 const atOrg = q => { const hit = coHit(q); return live().filter(r => hit(r.c) || hit(r.cl.agency)); };
 const brief = r => ({k: r.k, name: fullName(r), p: r.p || '', band: r.wm.band, score: r.wm.score});
+const splitNames = v => (Array.isArray(v) ? v : String(v || '').split(/[,;\n]+/)).map(x => String(x).trim()).filter(Boolean).slice(0, 12);
+/** The companies a company seat is filled from: the incumbent, or the teaming partners. */
+const seatCompanies = (p, field) => field === 'incumbent' ? splitNames(p.incumbent).slice(0, 1) : splitNames(p.partners);
+const pwinOf = p => p.pwin != null && p.pwin !== '' && isFinite(+p.pwin) ? Math.max(0, Math.min(100, Math.round(+p.pwin))) : STAGE_PWIN[p.stage] ?? 10;
 function addPursuit(o){
   const p = {id: 'p' + Date.now().toString(36) + Math.floor(Math.random() * 1e4).toString(36), name: String((o && o.name) || 'New pursuit').trim(),
     agency: String((o && o.agency) || '').trim(), due: (o && o.due) || '', value: (o && o.value) || '', stage: (o && o.stage) || 'Tracking', roles: {}, note: '', created: TODAY};
+  for (const f of ['incumbent', 'partners', 'pwin', 'source']) if (o && o[f] != null && o[f] !== '') p[f] = o[f];
   S.pursuits.push(p);
   return p;
 }
 function updatePursuit(id, patch){
   const p = S.pursuits.find(x => x.id === id); if (!p) return null;
-  for (const f of ['name', 'agency', 'due', 'value', 'stage', 'note']) if (patch && f in patch) p[f] = patch[f];
+  const was = p.stage;
+  for (const f of ['name', 'agency', 'due', 'value', 'stage', 'note', 'incumbent', 'partners']) if (patch && f in patch) p[f] = patch[f];
+  if (patch && 'pwin' in patch) { if (patch.pwin == null || patch.pwin === '') delete p.pwin; else p.pwin = Math.max(0, Math.min(100, Math.round(+patch.pwin) || 0)); }
+  // remember when it was decided, for the won and lost history
+  if (p.stage !== was) { if (p.stage === 'Won' || p.stage === 'Lost') p.closed = TODAY; else delete p.closed; }
   return p;
 }
 function removePursuit(id){ S.pursuits = S.pursuits.filter(x => x.id !== id); return true; }
@@ -821,12 +841,40 @@ function assignRole(id, role, k, on){
   if (!p.roles[role].length) delete p.roles[role];
   return p;
 }
+/** Which teammate owns the relationship in one seat. An empty owner clears it. */
+function setSeatOwner(id, role, owner){
+  const p = S.pursuits.find(x => x.id === id); if (!p) return null;
+  const o = String(owner || '').trim().slice(0, 80);
+  p.owners = Object.assign({}, p.owners);
+  if (o) p.owners[role] = o; else delete p.owners[role];
+  if (!Object.keys(p.owners).length) delete p.owners;
+  return p;
+}
+// A seat goes cold when no one in it has been in touch for this long while the pursuit is open.
+const COLD_DAYS = 60, COLD_WINDOW = 120;
+/** The seats on an open pursuit whose people you haven't been in touch with lately. */
+function coldOf(p){
+  if (!isOpen(p)) return [];
+  const days = p.due ? -daysSince(p.due) : null;
+  if (days != null && (days < 0 || days > COLD_WINDOW)) return [];
+  const out = [];
+  for (const [role] of PURSUIT_ROLES){
+    const rs = (p.roles[role] || []).map(k => S.byK.get(k)).filter(Boolean);
+    if (!rs.length) continue;
+    const quiet = rs.map(r => ({r, d: daysSince(lastTouch(r))})).sort((a, b) => a.d - b.d);
+    if (quiet[0].d <= COLD_DAYS) continue;
+    out.push({role, k: quiet[0].r.k, name: fullName(quiet[0].r), days: quiet[0].d >= 99999 ? null : quiet[0].d});
+  }
+  return out;
+}
 function pursuitSummary(p){
   const filled = PURSUIT_ROLES.filter(([role]) => (p.roles[role] || []).some(k => S.byK.has(k))).length;
   const people = [...new Set(Object.values(p.roles).flat())].map(k => S.byK.get(k)).filter(Boolean);
   const warm = people.filter(r => ['strong', 'warm'].includes(r.wm.band)).length;
   const days = p.due ? -daysSince(p.due) : null;
-  return {id: p.id, name: p.name, agency: p.agency, due: p.due, days, value: p.value, stage: p.stage, filled, roles: PURSUIT_ROLES.length, warm, people: people.length};
+  const amount = dollars(p.value);
+  return {id: p.id, name: p.name, agency: p.agency, due: p.due, days, value: p.value, stage: p.stage, filled, roles: PURSUIT_ROLES.length, warm, people: people.length,
+    pwin: pwinOf(p), pwinSet: p.pwin != null, amount, weighted: Math.round(amount * pwinOf(p) / 100), incumbent: splitNames(p.incumbent)[0] || '', cold: coldOf(p).length};
 }
 function pursuits(){
   return S.pursuits.map(pursuitSummary).sort((a, b) => (STAGES.indexOf(a.stage) > 3) - (STAGES.indexOf(b.stage) > 3) || ((a.due || '9') < (b.due || '9') ? -1 : 1));
@@ -835,15 +883,315 @@ function pursuit(id){
   const p = S.pursuits.find(x => x.id === id); if (!p) return null;
   const pool = p.agency ? atOrg(p.agency) : [];
   const used = new Set(Object.values(p.roles).flat());
-  const roles = PURSUIT_ROLES.map(([role, rx]) => {
-    const people = (p.roles[role] || []).map(k => S.byK.get(k)).filter(Boolean).map(brief);
-    const suggest = people.length ? [] : pool.filter(r => !used.has(r.k) && rx.test(`${r.p} ${r.cl.grade || ''}`))
+  const cold = new Map(coldOf(p).map(c => [c.role, c]));
+  const roles = PURSUIT_ROLES.map(([role, rx, field]) => {
+    const people = (p.roles[role] || []).map(k => S.byK.get(k)).filter(Boolean).map(r => Object.assign(brief(r), {last: lastTouch(r)}));
+    let suggest = [], companies = [], hint = '';
+    if (field){
+      companies = seatCompanies(p, field);
+      if (!companies.length) hint = field === 'incumbent' ? 'Add the incumbent to see who you know there.' : 'Add teaming partners to see who you know at each.';
+      else if (!people.length){
+        const hits = companies.map(coHit);
+        suggest = live().filter(r => !used.has(r.k) && hits.some(h => h(r.c))).sort((a, b) => b.wm.score - a.wm.score || bySenior(a, b)).slice(0, 3).map(brief);
+        if (!suggest.length) hint = `You don’t know anyone at ${companies.join(', ')} yet.`;
+      }
+    } else if (!people.length) suggest = pool.filter(r => !used.has(r.k) && rx.test(`${r.p} ${r.cl.grade || ''}`))
       .sort((a, b) => b.wm.score - a.wm.score || bySenior(a, b)).slice(0, 3).map(brief);
-    return {role, people, suggest};
+    const c = cold.get(role);
+    return {role, side: field ? 'industry' : 'government', people, suggest, companies, hint, owner: (p.owners && p.owners[role]) || '', cold: !!c, coldDays: c ? c.days : null};
   });
   const ways = p.agency ? introPaths(p.agency) : null;
-  return Object.assign(pursuitSummary(p), {note: p.note, stages: STAGES, roleList: roles,
-    known: pool.length, best: ways ? ways.best : [], team: ways ? ways.team : []});
+  return Object.assign(pursuitSummary(p), {note: p.note, stages: STAGES, roleList: roles, partners: splitNames(p.partners), owners: p.owners || {},
+    teammates: S.team.map(t => t.owner), known: pool.length, best: ways ? ways.best : [], team: ways ? ways.team : []});
+}
+/** Every cold seat on every open pursuit, most urgent first: for Today and the weekly brief. */
+function coldSeats(){
+  const out = [];
+  for (const p of S.pursuits) for (const c of coldOf(p)) out.push(Object.assign({pursuitId: p.id, pursuit: p.name, agency: p.agency, due: p.due, daysLeft: p.due ? -daysSince(p.due) : null}, c));
+  return out.sort((a, b) => (a.daysLeft ?? 999) - (b.daysLeft ?? 999) || (b.days ?? 99999) - (a.days ?? 99999));
+}
+
+/* ---------- pipeline ---------- */
+// Pursuits as a pipeline: what's open at each stage, weighted by the chance of winning, and
+// what's been won and lost. With `withTeam`, teammates' shared pursuits count too.
+function pipeline(withTeam){
+  const rows = S.pursuits.map(p => ({owner: 'You', mine: true, id: p.id, name: p.name, agency: p.agency, stage: p.stage, due: p.due, value: p.value,
+    amount: dollars(p.value), pwin: pwinOf(p), closed: p.closed || ''}));
+  if (withTeam) for (const t of S.team) for (const p of t.pursuits || []) rows.push({owner: t.owner, mine: false, id: '', name: p.name, agency: p.agency, stage: p.stage, due: p.due, value: p.value,
+    amount: dollars(p.value), pwin: p.pwin != null ? +p.pwin : STAGE_PWIN[p.stage] ?? 10, closed: p.closed || ''});
+  for (const r of rows) r.weighted = Math.round(r.amount * r.pwin / 100);
+  const stages = STAGES.map(st => {
+    const rs = rows.filter(r => r.stage === st);
+    const value = rs.reduce((a, r) => a + r.amount, 0), weighted = rs.reduce((a, r) => a + r.weighted, 0);
+    return {stage: st, count: rs.length, value, weighted, valueText: money(value), weightedText: money(weighted)};
+  });
+  const open = rows.filter(r => STAGES.indexOf(r.stage) < 4), won = rows.filter(r => r.stage === 'Won'), lost = rows.filter(r => r.stage === 'Lost');
+  const sum = (rs, f) => rs.reduce((a, r) => a + r[f], 0);
+  const decided = won.length + lost.length;
+  const quarterEnd = isoDay(Date.parse(TODAY) + 91 * 864e5);
+  const dueSoon = open.filter(r => r.due && r.due >= TODAY && r.due <= quarterEnd);
+  return {stages, open: {count: open.length, value: sum(open, 'amount'), weighted: sum(open, 'weighted'), valueText: money(sum(open, 'amount')), weightedText: money(sum(open, 'weighted'))},
+    won: {count: won.length, value: sum(won, 'amount'), valueText: money(sum(won, 'amount'))}, lost: {count: lost.length, value: sum(lost, 'amount'), valueText: money(sum(lost, 'amount'))},
+    winRate: decided ? Math.round(won.length / decided * 100) : null,
+    dueThisQuarter: {count: dueSoon.length, weighted: sum(dueSoon, 'weighted'), weightedText: money(sum(dueSoon, 'weighted'))},
+    history: won.concat(lost).sort((a, b) => (b.closed || b.due || '').localeCompare(a.closed || a.due || '')).slice(0, 20),
+    rows: rows.sort((a, b) => b.weighted - a.weighted), withTeam: !!withTeam, hasTeam: S.team.length > 0, unpriced: rows.filter(r => !r.amount).length};
+}
+
+/* ---------- pursuit one-pager ---------- */
+// Everything a capture lead puts on one page for a gate review: seats, who you know in each,
+// the warmest ways in, and the dates. The apps draw it as a PDF.
+function pursuitSheet(id){
+  const d = pursuit(id); if (!d) return null;
+  const name = k => { const r = S.byK.get(k); return r ? fullName(r) : ''; };
+  const line = x => [x.p, BAND_LABEL[x.band]].filter(Boolean).join(' · ');
+  const seats = d.roleList.map(s => ({role: s.role, side: s.side, owner: s.owner, cold: s.cold,
+    people: s.people.map(x => ({name: x.name, detail: line(x), last: x.last ? niceDate(x.last) : ''})),
+    status: s.people.length ? (s.cold ? `Cold: no contact in ${s.coldDays == null ? 'a long time' : s.coldDays + ' days'}` : 'Filled')
+      : s.suggest.length ? `Open. Could fill: ${s.suggest.map(x => x.name).join(', ')}` : s.hint || 'Open. No one yet.'}));
+  const best = d.best.map(b => ({name: name(b.k), why: b.why})).filter(b => b.name);
+  const team = d.team.slice(0, 5).map(t => ({name: t.name, detail: `${t.owner} knows them. ${BAND_LABEL[t.b] || ''}`.trim()}));
+  const facts = [
+    ['Agency', d.agency || 'Not set'], ['Stage', d.stage], ['Due', d.due ? `${niceDate(d.due)}${d.days != null ? ` (${d.days >= 0 ? d.days + ' days left' : -d.days + ' days ago'})` : ''}` : 'Not set'],
+    ['Value', d.value || 'Not set'], ['Win chance', `${d.pwin}%${d.pwinSet ? '' : ' (typical for this stage)'}`], ['Incumbent', d.incumbent || 'Not set'],
+    ['Teaming partners', d.partners.join(', ') || 'None yet'], ['Seats filled', `${d.filled} of ${d.roles}`], ['You know at the agency', String(d.known)],
+  ];
+  return {title: d.name, made: TODAY, facts, seats, best, team, note: d.note || '', cold: d.cold,
+    footer: `Made with Northfix on ${niceDate(TODAY)}. Private: contains your own relationship notes.`};
+}
+
+/* ---------- call plan ---------- */
+// The facts for a short plan before talking to someone: what they own, what changed, what
+// you last talked about, and what to ask. The iPhone and Mac turn the facts into a plan with
+// the on-device model; `plan` is the same thing written without one.
+function callPlan(k, pursuitId){
+  const r = S.byK.get(k); if (!r) return null;
+  const he = r.f || 'They';
+  const mem = memory(k);
+  const p = pursuitId ? S.pursuits.find(x => x.id === pursuitId) : S.pursuits.find(x => isOpen(x) && Object.values(x.roles).some(ks => ks.includes(k)));
+  const seat = p ? (Object.entries(p.roles).find(([, ks]) => ks.includes(k)) || [])[0] || '' : '';
+  const facts = [`${fullName(r)}${r.p ? ', ' + r.p : ''}${r.c ? ' at ' + r.c : ''}.`, `Relationship: ${BAND_LABEL[r.wm.band].toLowerCase()}.`];
+  const lt = lastTouch(r);
+  facts.push(lt ? `Last in touch ${ago(lt)}.` : 'You have not been in touch yet.');
+  if (mem && mem.line) facts.push(mem.line);
+  if (r.jc && daysAgo(r.jc) <= 365) facts.push(`Changed roles ${ago(r.jc)}.`);
+  { const mv = moveOf(r); if (mv) facts.push(mv.why); }
+  if (p){
+    facts.push(`Pursuit: ${p.name}${p.agency ? ' at ' + p.agency : ''}, stage ${p.stage}${p.due ? ', due ' + niceDate(p.due) : ''}.`);
+    if (seat) facts.push(`${he} sits in the ${seat.toLowerCase()} seat.`);
+    if (p.incumbent) facts.push(`Incumbent: ${splitNames(p.incumbent)[0]}.`);
+  }
+  if (r.ed && r.ed.due) facts.push(`You planned to follow up ${r.ed.due <= TODAY ? 'by ' + niceDate(r.ed.due) : 'on ' + niceDate(r.ed.due)}.`);
+  const ask = [];
+  if (seat === 'Contracting officer') ask.push('Is there a timeline for the solicitation, and how will it be released?');
+  else if (seat === 'Program manager') ask.push('What has to go right for the program this year?');
+  else if (seat === 'Executive sponsor') ask.push('What outcome would make this a win for the organization?');
+  else if (seat === 'Mission owner') ask.push('What slows the mission down today?');
+  else if (seat === 'Security lead') ask.push('What is hardest about getting systems authorized right now?');
+  else if (seat === 'Technical lead') ask.push('What does the current architecture make hard?');
+  else if (seat === 'Incumbent') ask.push('How is the current contract going, and where could a partner help?');
+  else if (seat === 'Teaming partner') ask.push('Where do our capabilities fit together on this bid?');
+  else ask.push(r.jc && daysAgo(r.jc) <= 365 ? 'How is the new role going, and what is on your plate?' : 'What are you focused on over the next few months?');
+  ask.push('Who else should I be talking to?');
+  const opener = isWaiting(r) || isMailWaiting(r) ? `Start by answering their last message.`
+    : r.jc && daysAgo(r.jc) <= 120 ? `Open with congratulations on the new role.` : lt && daysSince(lt) > 180 ? `Acknowledge it has been a while.` : `Pick up where you left off.`;
+  const plan = [`Goal: ${p ? `learn where ${p.name} stands and what ${he} needs` : `catch up and learn what ${he} is working on`}.`, `Open: ${opener}`,
+    `Ask: ${ask.join(' ')}`, `Next step: agree on one follow-up before you hang up.`].join('\n');
+  const prompt = `Write a short call plan for a business development professional about to talk with a contact. Use only these facts. Four lines: Goal, Open, Ask (two questions), Next step. Plain English, no em dashes.\n\nFacts:\n- ${facts.join('\n- ')}`;
+  return {k, name: fullName(r), pursuit: p ? p.name : '', seat, facts, plan, prompt};
+}
+
+/* ---------- event attendee lists ---------- */
+// A conference attendee or badge-scan list (CSV), matched to your network: who you already
+// know there, and who's new. People you don't know yet are kept as prospects, so they fill
+// empty seats on org charts. Read on the device only.
+function matchAttendeeList(text, event){
+  const grid = parseCSV(String(text || '').replace(/^﻿/, ''));
+  const norm = h => String(h || '').trim().toLowerCase().replace(/[_]+/g, ' ').replace(/\s+/g, ' ');
+  const hi = grid.findIndex(r => r.map(norm).some(c => ENRICH_COLS.first.includes(c) || ENRICH_COLS.name.includes(c)));
+  if (hi < 0) throw new Error('That file has no name columns. Use a CSV with first and last name (or full name), and company if you have it.');
+  const H = grid[hi].map(norm);
+  const col = {}; for (const [kk, names] of Object.entries(ENRICH_COLS)){ for (const n of names){ const i = H.indexOf(n); if (i >= 0){ col[kk] = i; break; } } }
+  const nm = s => String(s || '').toLowerCase().replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, ' ').trim();
+  const bySlug = new Map(), byEmail = new Map(), byNameCo = new Map(), byName = new Map();
+  for (const r of live()){
+    const sl = slugOf(r.u); if (sl) bySlug.set(sl, r.k);
+    if (r.e) byEmail.set(r.e.toLowerCase(), r.k);
+    const n = nm(`${r.f} ${r.l}`); if (!n) continue;
+    byNameCo.set(n + '|' + coKey(r.c), r.k);
+    byName.set(n, byName.has(n) ? null : r.k);
+  }
+  const known = [], fresh = [], seen = new Set();
+  let rows = 0;
+  for (const g of grid.slice(hi + 1)){
+    const get = kk => col[kk] != null ? String(g[col[kk]] || '').trim() : '';
+    let full = get('name') || `${get('first')} ${get('last')}`.trim();
+    if (full.includes(',') && !get('first')){ const [l, f] = full.split(','); full = `${f.trim()} ${l.trim()}`; }
+    if (!full) continue;
+    rows++;
+    const email = get('email');
+    const k = bySlug.get(slugOf(get('linkedin'))) || (email && byEmail.get(email.toLowerCase())) || byNameCo.get(nm(full) + '|' + coKey(get('company'))) || byName.get(nm(full));
+    if (k){ if (!seen.has(k)){ seen.add(k); known.push(k); } continue; }
+    fresh.push({name: full, p: get('title'), c: get('company'), e: email, li: get('linkedin')});
+  }
+  const rs = known.map(k => S.byK.get(k)).sort((a, b) => b.wm.score - a.wm.score || bySenior(a, b));
+  // the new people, grouped by employer, with what you know there already
+  const byCo = new Map();
+  for (const x of fresh){ const c = x.c || 'No company listed'; if (!byCo.has(c)) byCo.set(c, []); byCo.get(c).push(x); }
+  const companies = [...byCo.entries()].map(([c, xs]) => ({company: c, count: xs.length, people: xs.slice(0, 8).map(x => ({name: x.name, p: x.p})),
+    known: c === 'No company listed' ? 0 : atOrg(c).length, target: isTarget(c)})).sort((a, b) => (b.target - a.target) || b.count - a.count).slice(0, 60);
+  const added = addProspects(fresh.filter(x => x.c), event ? 'event: ' + String(event).slice(0, 80) : 'event');
+  return {event: String(event || '').slice(0, 120), rows, known: rs.map(r => Object.assign(brief(r), {c: r.c || ''})), knownCount: rs.length, newCount: fresh.length, companies, added};
+}
+/** Tags the people you know from an attendee list with the event's name, so they make a list. */
+function tagAttendees(keys, event){
+  const tag = String(event || '').trim().slice(0, 60); if (!tag) return {tagged: 0};
+  let n = 0;
+  for (const k of keys || []){ const r = S.byK.get(k); if (!r) continue; const tags = new Set((r.ed && r.ed.tags) || []); if (!tags.has(tag)){ tags.add(tag); setEdit(k, {tags: [...tags]}); n++; } }
+  return {tagged: n};
+}
+
+/* ---------- recompetes and teaming partners (src/awards.js) ---------- */
+// Contract awards from USASpending.gov: what ends soon at the agencies you work, who holds it,
+// and who you know at the agency and at the incumbent. The apps fetch; this matches.
+/** Federal map rows to ask about: the given names, else the watchlist and open pursuits, else your best-covered agencies. */
+function awardAgencies(names){
+  const F = fedRows(), out = [];
+  const add = a => { if (a && !out.some(x => x.id === a.id)) out.push(a); };
+  if (Array.isArray(names) && names.length) for (const n of names) add(agencyFor(n, F));
+  else {
+    for (const t of S.targets) add(agencyFor(t.name, F));
+    for (const p of S.pursuits) if (isOpen(p) && p.agency) add(agencyFor(p.agency, F));
+    if (!out.length){ const cov = agencyCoverage(false); for (const r of cov.rows.filter(r => r.known).sort((a, b) => b.known - a.known).slice(0, 5)) add(F.find(a => a.id === r.id)); }
+  }
+  return out.slice(0, 8);
+}
+/** The USASpending searches to run: [{agencyId, short, url, body}]. POST each body as JSON. */
+function awardRequests(names, months){ return awardReqs(awardAgencies(names), months, TODAY); }
+/** Fictional awards for the sample network only, grouped like real answers: [{agencyId, items}]. */
+function demoAwardPages(){
+  if (S.mode !== 'sample') return [];
+  const F = fedRows(), by = new Map();
+  for (const x of demoAwardList(TODAY)){ const a = F.find(f => f.short === x.demoShort); if (!a) continue; if (!by.has(a.id)) by.set(a.id, []); by.get(a.id).push(x); }
+  return [...by.entries()].map(([agencyId, items]) => ({agencyId, items}));
+}
+// pages: [{agencyId, items}] where items are awardPage().items
+function awardRows(pages){
+  const F = fedRows(), out = [], seen = new Set();
+  for (const pg of Array.isArray(pages) ? pages : []){
+    const a = F.find(x => x.id === pg.agencyId); if (!a) continue;
+    const q = awardAgency(a);
+    for (const x of pg.items || []){
+      if (!x || !x.id || seen.has(x.id)) continue;
+      if (q && q.office && !x.demo && !q.office.test(`${x.office} ${x.sub}`)) continue;
+      seen.add(x.id); out.push({a, x});
+    }
+  }
+  return out;
+}
+const peopleAtAgency = () => { const F = fedRows(), by = new Map(); for (const r of live()) for (const a of fedHits(F, r.c, r.cl.agency, r.p)){ const l = by.get(a.id); if (l) l.push(r); else by.set(a.id, [r]); } return by; };
+const topPeople = (rs, n) => rs.slice().sort((x, y) => y.wm.score - x.wm.score || bySenior(x, y)).slice(0, n).map(brief);
+// USASpending writes names in capitals: "LEIDOS, INC." reads better as "Leidos, Inc.", but short forms stay.
+const KEEP_CAPS = /^(LLC|LP|LLP|USA|US|IT|OT|ICS|II|III|IV|NAVFAC|NAVSEA|NAVAIR|NAVWAR|NAVSUP|NIWC|DISA|CISA|USACE|DOD|DOE|DHS|VA|GSA|NASA|AFCEC|AFRL|AFLCMC|AFIMSC|ACC|MICC|DLA|SAIC|CACI|GDIT|KBR|SHI|CDW|WWT|IBM|AWS|BPA|TVA|ERDC|PL\d*|W\d+\w*|N\d+\w*|FA\d+\w*)$/;
+const companyName = s => { const t = String(s || '').trim(); if (t !== t.toUpperCase() || t.length <= 4) return t;
+  return t.split(/(\s+|-|\/)/).map(w => KEEP_CAPS.test(w.replace(/[.,]/g, '')) ? w : w.toLowerCase().replace(/^([a-z])/, m => m.toUpperCase())).join('').replace(/\b(Of|The|And|For)\b/g, m => m.toLowerCase()).replace(/^./, m => m.toUpperCase()); };
+/**
+ * Contracts ending in the next `months` months at the agencies you asked about, with who holds
+ * each one and who you know at the agency and at the incumbent. opts: {months, min (dollars), limit}.
+ */
+function recompetes(pages, opts){
+  const o = opts || {};
+  const months = Math.max(3, Math.min(36, +o.months || 24));
+  const until = isoDay(Date.parse(TODAY) + months * 30.44 * 864e5);
+  const by = peopleAtAgency();
+  const pursuitAt = new Map(); for (const p of S.pursuits){ if (!isOpen(p) || !p.agency) continue; const a = agencyFor(p.agency, fedRows()); if (a && !pursuitAt.has(a.id)) pursuitAt.set(a.id, p); }
+  const tracked = new Set(S.pursuits.map(p => p.source).filter(Boolean));
+  const out = [];
+  for (const {a, x} of awardRows(pages)){
+    if (!x.end || x.end < TODAY || x.end > until) continue;
+    if (+o.min > 0 && x.amount < +o.min) continue;
+    const ps = by.get(a.id) || [];
+    const inc = x.recipient ? live().filter(r => coHit(x.recipient)(r.c)) : [];
+    const days = -daysSince(x.end);
+    const warm = ps.filter(r => r.wm.band === 'strong' || r.wm.band === 'warm').length;
+    const watched = S.targets.some(t => t.name === a.short || t.name === a.name);
+    const pursuit = pursuitAt.get(a.id);
+    let score = Math.max(0, 40 - Math.floor(days / 15)) + Math.min(30, ps.length * 3) + Math.min(15, warm * 5) + Math.min(15, inc.length * 5) + Math.min(20, Math.log10(Math.max(1, x.amount)) * 2);
+    if (watched) score += 15;
+    out.push({id: x.id, piid: x.piid, title: x.desc ? x.desc.charAt(0).toUpperCase() + x.desc.slice(1).toLowerCase() : x.piid, incumbent: companyName(x.recipient), amount: x.amount, amountText: money(x.amount),
+      start: x.start, end: x.end, days, agency: a.short, agencyName: a.name, agencyId: a.id, office: companyName(x.office), naics: x.naics,
+      link: x.demo ? '' : AWARD_LINK + encodeURIComponent(x.id), demo: !!x.demo,
+      known: ps.length, warm, people: topPeople(ps, 3), incumbentKnown: inc.length, incumbentPeople: topPeople(inc, 3),
+      watched, pursuit: pursuit ? pursuit.name : '', pursuitId: pursuit ? pursuit.id : '', tracked: tracked.has(x.id), score: Math.round(score),
+      line: `${ps.length ? `You know ${ps.length} at ${a.short}` : `No one at ${a.short} yet`}${x.recipient ? `, ${inc.length ? inc.length + ' at ' + companyName(x.recipient) : 'no one at the incumbent'}` : ''}`});
+  }
+  out.sort((p, q) => q.score - p.score || p.end.localeCompare(q.end));
+  const limit = +o.limit > 0 ? +o.limit : 100;
+  return {items: out.slice(0, limit), total: out.length, months, value: out.reduce((s, r) => s + r.amount, 0), valueText: money(out.reduce((s, r) => s + r.amount, 0))};
+}
+/** Makes a pursuit from a recompete: the agency, the end date as the due date, the value and the incumbent. */
+function pursueAward(item){
+  const x = item || {};
+  const existing = x.id && S.pursuits.find(p => p.source === x.id);
+  if (existing) return existing;
+  return addPursuit({name: String(x.title || x.piid || 'Recompete').slice(0, 120), agency: x.agency || '', due: x.end || '', value: x.amount ? money(x.amount) : '',
+    stage: 'Tracking', incumbent: x.incumbent || '', source: x.id || ''});
+}
+/**
+ * The companies that win work at these agencies, biggest first, with who you and your team
+ * know at each. opts: {agency (one name to narrow to), limit}.
+ */
+function teamingPartners(pages, opts){
+  const o = opts || {};
+  const want = o.agency ? agencyFor(o.agency, fedRows()) : null;
+  const by = new Map();
+  for (const {a, x} of awardRows(pages)){
+    if (want && a.id !== want.id) continue;
+    const key = coKey(x.recipient); if (!key) continue;
+    if (!by.has(key)) by.set(key, {name: companyName(x.recipient), awards: 0, amount: 0, agencies: new Set(), ending: 0});
+    const e = by.get(key); e.awards++; e.amount += x.amount; e.agencies.add(a.short);
+    if (x.end && x.end >= TODAY && x.end <= isoDay(Date.parse(TODAY) + 365 * 864e5)) e.ending++;
+  }
+  const out = [...by.values()].map(e => {
+    const hit = coHit(e.name);
+    const rs = live().filter(r => hit(r.c));
+    const team = teamPaths(hit).slice(0, 3).map(t => ({owner: t.owner, name: t.name, p: t.p, b: t.b}));
+    const warm = rs.filter(r => r.wm.band === 'strong' || r.wm.band === 'warm').length;
+    return {name: e.name, awards: e.awards, amount: e.amount, amountText: money(e.amount), agencies: [...e.agencies], ending: e.ending,
+      known: rs.length, warm, people: topPeople(rs, 3), team, watched: isTarget(e.name),
+      line: rs.length ? `You know ${rs.length} there${warm ? ', ' + warm + ' warm' : ''}` : team.length ? `${team[0].owner} knows someone there` : 'No one there yet'};
+  });
+  out.sort((p, q) => (q.known > 0) - (p.known > 0) || q.amount - p.amount);
+  const limit = +o.limit > 0 ? +o.limit : 40;
+  return {items: out.slice(0, limit), total: out.length, agency: want ? {id: want.id, short: want.short, name: want.name} : null};
+}
+
+/* ---------- the sample network's pursuits ---------- */
+// So the sample shows pursuits with filled seats, open seats, a cold seat and a pipeline.
+function samplePursuits(){
+  const by = q => atOrg(q).sort((a, b) => b.wm.score - a.wm.score);
+  const day = n => isoDay(Date.parse(TODAY) + n * 864e5);
+  const mk = (o, seats) => {
+    const p = {id: 'sample-' + o.key, name: o.name, agency: o.agency, due: o.due, value: o.value, stage: o.stage, roles: {}, note: o.note || '', created: TODAY};
+    for (const f of ['incumbent', 'partners', 'pwin', 'closed']) if (o[f] != null) p[f] = o[f];
+    for (const [role, k] of seats) if (k) p.roles[role] = [k];
+    return p;
+  };
+  const nav = by('NAVFAC'), disa = by('DISA'), cisa = by('CISA'), usace = by('USACE'), leidos = atOrg('Leidos'), dragos = atOrg('Dragos'), booz = atOrg('Booz Allen Hamilton'), doe = by('Department of Energy');
+  const pickT = (rs, rx) => (rs.find(r => rx.test(r.p)) || rs[0] || {}).k;
+  return [
+    mk({key: 'navfac', name: 'NAVFAC Southeast utility OT monitoring', agency: 'NAVFAC', due: day(34), value: '$14.2M', stage: 'Pursuing', incumbent: 'Leidos', partners: 'Dragos',
+      note: 'Example pursuit. Sources sought is out; industry day next month.'},
+      [['Program manager', pickT(nav, /program|facilit/i)], ['Contracting officer', pickT(nav, /contract/i)], ['Incumbent', (leidos[0] || {}).k], ['Teaming partner', (dragos[0] || {}).k]]),
+    mk({key: 'disa', name: 'DISA cross domain services recompete', agency: 'DISA', due: day(78), value: '$48.5M', stage: 'Proposal', pwin: 35, incumbent: 'Booz Allen Hamilton', partners: 'Fortinet, World Wide Technology'},
+      [['Executive sponsor', pickT(disa, /senior executive|director/i)], ['Contracting officer', pickT(disa, /contract/i)], ['Incumbent', (booz[0] || {}).k]]),
+    mk({key: 'cisa', name: 'CISA ICS assessment support', agency: 'CISA', due: day(120), value: '$31.7M', stage: 'Tracking', incumbent: 'SAIC'},
+      [['Mission owner', pickT(cisa, /branch chief|ics/i)]]),
+    mk({key: 'usace', name: 'USACE lock and dam SCADA', agency: 'USACE', due: day(-40), value: '$9.3M', stage: 'Won', closed: day(-20)},
+      [['Program manager', pickT(usace, /program/i)], ['Contracting officer', pickT(usace, /contract/i)]]),
+    mk({key: 'doe', name: 'DOE grid analytics pilot', agency: 'DOE', due: day(-75), value: '$5.4M', stage: 'Lost', closed: day(-60)},
+      [['Program manager', pickT(doe, /program/i)]]),
+  ];
 }
 
 /* ---------- moves: rotations and transitions ---------- */
@@ -1302,8 +1650,8 @@ function teamPack(owner){
 }
 /** Your share for the team server: people, pursuits (with who fills each seat) and watchlist. */
 function teamShare(owner){
-  const pursuits = S.pursuits.map(p => ({name: p.name, agency: p.agency, stage: p.stage, due: p.due, value: p.value,
-    roles: Object.entries(p.roles).flatMap(([role, ks]) => ks.map(k => S.byK.get(k)).filter(Boolean).map(r => ({role, name: fullName(r), p: r.p || '', b: r.wm.band})))}));
+  const pursuits = S.pursuits.map(p => ({name: p.name, agency: p.agency, stage: p.stage, due: p.due, value: p.value, pwin: p.pwin, incumbent: splitNames(p.incumbent)[0] || '', closed: p.closed || '',
+    owners: p.owners || {}, roles: Object.entries(p.roles).flatMap(([role, ks]) => ks.map(k => S.byK.get(k)).filter(Boolean).map(r => ({role, name: fullName(r), p: r.p || '', b: r.wm.band})))}));
   return JSON.stringify({kind: 'bearings-team-share', v: 2, owner: clip(owner || 'A teammate', 80), made: TODAY, people: sharePeople(), pursuits, targets: S.targets.map(t => t.name)});
 }
 function parseShare(text){
@@ -1313,6 +1661,8 @@ function parseShare(text){
   const people = d.people.slice(0, 50000).filter(p => p && (p.f || p.l)).map(p => ({f: clip(p.f, 80), l: clip(p.l, 80), c: clip(p.c, 160), p: clip(p.p, 240), u: clip(p.u, 300), b: band(p.b)}));
   const pursuits = (Array.isArray(d.pursuits) ? d.pursuits : []).slice(0, 200).filter(p => p && p.name).map(p => ({name: clip(p.name, 160), agency: clip(p.agency, 160),
     stage: STAGES.includes(p.stage) ? p.stage : 'Tracking', due: clip(p.due, 10), value: clip(p.value, 40),
+    pwin: p.pwin != null && isFinite(+p.pwin) ? Math.max(0, Math.min(100, Math.round(+p.pwin))) : null, incumbent: clip(p.incumbent, 160), closed: clip(p.closed, 10),
+    owners: Object.fromEntries(Object.entries(p.owners && typeof p.owners === 'object' ? p.owners : {}).slice(0, 20).map(([r, o]) => [clip(r, 60), clip(o, 80)]).filter(([r, o]) => r && o)),
     roles: (Array.isArray(p.roles) ? p.roles : []).slice(0, 60).filter(x => x && x.role && x.name).map(x => ({role: clip(x.role, 60), name: clip(x.name, 160), p: clip(x.p, 240), b: band(x.b)}))}));
   const targets = (Array.isArray(d.targets) ? d.targets : []).slice(0, 500).map(t => clip(t, 160)).filter(Boolean);
   return {owner: clip(d.owner || 'A teammate', 80), made: clip(d.made || TODAY, 10), people, pursuits, targets};
@@ -1349,9 +1699,9 @@ function teamOverview(){
   for (const t of S.team) for (const p of t.people) uniq.add(key(p));
   const cov = agencyCoverage(true);
   const pursuitsOut = [];
-  for (const p of S.pursuits){ const sum = pursuitSummary(p); pursuitsOut.push({owner: 'You', mine: true, id: p.id, name: p.name, agency: p.agency, stage: p.stage, due: p.due, days: sum.days, value: p.value, filled: sum.filled, roles: PURSUIT_ROLES.length, people: []}); }
+  for (const p of S.pursuits){ const sum = pursuitSummary(p); pursuitsOut.push({owner: 'You', mine: true, id: p.id, name: p.name, agency: p.agency, stage: p.stage, due: p.due, days: sum.days, value: p.value, filled: sum.filled, roles: PURSUIT_ROLES.length, people: [], owners: p.owners || {}}); }
   for (const t of S.team) for (const p of t.pursuits || []) pursuitsOut.push({owner: t.owner, mine: false, id: '', name: p.name, agency: p.agency, stage: p.stage, due: p.due,
-    days: p.due ? -daysSince(p.due) : null, value: p.value, filled: new Set(p.roles.map(x => x.role)).size, roles: PURSUIT_ROLES.length, people: p.roles});
+    days: p.due ? -daysSince(p.due) : null, value: p.value, filled: new Set(p.roles.map(x => x.role)).size, roles: PURSUIT_ROLES.length, people: p.roles, owners: p.owners || {}});
   pursuitsOut.sort((a, b) => (STAGES.indexOf(a.stage) > 3) - (STAGES.indexOf(b.stage) > 3) || ((a.due || '9') < (b.due || '9') ? -1 : 1));
   const names = new Map();
   for (const t of S.targets) names.set(t.name.toLowerCase(), {name: t.name, owners: ['You']});
@@ -1791,7 +2141,9 @@ function load(st){
 }
 function loadSample(){
   const s = sampleNetwork();
-  return load({mode: 'sample', rows: s.rows, meta: s.meta || {lastImport: TODAY, n: 1}, edits: s.edits || {}, review: {}, targets: SAMPLE_TARGETS.map(name => ({name, added: TODAY})), lens: S.lensPref});
+  const out = load({mode: 'sample', rows: s.rows, meta: s.meta || {lastImport: TODAY, n: 1}, edits: s.edits || {}, review: {}, targets: SAMPLE_TARGETS.map(name => ({name, added: TODAY})), lens: S.lensPref});
+  S.pursuits = samplePursuits();
+  return out;
 }
 // Native apps hand over the raw saved files; parsing them here keeps one source of truth.
 function loadFiles(f, lens){
@@ -1847,7 +2199,8 @@ function constants(){
 
 const api = {load, loadSample, loadFiles, clearNotes, clusters, placeClues, setCompanyLocation, companyPlaces, messages, matchAttendees, alsoAt, setLens, info, people, person, search, facets, home, payoff, targets, unit, addTargetCandidates, toggleTarget, setTargetNote, orgs,
   industries, industry, setCompanyIndustry, setCompanyLink, ranks, deck, deckCount, reviewed, radar, compass, startFromContacts, introPaths, weekly, touch, setCircle, setEdit, followUp, markReplied, addNote,
-  importTexts, importSnapshot, yearInReview, teamPack, teamShare, addTeamPack, setTeamShares, removeTeamPack, teamList, teamOverview, demoTeamShares, matchEnrichment, readNotes, memory, applyMail, clearMail, addProspects, clearProspects, addPursuit, updatePursuit, removePursuit, assignRole, pursuits, pursuit, moves, setRoleSince, quickLog, addIntro, setIntro, intros, trend, snapshot, targetChanges, ask, importSocial, clearSocial, socials, agencyCoverage, matchOpportunities, opportunityFilters, opportunityRequests, opportunityPage, demoOpportunities, markOpportunitiesSeen, orgChart, structureFor, setReportsTo, backup, restore, exportCSV, reminders, watch, constants, quote,
+  importTexts, importSnapshot, yearInReview, teamPack, teamShare, addTeamPack, setTeamShares, removeTeamPack, teamList, teamOverview, demoTeamShares, matchEnrichment, readNotes, memory, applyMail, clearMail, addProspects, clearProspects, addPursuit, updatePursuit, removePursuit, assignRole, setSeatOwner, pursuits, pursuit, coldSeats, pipeline, pursuitSheet, callPlan, matchAttendeeList, tagAttendees,
+  awardRequests, awardPage, demoAwardPages, recompetes, pursueAward, teamingPartners, federalAsOf: () => FEDERAL_AS_OF, moves, setRoleSince, quickLog, addIntro, setIntro, intros, trend, snapshot, targetChanges, ask, importSocial, clearSocial, socials, agencyCoverage, matchOpportunities, opportunityFilters, opportunityRequests, opportunityPage, demoOpportunities, markOpportunitiesSeen, orgChart, structureFor, setReportsTo, backup, restore, exportCSV, reminders, watch, constants, quote,
   flightInfo, flightInfos, feedTrips, eventTrips, icsEvents};
 // Every call goes through here: JSON string in, JSON string out, errors as {error}.
 globalThis.Bearings = {

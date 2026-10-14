@@ -18,6 +18,8 @@ const searchKeys = input => call('search', Object.assign({ text: '', filters: {}
 beforeEach(() => {
   call('clearNotes');
   call('loadSample');
+  // the sample comes with example pursuits; these tests start without them (see capture.test.mjs)
+  for (const p of call('pursuits')) call('removePursuit', p.id);
 });
 
 test('sample network loads', () => {
@@ -65,7 +67,7 @@ test('weekly brief: at most five different people, each with a reason', () => {
   assert.equal(new Set(picks.map(p => p.k)).size, picks.length);
   for (const p of picks) {
     assert.ok(p.why && p.why.length > 10);
-    assert.ok(['reply', 'circle', 'due', 'congrats', 'cold', 'anniv', 'new', 'checkin'].includes(p.kind), p.kind);
+    assert.ok(['reply', 'circle', 'due', 'seat', 'congrats', 'cold', 'anniv', 'new', 'checkin', 'intro', 'move'].includes(p.kind), p.kind);
   }
   // people waiting on a reply come first
   const map = byKey();
@@ -471,9 +473,10 @@ test('people from an enrichment file you are not connected to fill empty org cha
 
 test('pursuits map the people who decide an opportunity, with gaps and suggestions', () => {
   call('loadSample');
+  for (const x of call('pursuits')) call('removePursuit', x.id);
   const p = call('addPursuit', {name: 'DISA OT gateway', agency: 'DISA', due: '2026-12-01'});
   let d = call('pursuit', p.id);
-  assert.equal(d.roleList.length, 6);
+  assert.equal(d.roleList.length, 8);
   assert.ok(d.known > 0);
   const withSuggest = d.roleList.find(r => r.suggest.length);
   assert.ok(withSuggest, 'some role has suggestions');

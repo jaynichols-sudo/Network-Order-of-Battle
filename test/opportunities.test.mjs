@@ -27,6 +27,8 @@ const ALL = ['r', 'p', 'k', 'o', 's', 'a'];
 beforeEach(() => {
   call('clearNotes');
   call('loadSample');
+  // the sample comes with example pursuits; these tests start without them (see capture.test.mjs)
+  for (const p of call('pursuits')) call('removePursuit', p.id);
 });
 
 test('opportunities: reads a SAM.gov answer into slim notices', () => {
