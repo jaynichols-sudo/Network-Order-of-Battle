@@ -45,8 +45,8 @@ export const accountButton = () => `<button type="button" class="me-btn" data-a=
 export function accountMenu(){ go('you'); }
 
 /* ---------- the daily five ---------- */
-const EYEBROW = {reply: ['WAITING ON YOU', 'var(--needs)'], congrats: ['NEW ROLE', 'var(--good)'], new: ['NEW CONNECTION', 'var(--info)'], move: ['LIKELY TO MOVE', 'var(--violet)'], intro: ['INTRO PENDING', 'var(--accent)']};
-const ACTION = {reply: 'Reply', congrats: 'Congratulate', new: 'Say thanks', intro: 'Nudge'};
+const EYEBROW = {reply: ['WAITING ON YOU', 'var(--needs)'], congrats: ['NEW ROLE', 'var(--good)'], new: ['NEW CONNECTION', 'var(--info)'], move: ['LIKELY TO MOVE', 'var(--violet)'], intro: ['INTRO PENDING', 'var(--accent)'], seat: ['PURSUIT SEAT GOING COLD', 'var(--info)']};
+const ACTION = {reply: 'Reply', congrats: 'Congratulate', new: 'Say thanks', intro: 'Nudge', seat: 'Check in'};
 
 function openLine(picks){
   const off = weeklySnoozed();
@@ -74,7 +74,8 @@ function focusCard(w, p, enter){
   return `<section class="card daily-focus ${enter ? 'enter' : ''}" data-k="${esc(p.k)}">
     <button type="button" class="df-who" data-a="open" data-v="${esc(p.k)}">${avatar(p, 64)}
       <span class="df-text"><span class="eyebrow" style="color:${color}">${tag}</span><b class="serif">${esc(p.full)}</b>${sub ? `<span class="df-sub">${esc(sub)}</span>` : ''}</span></button>
-    <p class="df-memory">${esc(recall)}</p>
+    <p class="df-memory">${esc(w.kind === 'seat' ? w.why : recall)}</p>
+    ${w.kind === 'seat' ? `<button type="button" class="link small df-plan" data-a="callPlan" data-v="${esc(p.k)}">${icon('checklist')}Call plan</button>` : ''}
     ${draft ? `<p class="df-draft serif">“${esc(draft)}”</p>` : ''}
     <div class="df-btns"><button type="button" class="bigpill filled" data-a="write" data-v="${esc(p.k)}">${esc(ACTION[w.kind] || 'Write')}</button>
       <button type="button" class="bigpill" data-a="later" data-v="${esc(p.k)}" aria-haspopup="menu">Remind me later</button></div>
@@ -152,7 +153,7 @@ function chips(){
   return `<div class="tchips">${out.join('')}</div>`;
 }
 
-const CARD_ICONS = {'circle.circle': 'circleKey', 'rectangle.stack': 'stack', bell: 'bell', 'arrowshape.turn.up.left': 'reply', snowflake: 'snow', briefcase: 'briefcase', 'person.badge.plus': 'personPlus', flag: 'flag', scope: 'scope', gift: 'gift', star: 'star', 'square.grid.2x2': 'grid', tag: 'tag', externaldrive: 'drive', 'chart.pie': 'pie'};
+const CARD_ICONS = {'thermometer.snowflake': 'snow', target: 'target', 'circle.circle': 'circleKey', 'rectangle.stack': 'stack', bell: 'bell', 'arrowshape.turn.up.left': 'reply', snowflake: 'snow', briefcase: 'briefcase', 'person.badge.plus': 'personPlus', flag: 'flag', scope: 'scope', gift: 'gift', star: 'star', 'square.grid.2x2': 'grid', tag: 'tag', externaldrive: 'drive', 'chart.pie': 'pie'};
 function worthRow(c, i){
   const ps = persons((c.people || []).slice(0, 6));
   const bars = c.bars && c.bars.length ? (() => { const total = Math.max(1, c.bars.reduce((a, b) => a + b[1], 0)); return `<span class="bars">${c.bars.map(([, n, col]) => `<i style="flex:${n / total};background:${esc(col)}"></i>`).join('')}</span>`; })() : '';
@@ -222,6 +223,7 @@ export const HomeView = {
     weekly: () => open('weekly'),
     open: k => openPerson(k),
     write: k => { fx.tap(); open('message', k); },
+    callPlan: k => { fx.tap(); open('callPlan', k); },
     later(k, t){
       const p = person(k), who = p ? (p.f || p.full) : 'them';
       const snooze = days => { snoozeWeekly(k); HomeView.update(t.closest('.screen')); followUp(k, days); };

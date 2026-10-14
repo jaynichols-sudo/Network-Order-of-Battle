@@ -440,6 +440,33 @@ export async function addPursuit(o){
 export async function updatePursuit(id, patch){ tryOr(() => api.updatePursuit(id, patch), null); await savePursuits(); }
 export async function assignRole(id, role, k, on){ tryOr(() => api.assignRole(id, role, k, on), null); await savePursuits(); }
 export async function removePursuit(id){ tryOr(() => api.removePursuit(id), null); await savePursuits(); }
+/** Which teammate owns the relationship in one seat; '' clears it. */
+export async function setSeatOwner(id, role, owner){ tryOr(() => api.setSeatOwner(id, role, owner || ''), null); await savePursuits(); }
+export const pipeline = withTeam => tryOr(() => api.pipeline(!!withTeam), null);
+export const pursuitSheet = id => tryOr(() => api.pursuitSheet(id), null);
+export const callPlan = (k, pursuitId) => tryOr(() => api.callPlan(k, pursuitId || null), null);
+/** Makes a pursuit from a recompete (once) and saves it. Returns the pursuit's id. */
+export async function pursueAward(item){
+  const p = tryOr(() => api.pursueAward(item), null);
+  await savePursuits();
+  return p && p.id;
+}
+
+/* ---------- event attendee lists ---------- */
+/** Matches an attendee CSV to the network. Throws a plain-English error when it has no name columns. */
+export async function matchAttendeeList(text, event){
+  const r = api.matchAttendeeList(text, event);
+  if (r.added) await saveFile('prospects', 'prospects.json');
+  return r;
+}
+/** Tags the people you know from an attendee list with the event's name. */
+export async function tagAttendees(keys, event){
+  try {
+    const r = api.tagAttendees(keys, event);
+    if (r.tagged){ await saveFile('edits', 'edits.json'); refreshAll(); }
+    return r;
+  } catch (e) { show('Couldn’t save: ' + ((e && e.message) || e)); return {tagged: 0}; }
+}
 
 /* ---------- moves and intros ---------- */
 export const moves = () => tryOr(() => api.moves(), []);

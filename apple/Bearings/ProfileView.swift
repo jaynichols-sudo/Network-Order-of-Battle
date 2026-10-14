@@ -7,6 +7,7 @@ struct ProfileView: View {
     @State private var writing = false
     @State private var addingNotes = false
     @State private var settingRoleStart = false
+    @State private var planning = false
     @State private var photoItem: PhotosPickerItem?
     @State private var width: CGFloat = 0
 
@@ -56,6 +57,7 @@ struct ProfileView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
+                        Button { planning = true } label: { Label("Call plan", systemImage: "list.bullet.clipboard") }
                         Button { addingNotes = true } label: { Label("Add meeting notes", systemImage: "text.badge.plus") }
                         Button { model.sharePaperBrief(p.k) } label: { Label("Paper brief for reMarkable or print", systemImage: "doc.richtext") }
                         Button { settingRoleStart = true } label: { Label("In this role since…", systemImage: "calendar.badge.clock") }
@@ -68,6 +70,7 @@ struct ProfileView: View {
             }
             .modifier(AddNotesPrompt(isPresented: $addingNotes, forPerson: p.k))
             .sheet(isPresented: $settingRoleStart) { RoleSinceSheet(k: p.k).environment(AppModel.shared) }
+            .sheet(isPresented: $planning) { CallPlanSheet(k: p.k).environment(AppModel.shared) }
             .task(id: k) { await model.loadFull(k) }
         } else {
             ContentUnavailableView("Not found", systemImage: "person.crop.circle.badge.xmark", description: Text("This person isn’t in your network anymore."))

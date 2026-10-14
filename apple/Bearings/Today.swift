@@ -152,11 +152,16 @@ struct NeedsYouCard: View {
                                 .foregroundStyle(isDone ? Theme.text3 : .primary)
                                 .strikethrough(isDone, color: Theme.text3)
                                 .lineLimit(1)
-                            Text(w.why)
-                                .font(Theme.geist(.footnote))
-                                .foregroundStyle(Theme.text2)
-                                .lineLimit(2)
-                                .multilineTextAlignment(.leading)
+                            HStack(alignment: .firstTextBaseline, spacing: 4) {
+                                if w.kind == "seat" {
+                                    Image(systemName: "thermometer.snowflake").font(.caption2).foregroundStyle(Theme.info).accessibilityLabel("Pursuit seat")
+                                }
+                                Text(w.why)
+                                    .font(Theme.geist(.footnote))
+                                    .foregroundStyle(Theme.text2)
+                                    .lineLimit(2)
+                                    .multilineTextAlignment(.leading)
+                            }
                         }
                         Spacer(minLength: 0)
                     }
@@ -187,6 +192,7 @@ struct NeedsYouCard: View {
         case "reply": return "Reply"
         case "congrats": return "Congrats"
         case "new": return "Thank"
+        case "seat": return "Check in"
         default: return "Write"
         }
     }
@@ -310,6 +316,7 @@ struct YouView: View {
                     row("Pursuits", icon: "scope") { model.open(.pursuits) }
                     row("The federal map", icon: "building.columns") { model.companiesMode = .agencies; model.paths[.companies] = []; model.tab = .companies }
                     row("SAM.gov opportunities", icon: "doc.text.magnifyingglass", detail: (SamFeed.shared.match?.newCount ?? 0) > 0 ? "\(SamFeed.shared.match?.newCount ?? 0) new" : nil) { model.open(.opportunities) }
+                    row("Recompetes and teaming partners", icon: "arrow.triangle.2.circlepath.doc.on.clipboard") { model.open(.recompetes) }
                     row("Across your socials", icon: "person.3.sequence") { model.open(.socials) }
                     row("Intros", icon: "person.line.dotted.person") { model.open(.intros) }
                     row("Moves and rotations", icon: "arrow.triangle.swap") { model.open(.moves) }

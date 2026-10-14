@@ -379,6 +379,7 @@ struct OpportunitiesView: View {
     var body: some View {
         List {
             if !feed.available(model) {
+                awardLinks
                 Section {
                     ContentUnavailableView {
                         Label("Add your SAM.gov key", systemImage: "building.columns")
@@ -413,6 +414,7 @@ struct OpportunitiesView: View {
                     Text(footer).font(Theme.geist(.footnote)).foregroundStyle(.secondary)
                     Button("SAM.gov settings") { model.showSettings = true }.font(Theme.geist(.footnote, .semibold))
                 }
+                awardLinks
             } else {
                 ProgressView().frame(maxWidth: .infinity)
             }
@@ -422,6 +424,16 @@ struct OpportunitiesView: View {
         .navigationBarTitleDisplayMode(.inline)
         .refreshable { await feed.refresh(model: model, force: true) }
         .task(id: "\(model.info.rev)-\(model.info.isSample)") { await feed.refresh(model: model) }
+    }
+
+    /// Recompetes and teaming partners, from USASpending.gov. No key needed.
+    private var awardLinks: some View {
+        Section {
+            NavigationLink(value: Route.recompetes) { Label("Recompetes: contracts ending soon", systemImage: "arrow.triangle.2.circlepath.doc.on.clipboard") }
+            NavigationLink(value: Route.teaming) { Label("Teaming partners", systemImage: "person.2.badge.gearshape") }
+        } footer: {
+            Text("Contract data from USASpending.gov. Only the agency name is sent.")
+        }
     }
 
     private func header(_ m: OpportunityMatch) -> some View {

@@ -166,6 +166,9 @@ struct EventView: View {
     @State private var draft: NetEvent.Met?
     @State private var writingTo: String?
     @State private var savingContact: NetEvent.Met?
+    /// The file picker is for a full attendee list (CSV with columns), not a list of names.
+    @State private var pickingCSV = false
+    @State private var attendeeMatch: AttendeeMatch?
 
     var body: some View {
         if let e = model.events.first(where: { $0.id == id }) {
@@ -189,8 +192,12 @@ struct EventView: View {
                 #endif
             }
             .fileImporter(isPresented: $pickingList, allowedContentTypes: [.commaSeparatedText, .plainText, .text]) { r in
-                if case .success(let url) = r { loadList(url: url, e) }
+                if case .success(let url) = r {
+                    if pickingCSV { importCSV(url: url, e) } else { loadList(url: url, e) }
+                }
+                pickingCSV = false
             }
+            .sheet(item: $attendeeMatch) { m in AttendeeListSheet(match: m).environment(AppModel.shared) }
             .sheet(isPresented: $pasting) { pasteSheet(e).environment(AppModel.shared) }
             .sheet(isPresented: $addingKnown) { PersonPicker { k in addKnown(k, e) }.environment(AppModel.shared) }
             .sheet(item: $draft) { m in MetForm(met: m, event: e).environment(AppModel.shared) }
@@ -250,7 +257,8 @@ struct EventView: View {
             Button { addingKnown = true } label: { Label("Met someone you’re connected to", systemImage: "person.crop.circle.badge.checkmark") }
             Button { draft = NetEvent.Met(name: "") } label: { Label("Add someone new", systemImage: "person.badge.plus") }
             Menu {
-                Button { pickingList = true } label: { Label("Choose a file (CSV or text)", systemImage: "doc") }
+                Button { pickingCSV = true; pickingList = true } label: { Label("Import attendee list (CSV)", systemImage: "tablecells") }
+                Button { pickingCSV = false; pickingList = true } label: { Label("Choose a file (CSV or text)", systemImage: "doc") }
                 Button { pasting = true } label: { Label("Paste names or emails", systemImage: "doc.on.clipboard") }
             } label: {
                 HStack {
@@ -354,6 +362,29 @@ struct EventView: View {
         defer { if access { url.stopAccessingSecurityScopedResource() } }
         guard let d = try? Data(contentsOf: url) else { model.show("Couldn’t read that file"); return }
         match(text: String(decoding: d, as: UTF8.self), e)
+    }
+
+    /// A registration or badge-scan export with columns: who you know, and who's new by company.
+    private func importCSV(url: URL, _ e: NetEvent) {
+        let access = url.startAccessingSecurityScopedResource()
+        defer { if access { url.stopAccessingSecurityScopedResource() } }
+        guard let d = try? Data(contentsOf: url) else { model.show("Couldn’t read that file"); return }
+        let text = String(decoding: d, as: UTF8.self)
+        loadingList = true
+        Task {
+            do {
+                let m = try await model.matchAttendeeList(text, event: e.name)
+                if var x = model.events.first(where: { $0.id == e.id }) {
+                    x.attending = Array(Set(x.attending + m.known.map(\.k)))
+                    await model.saveEvent(x)
+                }
+                Haptic.success()
+                attendeeMatch = m
+            } catch {
+                model.show(error.localizedDescription, seconds: 5)
+            }
+            loadingList = false
+        }
     }
 
     private func match(text: String, _ e: NetEvent) {

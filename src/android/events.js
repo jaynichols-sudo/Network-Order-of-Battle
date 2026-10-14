@@ -2,7 +2,7 @@
 // people you meet with a note each; afterward, a follow-up list until everyone's been
 // contacted. Ports Events.swift. Card scanning (camera OCR) is iPhone only; on Android
 // you add people by hand, which takes a few seconds with the keyboard's microphone.
-import { M, person, persons, show, metAt, saveEvents } from './model.js';
+import { M, person, persons, show, metAt, saveEvents, matchAttendeeList, tagAttendees } from './model.js';
 import { esc, fmt, icon, avatar, menu, empty, $, plural } from './ui.js';
 import { openSheet, closeSheet, registerRoute, push, popPage } from './nav.js';
 import { openPerson, register, open } from './actions.js';
@@ -129,7 +129,7 @@ function eventView(id){
       metKnown: k => openMetForm(id, fromPerson(k)),
       addNew: () => openMetForm(id, {name: ''}),
       loadList(_, t){
-        menu(t, [{label: 'Paste names or emails', icon: 'copy', run: () => openPaste(id)}, {label: 'Choose a file (CSV or text)', icon: 'note', run: () => pickFile()}]);
+        menu(t, [{label: 'Paste names or emails', icon: 'copy', run: () => openPaste(id)}, {label: 'Import attendee list (CSV)', icon: 'download', run: () => pickFile()}]);
       },
       tick(mid){
         const e = eventById(id), m = e && e.met.find(x => x.id === mid); if (!m) return;
@@ -159,7 +159,7 @@ function eventView(id){
   function pickFile(){
     if (!fileInput){
       fileInput = document.createElement('input'); fileInput.type = 'file'; fileInput.accept = '.csv,.txt,.tsv,text/csv,text/plain,text/comma-separated-values'; fileInput.hidden = true;
-      fileInput.addEventListener('change', async () => { const f = fileInput.files && fileInput.files[0]; fileInput.value = ''; if (!f) return; try { matchList(id, await f.text()); } catch { show('Couldn’t read that file'); } });
+      fileInput.addEventListener('change', async () => { const f = fileInput.files && fileInput.files[0]; fileInput.value = ''; if (!f) return; let text = ''; try { text = await f.text(); } catch { show('Couldn’t read that file'); return; } importList(id, text); });
       document.body.appendChild(fileInput);
     }
     fileInput.click();
@@ -252,9 +252,59 @@ export function openPicker(onPick, {title = 'Who did you meet?', none = 'No one 
 }
 
 /* ---------- attendee list ---------- */
+/**
+ * An attendee or badge-scan CSV: who you know there and who's new, by company. People you
+ * don't know yet are kept on this phone so they fill empty seats on org charts. A plain list
+ * with no header row (one name or email per line) is matched the simple way instead.
+ */
+export async function importList(eventId, text){
+  const e = eventById(eventId); if (!e) return;
+  let r;
+  try { r = await matchAttendeeList(text, e.name); }
+  catch (err) {
+    if (parseAttendees(text).length){ matchList(eventId, text); return; }
+    show((err && err.message) || 'Couldn’t read that file'); return;
+  }
+  const metKeys = new Set(e.met.map(m => m.k).filter(Boolean));
+  e.attending = [...new Set((e.attending || []).concat(r.known.map(x => x.k).filter(k => k && !metKeys.has(k))))];
+  fx.success();
+  await saveEvents();
+  openAttendeeResult(r);
+}
+function openAttendeeResult(r){
+  let tagged = false;
+  const render = body => {
+    const ps = persons(r.known.map(x => x.k));
+    body.innerHTML = `<section class="card stats3 ev-stats">
+        <div class="stat"><b class="mono">${fmt(r.rows)}</b><span class="muted small">on the list</span></div>
+        <div class="stat"><b class="mono">${fmt(r.knownCount)}</b><span class="muted small">you know</span></div>
+        <div class="stat"><b class="mono">${fmt(r.newCount)}</b><span class="muted small">new to you</span></div></section>
+      ${ps.length ? `<div class="card list actions top12">${tagged ? `<div class="row static act good">${icon('checkCircle')}<span>${esc(`Tagged with ${r.event}`)}</span></div>`
+        : `<button type="button" class="row act accent" data-a="tagAll">${icon('tag')}<span>${esc(`Tag the ${fmt(ps.length)} you know with ${r.event}`)}</span></button>`}</div>` : ''}
+      ${ps.length ? `<p class="sec-h">You know ${fmt(ps.length)}</p><div class="card list">${ps.map(p => personRow(p)).join('')}</div>` : '<p class="foot">No one on this list is in your network yet.</p>'}
+      ${r.companies.length ? `<p class="sec-h">New to you, by company</p><div class="card list">${r.companies.map(c => `<div class="row static att-co"><span class="grow"><span class="row-between"><b>${esc(c.company)}</b><span class="mono small">${fmt(c.count)}</span></span>
+          <span class="muted small">${esc([c.target ? 'On your watchlist' : '', c.known ? `You know ${fmt(c.known)} there` : c.company === 'No company listed' ? '' : 'No one there yet'].filter(Boolean).join(' · '))}</span>
+          <span class="small att-names">${esc(c.people.map(x => x.p ? `${x.name} (${x.p})` : x.name).join(', ') + (c.count > c.people.length ? `, and ${fmt(c.count - c.people.length)} more` : ''))}</span></span>${c.target ? `<span class="accent">${icon('starFill')}</span>` : ''}</div>`).join('')}</div>` : ''}
+      <p class="foot">${esc(r.added ? `Northfix kept ${fmt(r.added)} new ${r.added === 1 ? 'person' : 'people'} on this phone, so they show up on org charts.` : '')} The list never leaves this phone.</p>`;
+  };
+  openSheet({
+    title: r.event || 'Attendee list', right: ['Done'], full: true,
+    mount: render,
+    handlers: {
+      open(k){ closeSheet(); openPerson(k); },
+      async tagAll(_, t){
+        const body = t.closest('.sheet-body');
+        const res = await tagAttendees(r.known.map(x => x.k), r.event);
+        tagged = true; fx.success();
+        show(res.tagged ? `Tagged ${plural(res.tagged, 'person', 'people')} with ${r.event}` : `Already tagged with ${r.event}`);
+        render(body);
+      },
+    },
+  });
+}
 function openPaste(eventId){
   openSheet({
-    title: 'Attendee list', left: ['Cancel'], right: ['Match', s => { const txt = $('textarea', s.el).value; if (!txt.trim()) return; closeSheet(); matchList(eventId, txt); }], full: true,
+    title: 'Attendee list', left: ['Cancel'], right: ['Match', s => { const txt = $('textarea', s.el).value; if (!txt.trim()) return; closeSheet(); importList(eventId, txt); }], full: true,
     mount(body){
       body.innerHTML = `<div class="card form"><textarea class="field" rows="12" placeholder="Jane Smith, jane@example.com&#10;Lt Col Sam Rivera&#10;pat.lee@agency.gov" aria-label="Attendee list"></textarea></div>
         <p class="foot">One person per line: a name, an email, or both. Copy it from the registration page or a spreadsheet. The list stays on this phone.</p>`;

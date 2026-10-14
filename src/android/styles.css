@@ -1083,3 +1083,32 @@ input[type=range] { accent-color: var(--accent); }
 .opp-detail h1 { font-size: 24px; font-weight: 600; line-height: 1.2; margin: 6px 0 4px; }
 .opp-detail .small .i { width: 14px; height: 14px; vertical-align: -2px; margin-right: 4px; }
 .opp-card .foot { margin: 4px 16px 12px; }
+
+/* ================= capture: industry seats, pipeline, one-pager, call plan, recompetes ================= */
+.pu-cold { display: block; margin-top: 4px; }
+.pu-pipe .grow { display: flex; flex-direction: column; gap: 2px; }
+.pu-form .frow.col .field { padding: 6px 0 10px; font-size: 16px; }
+.pu-pwin-in { display: inline-flex; align-items: center; gap: 4px; }
+.pu-pwin-in .field { width: 64px; text-align: right; padding: 4px 0; -moz-appearance: textfield; }
+.pu-pwin-in .field::-webkit-outer-spin-button, .pu-pwin-in .field::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.pu-role-sub { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; padding: 2px 16px 4px; }
+.pu-owner { margin-left: auto; }
+.pu-plan { display: inline-flex; align-items: center; gap: 6px; margin: -4px 0 4px 70px; padding: 4px 0; }
+.pu-plan .i { width: 15px; height: 15px; }
+.df-plan { display: inline-flex; align-items: center; gap: 6px; margin: 0 0 12px; }
+.df-plan .i { width: 15px; height: 15px; }
+.pipe-head .big, .opp-head .big { font-size: 34px; font-weight: 600; letter-spacing: -.02em; }
+.pipe-stage .grow, .pipe-row .grow, .att-co .grow { display: flex; flex-direction: column; gap: 3px; }
+.pipe-bar { display: block; height: 6px; border-radius: 3px; overflow: hidden; background: var(--fill); }
+.pipe-bar i { display: block; height: 100%; border-radius: 3px; }
+.pipe-row { gap: 12px; align-items: center; padding: 11px 16px; text-align: left; }
+.pipe-row:disabled { opacity: 1; cursor: default; }
+.pipe-amt { flex: none; display: flex; flex-direction: column; align-items: flex-end; gap: 3px; text-align: right; }
+.att-names { color: var(--text2); line-height: 1.35; }
+.onepager { overflow: hidden; padding: 0; }
+.onepager-frame { display: block; width: 100%; height: 62vh; border: 0; background: #fff; }
+.cplan p { margin: 0; line-height: 1.45; }
+.cplan p + p { margin-top: 8px; }
+.cplan-facts { margin: 0; padding-left: 18px; color: var(--text2); font-size: 14px; line-height: 1.45; }
+.cplan-facts li + li { margin-top: 4px; }
+.fed-asof { margin-top: 6px; }

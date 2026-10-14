@@ -130,6 +130,7 @@ struct DailyFiveCard: View {
         case "new": return ("NEW CONNECTION", Theme.info)
         case "move": return ("LIKELY TO MOVE", Theme.violet)
         case "intro": return ("INTRO PENDING", Theme.accent)
+        case "seat": return ("PURSUIT SEAT GOING COLD", Theme.info)
         default: return ("WORTH A NOTE", Theme.violet)
         }
     }
@@ -140,6 +141,7 @@ struct DailyFiveCard: View {
         case "congrats": return "Congratulate"
         case "new": return "Say thanks"
         case "intro": return "Nudge"
+        case "seat": return "Check in"
         default: return "Write"
         }
     }

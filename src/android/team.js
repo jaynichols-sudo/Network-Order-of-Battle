@@ -112,7 +112,7 @@ function overview(){
     <div class="card stats3 team-reach">${stat(fmt(o.people), 'people across the team')}${stat(`${o.agencies.team}/${o.agencies.total}`, 'agencies with the team')}${stat(`${o.agencies.mine}`, 'agencies on your own')}</div>
     <p class="foot">With the team, ${o.coverage.team.covered} agencies are covered and ${o.coverage.team.thin} thin. On your own: ${o.coverage.mine.covered} covered, ${o.coverage.mine.thin} thin.</p>
     ${shares}
-    <p class="sec-h">Team pursuits</p>${pursuits ? `<div class="card list">${pursuits}</div><p class="foot">Seats filled out of the six decision-maker roles.</p>` : '<p class="foot">No pursuits on the team yet.</p>'}
+    <p class="sec-h">Team pursuits</p>${pursuits ? `<div class="card list">${pursuits}</div><p class="foot">Seats known on each pursuit, out of all its seats.</p>` : '<p class="foot">No pursuits on the team yet.</p>'}
     <p class="sec-h">Team watchlist</p>${targets ? `<div class="card list">${targets}</div>` : '<p class="foot">No one on the team is watching anything yet.</p>'}`;
 }
 

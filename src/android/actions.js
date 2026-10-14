@@ -41,6 +41,8 @@ export function perform(a){
     case 'addTarget': later.companiesMode && later.companiesMode('watchlist'); go('companies'); open('addTarget'); break;
     case 'industries': later.companiesMode && later.companiesMode('industries'); resetStack('companies'); go('companies'); break;
     case 'backup': open('backup'); break;
+    case 'pursuit': if (a.id) push('pursuit', a.id); else push('pursuits'); break;
+    default: break; // a kind this version doesn't know yet: do nothing
   }
 }
 export const currentTab = () => N.tab;

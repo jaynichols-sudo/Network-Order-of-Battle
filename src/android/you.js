@@ -58,6 +58,7 @@ export const YouView = {
         ${row('quickNote', 'mic', 'Quick note')}
         ${row('pursuits', 'target', 'Pursuits', pursuits().length ? fmt(pursuits().length) : '')}
         ${row('opportunities', 'building', 'SAM.gov opportunities', oppMatch() && oppMatch().newCount ? `${fmt(oppMatch().newCount)} new` : '')}
+        ${row('recompetes', 'calClock', 'Recompetes and teaming partners')}
         ${row('socials', 'people', 'Across your socials')}
         ${row('intros', 'waysIn', 'Intros', intros().filter(x => x.st === 'asked').length ? `${fmt(intros().filter(x => x.st === 'asked').length)} open` : '')}
         ${row('moves', 'swap', 'Moves and rotations')}
@@ -92,6 +93,7 @@ export const YouView = {
     quickNote: () => { fx.tap(); open('quickNote'); },
     pursuits: () => open('pursuits'),
     opportunities: () => open('opportunities'),
+    recompetes: () => open('recompetes'),
     socials: () => open('socials'),
     intros: () => open('intros'),
     moves: () => open('moves'),

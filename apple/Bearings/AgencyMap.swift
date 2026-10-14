@@ -43,6 +43,7 @@ struct AgencyMapList: View {
     @AppStorage("agencyFocus") private var focus = "all"
     @State private var dept = "All departments"
     @AppStorage("agencyWithTeam") private var withTeam = true
+    @State private var asOf = ""
 
     private static let focuses: [(String, String)] = [("all", "Everything"), ("energy", "Energy"), ("water", "Water"), ("defense", "Defense"),
                                                        ("cyber", "Cyber"), ("transport", "Transportation"), ("infrastructure", "Infrastructure"), ("intel", "Intelligence")]
@@ -99,6 +100,7 @@ struct AgencyMapList: View {
             }
         }
         .task(id: "\(model.info.rev)-\(model.info.edits)-\(model.targets.count)-\(TeamSync.shared.rev)-\(withTeam)") { map = await model.agencyMap(withTeam: withTeam) }
+        .task { if asOf.isEmpty { asOf = Self.monthName((try? await model.engine.call("federalAsOf", as: String.self)) ?? "") } }
     }
 
     private func header(_ m: AgencyMap) -> some View {
@@ -126,8 +128,20 @@ struct AgencyMapList: View {
                 key(Theme.accent, "\(m.totals.thin) thin")
                 key(Theme.text3, "\(m.totals.none) not connected")
             }
+            if !asOf.isEmpty {
+                Text("Federal map updated \(asOf)").font(Theme.geist(.caption)).foregroundStyle(Theme.text3)
+            }
         }
         .padding(.vertical, 6)
+    }
+
+    /// "2026-10" as "Oct 2026".
+    static func monthName(_ ym: String) -> String {
+        let parts = ym.split(separator: "-").compactMap { Int($0) }
+        guard parts.count == 2, (1...12).contains(parts[1]) else { return "" }
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        return "\(f.shortMonthSymbols[parts[1] - 1]) \(parts[0])"
     }
 
     private func key(_ c: Color, _ s: String) -> some View {

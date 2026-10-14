@@ -282,6 +282,8 @@ struct CardAction: Decodable, Hashable {
     var sig: [String]?
     var seg: [String]?
     var status: [String]?
+    /// For kind "pursuit": the pursuit to open.
+    var id: String?
 }
 
 struct HomeCard: Decodable, Hashable, Identifiable {

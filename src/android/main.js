@@ -15,6 +15,7 @@ import './trips.js';
 import './birthdays.js';
 import './org.js';
 import './pursuits.js';
+import './recompetes.js';
 import './relationships.js';
 import './ask.js';
 import './socials.js';
