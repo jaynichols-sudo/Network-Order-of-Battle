@@ -235,7 +235,7 @@ async function fetchAwards(names, months){
       // NORTHFIX_USASPENDING_URL points tests at a local stand-in
       const url = usable(process.env.NORTHFIX_USASPENDING_URL) ? process.env.NORTHFIX_USASPENDING_URL : r.url;
       const res = await fetch(url, {method: 'POST', headers: {'Content-Type': 'application/json', Accept: 'application/json'}, body: JSON.stringify(r.body), signal: AbortSignal.timeout(20000)});
-      const page = call('awardPage', await res.text());
+      const page = call('awardPage', await res.text(), res.status);
       if (page.error) errors.push(page.error); else ok.push({agencyId: r.agencyId, items: page.items});
     } catch { errors.push('USASpending.gov didn’t answer. Check the internet connection and try again.'); }
   }));
@@ -436,9 +436,18 @@ const handlers = {
     }
     const file = path.join(state.dir, INBOX);
     let list = [];
-    try { const j = JSON.parse(fs.readFileSync(file, 'utf8')); if (Array.isArray(j.notes)) list = j.notes; } catch { /* first note */ }
+    if (fs.existsSync(path.join(state.dir, '.' + INBOX + '.icloud'))) throw new Error('Earlier notes from Claude are still downloading from iCloud. Open Northfix on this Mac, then try again.');
+    if (fs.existsSync(file)){
+      const raw = fs.readFileSync(file, 'utf8');
+      // a file being written or in an iCloud conflict: never overwrite notes not filed yet
+      let j; try { j = raw.trim() ? JSON.parse(raw) : {notes: []}; } catch { throw new Error('Notes from Claude waiting for Northfix couldn’t be read. Open Northfix on this Mac to file them, then try again.'); }
+      if (j && Array.isArray(j.notes)) list = j.notes;
+    }
     list.push({k: f.k, text, at: new Date().toISOString()});
-    fs.writeFileSync(file, JSON.stringify({kind: 'northfix-ai-inbox', v: 1, notes: list.slice(-200)}));
+    // write a temporary file and rename it, so the app never reads half a file
+    const tmp = `${file}.${process.pid}.${Date.now()}.tmp`;
+    fs.writeFileSync(tmp, JSON.stringify({kind: 'northfix-ai-inbox', v: 1, notes: list.slice(-200)}));
+    fs.renameSync(tmp, file);
     const who = state.people.get(f.k);
     return {text: `Saved for ${who ? who.name : 'them'}. Northfix files the note the next time it opens on this Mac.`, data: {saved: true, key: f.k, pending: list.length}};
   },
@@ -461,7 +470,7 @@ const handlers = {
 export async function runTool(name, args){
   if (!handlers[name]) return {isError: true, content: [{type: 'text', text: `Unknown tool ${name}.`}]};
   const problem = ensureLoaded();
-  if (problem) return {content: [{type: 'text', text: problem}], structuredContent: {ok: false, reason: problem}};
+  if (problem) return {isError: true, content: [{type: 'text', text: problem}], structuredContent: {ok: false, reason: problem}};
   if (!FREE_TOOLS.has(name) && !isPro()){
     if (usage().used >= FREE_DAILY) return {content: [{type: 'text', text: LIMIT_TEXT}], structuredContent: {ok: false, reason: 'free_limit', freeDaily: FREE_DAILY}};
   }
@@ -484,6 +493,9 @@ function reply(id, result){ send({jsonrpc: '2.0', id, result}); }
 function fail(id, code, message){ send({jsonrpc: '2.0', id, error: {code, message}}); }
 function send(o){ process.stdout.write(JSON.stringify(o) + '\n'); }
 
+/** Tool calls still running, so stdin closing doesn't cut their replies off. */
+const pending = new Set();
+
 export function handle(msg){
   if (!msg || msg.jsonrpc !== '2.0' || typeof msg.method !== 'string'){
     if (msg && msg.id != null && !('result' in msg) && !('error' in msg)) fail(msg.id, -32600, 'Invalid request');
@@ -503,7 +515,8 @@ export function handle(msg){
     case 'tools/call': {
       const name = params && params.name;
       if (!handlers[name]) return fail(id, -32602, `Unknown tool: ${name}`);
-      return runTool(name, params.arguments).then(r => reply(id, r), e => fail(id, -32603, (e && e.message) || 'Internal error'));
+      { const job = runTool(name, params.arguments).then(r => reply(id, r), e => fail(id, -32603, (e && e.message) || 'Internal error')).finally(() => pending.delete(job));
+        pending.add(job); return job; }
     }
     case 'resources/list': return reply(id, {resources: []});
     case 'resources/templates/list': return reply(id, {resourceTemplates: []});
@@ -526,7 +539,8 @@ function serve(){
       try { (Array.isArray(msg) ? msg : [msg]).forEach(handle); } catch (e) { if (msg && msg.id != null) fail(msg.id, -32603, e.message || 'Internal error'); }
     }
   });
-  process.stdin.on('end', () => process.exit(0));
+  // let replies still being worked out (a USASpending fetch) and large ones finish writing first
+  process.stdin.on('end', () => { const done = () => process.stdout.write('', () => process.exit(0)); pending.size ? Promise.allSettled([...pending]).then(done) : done(); });
   const f = findData();
   process.stderr.write(`Northfix MCP ${VERSION}: ${f.problem ? 'no network found yet (' + f.dir + ')' : 'reading ' + f.dir}\n`);
 }

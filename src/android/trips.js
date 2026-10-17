@@ -29,20 +29,30 @@ export function feedLink(raw){
   if (/^webcals?:\/\//i.test(s)) s = s.replace(/^webcals?:\/\//i, 'https://');
   try { const u = new URL(s); return u.protocol === 'https:' && u.hostname ? u.href : ''; } catch { return ''; }
 }
-async function getText(url){
+/** {status, text}: status 0 when the request never got an answer. */
+async function getFeed(url){
   // the native HTTP client first: a WebView fetch to another site is usually blocked by CORS
   if (NATIVE){
     try {
       const r = await CapacitorHttp.get({url, responseType: 'text', connectTimeout: 15000, readTimeout: 20000, headers: {Accept: 'text/calendar, */*'}});
-      if (r && r.status >= 200 && r.status < 300) return String(r.data || '');
+      if (r) return {status: r.status || 0, text: r.status >= 200 && r.status < 300 ? String(r.data || '') : ''};
     } catch {}
   }
-  try { const r = await fetch(url, {cache: 'no-store'}); return r.ok ? await r.text() : ''; } catch { return ''; }
+  const ac = typeof AbortController === 'function' ? new AbortController() : null;
+  const timer = ac ? setTimeout(() => ac.abort(), 20000) : 0;
+  try { const r = await fetch(url, {cache: 'no-store', signal: ac ? ac.signal : undefined}); return {status: r.status, text: r.ok ? await r.text() : ''}; }
+  catch { return {status: 0, text: ''}; }
+  finally { clearTimeout(timer); }
 }
-/** Feed text → trips, with any city the engine couldn't place looked up offline. */
+const checkFeed = got => { try { return M.api.feedCheck(got.text, got.status, feedName()); } catch { return {ok: /BEGIN:VCALENDAR/.test(got.text), error: 'Couldn’t read that feed.'}; } };
+/** Where home is, for leaving out trips in your own city: the place saved for arrival alerts. */
+function homeOf(){
+  const h = ls.json('bearings.home', null);
+  return h && isFinite(h.lat) && isFinite(h.lon) ? {lat: +h.lat, lon: +h.lon, name: h.name || ''} : null;
+}
+/** Feed text → trips, with any city the engine couldn't place looked up offline. Throws when the engine can't read it. */
 async function tripsFrom(text){
-  let list = [];
-  try { list = M.api.feedTrips(text, null) || []; } catch (e) { console.warn(e); return []; }
+  const list = M.api.feedTrips(text, homeOf()) || [];
   const t = today(), out = [];
   for (const x of list){
     if (x.end < t) continue;
@@ -65,9 +75,12 @@ export function refreshFeed(force = false){
   if (feeding) return feeding;
   feeding = (async () => {
     feed.tried = Date.now();
-    const text = await getText(url);
-    if (!text.includes('BEGIN:VCALENDAR')){ feed.error = `Couldn’t reach ${feedName()} at the last check. Northfix will try again later.`; keepFeed(); return false; }
-    feed = {at: Date.now(), tried: Date.now(), trips: await tripsFrom(text), error: ''};
+    const got = await getFeed(url), ok = checkFeed(got);
+    // anything short of a whole calendar keeps the last good trips
+    if (!ok.ok){ feed.error = ok.error; keepFeed(); emit('trips'); return false; }
+    let trips;
+    try { trips = await tripsFrom(got.text); } catch (e) { console.warn(e); feed.error = `Couldn’t read ${feedName()} at the last check. Northfix will try again later.`; keepFeed(); return false; }
+    feed = {at: Date.now(), tried: Date.now(), trips, error: ''};
     keepFeed();
     emit('trips');
     return true;
@@ -78,11 +91,14 @@ export function refreshFeed(force = false){
 async function setFeed(raw){
   const url = feedLink(raw);
   if (!url) return 'That doesn’t look like a feed link. It should start with https:// or webcal://.';
-  const text = await getText(url);
-  if (!text) return 'Couldn’t read that link. Check that you copied the whole thing and that you’re online.';
-  if (!text.includes('BEGIN:VCALENDAR')) return 'That link didn’t return a calendar. Copy the feed link from TripIt again.';
+  const got = await getFeed(url);
+  if (!got.status || !got.text && got.status < 400) return 'Couldn’t read that link. Check that you copied the whole thing and that you’re online.';
+  const ok = checkFeed(got);
+  if (!ok.ok) return ok.code === 'gone' ? 'That link doesn’t work anymore. Copy the feed link from TripIt again.' : ok.error;
+  let trips;
+  try { trips = await tripsFrom(got.text); } catch { return 'Couldn’t read the trips in that feed.'; }
   ls.set(FEED_URL, url);
-  feed = {at: Date.now(), tried: Date.now(), trips: await tripsFrom(text), error: ''};
+  feed = {at: Date.now(), tried: Date.now(), trips, error: ''};
   keepFeed();
   emit('trips');
   return '';

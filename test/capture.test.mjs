@@ -140,7 +140,10 @@ test('award requests: one POST per agency, contracts only, with a service-wide a
   assert.match(nav.url, /api\.usaspending\.gov\/api\/v2\/search\/spending_by_award\/$/);
   assert.deepEqual(nav.body.filters.award_type_codes, ['A', 'B', 'C', 'D']);
   assert.deepEqual(nav.body.filters.agencies, [{type: 'awarding', tier: 'subtier', name: 'Department of the Navy'}]);
-  assert.equal(nav.body.filters.time_period[0].start_date, today());
+  // time_period is about actions, not the period of performance: ask for awards still being worked
+  assert.equal(nav.body.filters.time_period[0].end_date, today());
+  assert.ok(nav.body.filters.time_period[0].start_date < day(-500), 'looks back about 18 months');
+  assert.ok(!nav.body.fields.includes('Awarding Office'), 'only fields the API knows');
   const def = call('awardRequests', [], 12);
   assert.ok(def.length > 0 && def.length <= 8, 'defaults to the watchlist and pursuits');
 });

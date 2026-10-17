@@ -9,14 +9,26 @@
 //   body: {filters: {award_type_codes, time_period: [{start_date, end_date}], agencies: [{type, tier, name}]},
 //          fields: [...], sort, order, limit, page}
 //   answer: {results: [{"Award ID", "Recipient Name", "Start Date", "End Date", "Award Amount",
-//            "Awarding Agency", "Awarding Sub Agency", "Description", generated_internal_id, …}],
-//            page_metadata: {page, hasNext}}
+//            "Awarding Agency", "Awarding Sub Agency", "Description", NAICS: {code, description},
+//            generated_internal_id, …}], page_metadata: {page, hasNext}, messages: [...]}
+//   errors: 422 {detail: "..."}, 429 or 503 when busy, sometimes an HTML page.
+//
+// Two things the API does that are easy to get wrong:
+// - time_period matches an award when its latest action is on or after start_date and it was
+//   signed on or before end_date. It is not the period of performance. So the search asks for
+//   awards with any action in the last 18 months (still being worked) and the engine keeps the
+//   ones whose period of performance ends inside the window.
+// - There is no awarding office field or filter. Commands that buy through a service are
+//   narrowed by the office code at the front of the contract number where that code is known,
+//   and otherwise shown as filed under the service.
 
 export const AWARDS_URL = 'https://api.usaspending.gov/api/v2/search/spending_by_award/';
 export const AWARD_LINK = 'https://www.usaspending.gov/award/';
 const CONTRACT_CODES = ['A', 'B', 'C', 'D'];
 export const AWARD_FIELDS = ['Award ID', 'Recipient Name', 'Start Date', 'End Date', 'Award Amount', 'Awarding Agency', 'Awarding Sub Agency',
-  'Awarding Office', 'Description', 'NAICS', 'generated_internal_id'];
+  'Description', 'NAICS', 'generated_internal_id'];
+/** How far back an award's latest action may be and still count as being worked. */
+export const ACTIVE_MONTHS = 18;
 
 /* ---------- which agency to ask for ---------- */
 // USASpending files awards under a department (toptier) and an agency (subtier). Commands
@@ -69,32 +81,48 @@ const OFFICE_RX = {
   'PEO EIS': /PEO EIS|ENTERPRISE INFORMATION SYSTEMS/i, ERDC: /ERDC|ENGINEER RESEARCH/i, IMCOM: /MICC|INSTALLATION MANAGEMENT|MISSION AND INSTALLATION CONTRACTING/i,
   ARCYBER: /ARCYBER|ARMY CYBER/i, NGB: /NATIONAL GUARD|NGB|USPFO/i, USMC: /MARINE/i, 'Space Force': /SPACE/i,
 };
-/** What to ask USASpending for, for one federal map row: {tier, name, office?}. */
+// Contract numbers start with the buying office's code. These are the codes for commands that
+// USASpending files under their service. A command not listed here can't be narrowed.
+const PIID_RX = {
+  NAVFAC: /^(N62470|N69450|N62473|N62478|N44255|N40080|N40085|N62742|N39430|N33191|N40192|N62583|N47408|N40083)/i,
+  NAVSEA: /^(N00024|N61331|N00253|N65540|N00174|N64267|N00178|N00167|N63394|N66604|N61533|N68936)/i,
+  NAVAIR: /^(N00019|N68335|N61340|N00421|N68520|N68936)/i,
+  NAVWAR: /^(N66001|N00039|N65236|N66604)/i,
+  MARCORSYSCOM: /^M67854/i,
+};
+/** True when an award belongs to the command: by office name when there is one, else by contract number. */
+export function awardInCommand(q, x){
+  if (!q || !q.office) return true;
+  if (x.office) return q.office.test(`${x.office} ${x.sub}`);
+  return q.piid ? q.piid.test(x.piid || '') : true;
+}
+/** What to ask USASpending for, for one federal map row: {tier, name, office?, piid?, wide}. */
 export function awardAgency(a){
   if (!a) return null;
-  if (SUBTIER[a.short]) return {tier: 'subtier', name: SUBTIER[a.short], office: OFFICE_RX[a.short] || null};
-  if (TOPTIER[a.short]) return {tier: 'toptier', name: TOPTIER[a.short], office: null};
-  return {tier: 'subtier', name: a.name.replace(/\s*\(HQ\)\s*$/, ''), office: null};
+  if (SUBTIER[a.short]) return {tier: 'subtier', name: SUBTIER[a.short], office: OFFICE_RX[a.short] || null, piid: PIID_RX[a.short] || null,
+    wide: !!OFFICE_RX[a.short] && !PIID_RX[a.short]};
+  if (TOPTIER[a.short]) return {tier: 'toptier', name: TOPTIER[a.short], office: null, piid: null, wide: false};
+  return {tier: 'subtier', name: String(a.name || '').replace(/\s*\(HQ\)\s*$/, ''), office: null, piid: null, wide: false};
 }
 
 /* ---------- the requests ---------- */
 const isoOf = ms => { const z = new Date(ms); return z.getFullYear() + '-' + String(z.getMonth() + 1).padStart(2, '0') + '-' + String(z.getDate()).padStart(2, '0'); };
 /**
- * The searches to run: one POST body per agency (at most 8), for contracts whose period of
- * performance runs into the next `months` months, biggest first. `agencies` are federal map
- * rows. Each comes back with the agency's id so the answer can be matched to it.
+ * The searches to run: one POST body per agency (at most 8), for contracts still being worked
+ * (an action in the last 18 months), biggest first. The engine keeps the ones that end in the
+ * next `months` months. `agencies` are federal map rows. Each comes back with the agency's id
+ * so the answer can be matched to it.
  */
 export function awardRequests(agencies, months, today){
-  const m = Math.max(3, Math.min(36, +months || 24));
-  const from = today || isoOf(Date.now());
-  const to = isoOf(Date.parse(from + 'T12:00:00') + m * 30.44 * 864e5);
+  const day = /^\d{4}-\d{2}-\d{2}$/.test(today || '') ? today : isoOf(Date.now());
+  const from = isoOf(Date.parse(day + 'T12:00:00') - ACTIVE_MONTHS * 30.44 * 864e5);
   const seen = new Set(), out = [];
-  for (const a of agencies || []){
-    const q = awardAgency(a); if (!q) continue;
+  for (const a of Array.isArray(agencies) ? agencies : []){
+    const q = awardAgency(a); if (!q || !q.name) continue;
     const key = q.tier + '|' + q.name + '|' + (q.office ? a.short : '');
     if (seen.has(key)) continue; seen.add(key);
     out.push({agencyId: a.id, short: a.short, url: AWARDS_URL, body: {
-      filters: {award_type_codes: CONTRACT_CODES, time_period: [{start_date: from, end_date: to}], agencies: [{type: 'awarding', tier: q.tier, name: q.name}]},
+      filters: {award_type_codes: CONTRACT_CODES, time_period: [{start_date: from, end_date: day}], agencies: [{type: 'awarding', tier: q.tier, name: q.name}]},
       fields: AWARD_FIELDS, sort: 'Award Amount', order: 'desc', limit: 100, page: 1}});
     if (out.length >= 8) break;
   }
@@ -104,25 +132,55 @@ export function awardRequests(agencies, months, today){
 /* ---------- reading an answer ---------- */
 const str = v => v == null ? '' : typeof v === 'object' ? String(v.description || v.name || v.code || '') : String(v);
 const dayOf = v => { const m = /^(\d{4}-\d{2}-\d{2})/.exec(String(v || '')); return m ? m[1] : ''; };
-/** One USASpending answer (the response text): slim awards, or a plain-English error. */
-export function awardPage(text){
+/**
+ * One USASpending answer: slim awards, or a plain-English error. `text` is the response body
+ * (or already-parsed JSON); `status` is the HTTP status when the app has it.
+ */
+export function awardPage(text, status){
+  const st = +status || 0;
   let j;
-  try { j = typeof text === 'string' ? JSON.parse(text) : text; } catch { return {items: [], more: false, error: 'USASpending.gov sent back something Northfix couldn’t read. Try again later.'}; }
-  if (!j || typeof j !== 'object') return {items: [], more: false, error: 'USASpending.gov sent back an empty answer.'};
-  if (j.detail || j.message || j.error){
-    const msg = str(j.detail || j.message || j.error);
-    if (/throttl|rate|too many/i.test(msg)) return {items: [], more: false, error: 'USASpending.gov is busy. Northfix will try again later.', code: 'rate'};
+  try { j = typeof text === 'string' ? (text.trim() ? JSON.parse(text) : null) : text; } catch { j = undefined; }
+  if (st === 429 || st === 503) return {items: [], more: false, error: 'USASpending.gov is busy. Northfix will try again later.', code: 'rate'};
+  if (j === undefined || (st >= 400 && (!j || typeof j !== 'object'))){
+    if (st >= 500) return {items: [], more: false, error: `USASpending.gov is having trouble (error ${st}). Northfix will try again later.`, code: 'down'};
+    if (st >= 400) return {items: [], more: false, error: `USASpending.gov didn’t answer (error ${st}). Northfix will try again later.`};
+    return {items: [], more: false, error: 'USASpending.gov sent back something Northfix couldn’t read. Try again later.'};
+  }
+  if (!j || typeof j !== 'object' || Array.isArray(j)) return {items: [], more: false, error: 'USASpending.gov sent back an empty answer.'};
+  if (j.detail || j.message || j.error || st >= 400){
+    const msg = str(j.detail || j.message || j.error) || `error ${st}`;
+    if (/throttl|rate limit|too many/i.test(msg)) return {items: [], more: false, error: 'USASpending.gov is busy. Northfix will try again later.', code: 'rate'};
     return {items: [], more: false, error: `USASpending.gov said: ${msg.slice(0, 200)}`};
   }
   const list = Array.isArray(j.results) ? j.results : [];
-  const items = list.filter(x => x && (x['Award ID'] || x.generated_internal_id)).map(x => {
+  const items = list.filter(x => x && typeof x === 'object' && (x['Award ID'] || x.generated_internal_id)).map(x => {
     const naics = x.NAICS && typeof x.NAICS === 'object' ? x.NAICS : {code: x.NAICS || '', description: ''};
-    return {id: str(x.generated_internal_id || x['Award ID']).slice(0, 120), piid: str(x['Award ID']).slice(0, 60), recipient: str(x['Recipient Name']).slice(0, 160),
-      start: dayOf(x['Start Date']), end: dayOf(x['End Date']), amount: +x['Award Amount'] || 0, agency: str(x['Awarding Agency']).slice(0, 160),
+    const amount = +x['Award Amount'];
+    return {id: str(x.generated_internal_id || x['Award ID']).slice(0, 120), piid: str(x['Award ID']).slice(0, 60), recipient: str(x['Recipient Name']).trim().slice(0, 160),
+      start: dayOf(x['Start Date']), end: dayOf(x['End Date']), amount: isFinite(amount) && amount > 0 ? amount : 0, agency: str(x['Awarding Agency']).slice(0, 160),
       sub: str(x['Awarding Sub Agency']).slice(0, 160), office: str(x['Awarding Office']).slice(0, 160), desc: str(x.Description).replace(/\s+/g, ' ').trim().slice(0, 300),
       naics: str(naics.code).slice(0, 6), naicsName: str(naics.description).slice(0, 120), demo: !!x.demo};
   });
   return {items, more: !!(j.page_metadata && j.page_metadata.hasNext)};
+}
+
+/**
+ * The pages to keep after a refresh: fresh answers win, and an agency that failed this time
+ * keeps what it had, so one bad answer doesn't empty the screen. Agencies no longer asked
+ * about are dropped. old/got: [{agencyId, items}]; asked: the agency ids asked about.
+ */
+export function mergeAwardPages(old, got, asked){
+  const want = new Set((Array.isArray(asked) ? asked : []).map(String));
+  const fresh = new Map((Array.isArray(got) ? got : []).filter(p => p && p.agencyId != null).map(p => [String(p.agencyId), p]));
+  const out = [...fresh.values()];
+  for (const p of Array.isArray(old) ? old : []){
+    if (!p || p.agencyId == null) continue;
+    const id = String(p.agencyId);
+    if (fresh.has(id) || !want.has(id)) continue;
+    if ((p.items || []).some(x => x && x.demo)) continue;
+    out.push(p);
+  }
+  return out;
 }
 
 /* ---------- money ---------- */

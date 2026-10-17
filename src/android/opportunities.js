@@ -63,8 +63,13 @@ async function getText(url){
       return {status: r.status, text: typeof r.data === 'string' ? r.data : JSON.stringify(r.data || {})};
     } catch { /* fall through to fetch */ }
   }
-  const r = await fetch(url, {headers: {Accept: 'application/json'}});
-  return {status: r.status, text: await r.text()};
+  // a timeout, so a hung request can't block every later check
+  const ac = typeof AbortController === 'function' ? new AbortController() : null;
+  const timer = ac ? setTimeout(() => ac.abort(), 40000) : 0;
+  try {
+    const r = await fetch(url, {headers: {Accept: 'application/json'}, signal: ac ? ac.signal : undefined});
+    return {status: r.status, text: await r.text()};
+  } finally { clearTimeout(timer); }
 }
 /** Fetches at most every six hours (or when forced), then matches. Never throws. */
 export function refreshOpportunities(force = false){
@@ -85,21 +90,25 @@ export function refreshOpportunities(force = false){
     loadCache();
     if (!force && Date.now() - st.at < FRESH){ rematch(); return false; }
     const reqs = tryOr(() => M.api.opportunityRequests(filters(), 14), []);
-    let got = [], err = '', answered = false;
+    let got = [], err = '', code = '', answered = false;
+    const failed = [];
     for (const r of reqs){
       const q = new URLSearchParams(Object.assign({api_key: key}, Object.fromEntries(Object.entries(r).map(([k, v]) => [k, String(v)]))));
       try {
         const res = await getText(`${SAM_URL}?${q}`);
-        const page = M.api.opportunityPage(res.text);
-        if (page.error){ err = page.error; if (page.code === 'key' || page.code === 'rate') break; continue; }
-        if (res.status >= 400){ err = `SAM.gov didn’t answer (error ${res.status}). Northfix will try again later.`; continue; }
+        // the engine reads the status too, so a 429 or an HTML error page reads in plain English
+        const page = M.api.opportunityPage(res.text, res.status);
+        if (page.error){ err = page.error; code = page.code || ''; failed.push(r); if (code === 'key' || code === 'rate') break; continue; }
         got = got.concat(page.items); answered = true;
-      } catch { err = 'Couldn’t reach SAM.gov. Check your connection and try again.'; }
+      } catch { err = 'Couldn’t reach SAM.gov. Check your connection and try again.'; code = ''; failed.push(r); }
     }
-    // a failed check still waits six hours, so a bad key doesn't use up the daily limit
-    st.at = Date.now(); ls.set(CACHE + '.at', String(st.at));
-    st.error = answered ? '' : err;
+    // a good answer, a bad key or a used-up limit waits six hours, so the daily limit lasts;
+    // a dropped connection or a server error tries again at the next check
+    if (answered || code === 'key' || code === 'rate'){ st.at = Date.now(); ls.set(CACHE + '.at', String(st.at)); }
+    st.error = answered && !failed.length ? '' : err;
     if (!answered){ rematch(true); return true; }
+    // a search that failed keeps the notices it brought back last time
+    got = tryOr(() => M.api.mergeOpportunities(st.notices, got, failed), got);
     st.notices = got; saveCache();
     // what counts as new: anything not seen before this check
     const prior = ls.json(SEEN, null);

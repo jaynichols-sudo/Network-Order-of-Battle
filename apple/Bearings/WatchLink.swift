@@ -61,7 +61,12 @@ final class WatchLink: NSObject, WCSessionDelegate {
 
     // MARK: watch -> phone
 
+    /// enqueue runs on WatchConnectivity's queue and drain on the main thread, so both hold
+    /// this lock: otherwise a note sent while the phone files the last one can vanish or file twice.
+    private let queueLock = NSLock()
+
     func drain() -> [[String: Any]] {
+        queueLock.lock(); defer { queueLock.unlock() }
         let d = UserDefaults.standard
         let list = d.array(forKey: queueKey) as? [[String: Any]] ?? []
         d.removeObject(forKey: queueKey)
@@ -69,12 +74,14 @@ final class WatchLink: NSObject, WCSessionDelegate {
     }
 
     private func enqueue(_ info: [String: Any]) {
-        let d = UserDefaults.standard
-        var list = d.array(forKey: queueKey) as? [[String: Any]] ?? []
         var clean: [String: Any] = [:]
         for (k, v) in info where v is String || v is NSNumber || v is Bool { clean[k] = v }
+        queueLock.lock()
+        let d = UserDefaults.standard
+        var list = d.array(forKey: queueKey) as? [[String: Any]] ?? []
         list.append(clean)
         d.set(Array(list.suffix(500)), forKey: queueKey)
+        queueLock.unlock()
         DispatchQueue.main.async { self.onAction?() }
     }
 

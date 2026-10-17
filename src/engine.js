@@ -10,9 +10,9 @@ import {
 import { parseQuery, matchNL } from './nlq.js';
 import { findAgency, officeOf } from './agencies.js';
 import {compileFederal, FEDERAL_AS_OF} from './federal.js';
-import { matchOpportunities as matchOpps, opportunityFilters, opportunityRequests as oppRequests, opportunityPage, demoOpportunities as demoOpps, markSeen, agencyFor } from './opportunities.js';
-import { parseFlight, parseICS, tripsFromEvents, tripsFromFeed } from './flights.js';
-import { awardRequests as awardReqs, awardPage, awardAgency, demoAwards as demoAwardList, dollars, money, AWARD_LINK } from './awards.js';
+import { matchOpportunities as matchOpps, opportunityFilters, opportunityRequests as oppRequests, opportunityPage, demoOpportunities as demoOpps, markSeen, agencyFor, mergeOpportunities } from './opportunities.js';
+import { parseFlight, parseICS, tripsFromEvents, tripsFromFeed, feedCheck } from './flights.js';
+import { awardRequests as awardReqs, awardPage, awardAgency, awardInCommand, mergeAwardPages, demoAwards as demoAwardList, dollars, money, AWARD_LINK } from './awards.js';
 import { INDUSTRIES, indColor, indShort, setIndustryOverrides, companyKey, UNCLASSIFIED, GOV_IND } from './industry.js';
 
 /* ---------- state ---------- */
@@ -1052,6 +1052,18 @@ function tagAttendees(keys, event){
 }
 
 /* ---------- notes from AI apps ---------- */
+/**
+ * The inbox to leave behind after filing: notes in `now` (the file as it is after filing) that
+ * weren't in `filed` (the text that was filed), as file text, or '' when there are none. Claude
+ * can add a note while the app files the last ones, and that note must not be deleted.
+ */
+function inboxRest(filed, now){
+  const read = t => { try { const d = typeof t === 'string' ? JSON.parse(t) : t; return d && Array.isArray(d.notes) ? d.notes : []; } catch { return []; } };
+  const id = n => n && `${n.k}|${n.at}|${n.text}`;
+  const done = new Set(read(filed).map(id));
+  const rest = read(now).filter(n => n && !done.has(id(n)));
+  return rest.length ? JSON.stringify({kind: 'northfix-ai-inbox', v: 1, notes: rest}) : '';
+}
 // Notes the AI connector (mcp/server.mjs) left in ai-inbox.json. The app hands the file's text
 // here when it opens, saves edits, then deletes the file.
 function applyInbox(text){
@@ -1095,12 +1107,14 @@ function demoAwardPages(){
 function awardRows(pages){
   const F = fedRows(), out = [], seen = new Set();
   for (const pg of Array.isArray(pages) ? pages : []){
+    if (!pg || typeof pg !== 'object') continue;
     const a = F.find(x => x.id === pg.agencyId); if (!a) continue;
     const q = awardAgency(a);
-    for (const x of pg.items || []){
-      if (!x || !x.id || seen.has(x.id)) continue;
-      if (q && q.office && !x.demo && !q.office.test(`${x.office} ${x.sub}`)) continue;
-      seen.add(x.id); out.push({a, x});
+    for (const x of Array.isArray(pg.items) ? pg.items : []){
+      if (!x || typeof x !== 'object' || !x.id || seen.has(x.id)) continue;
+      if (!x.demo && !awardInCommand(q, x)) continue;
+      // no office name and no known office code: it can only be shown as filed under the service
+      seen.add(x.id); out.push({a, x, wide: !x.demo && !x.office && q && q.wide ? q.name : ''});
     }
   }
   return out;
@@ -1123,8 +1137,8 @@ function recompetes(pages, opts){
   const pursuitAt = new Map(); for (const p of S.pursuits){ if (!isOpen(p) || !p.agency) continue; const a = agencyFor(p.agency, fedRows()); if (a && !pursuitAt.has(a.id)) pursuitAt.set(a.id, p); }
   const tracked = new Set(S.pursuits.map(p => p.source).filter(Boolean));
   const out = [];
-  for (const {a, x} of awardRows(pages)){
-    if (!x.end || x.end < TODAY || x.end > until) continue;
+  for (const {a, x, wide} of awardRows(pages)){
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(x.end || '') || x.end < TODAY || x.end > until) continue;
     if (+o.min > 0 && x.amount < +o.min) continue;
     const ps = by.get(a.id) || [];
     const inc = x.recipient ? live().filter(r => coHit(x.recipient)(r.c)) : [];
@@ -1135,7 +1149,7 @@ function recompetes(pages, opts){
     let score = Math.max(0, 40 - Math.floor(days / 15)) + Math.min(30, ps.length * 3) + Math.min(15, warm * 5) + Math.min(15, inc.length * 5) + Math.min(20, Math.log10(Math.max(1, x.amount)) * 2);
     if (watched) score += 15;
     out.push({id: x.id, piid: x.piid, title: x.desc ? x.desc.charAt(0).toUpperCase() + x.desc.slice(1).toLowerCase() : x.piid, incumbent: companyName(x.recipient), amount: x.amount, amountText: money(x.amount),
-      start: x.start, end: x.end, days, agency: a.short, agencyName: a.name, agencyId: a.id, office: companyName(x.office), naics: x.naics,
+      start: x.start, end: x.end, days, agency: a.short, agencyName: a.name, agencyId: a.id, office: x.office ? companyName(x.office) : wide ? `filed under ${wide}` : '', naics: x.naics,
       link: x.demo ? '' : AWARD_LINK + encodeURIComponent(x.id), demo: !!x.demo,
       known: ps.length, warm, people: topPeople(ps, 3), incumbentKnown: inc.length, incumbentPeople: topPeople(inc, 3),
       watched, pursuit: pursuit ? pursuit.name : '', pursuitId: pursuit ? pursuit.id : '', tracked: tracked.has(x.id), score: Math.round(score),
@@ -2216,8 +2230,8 @@ function constants(){
 const api = {load, loadSample, loadFiles, clearNotes, clusters, placeClues, setCompanyLocation, companyPlaces, messages, matchAttendees, alsoAt, setLens, info, people, person, search, facets, home, payoff, targets, unit, addTargetCandidates, toggleTarget, setTargetNote, orgs,
   industries, industry, setCompanyIndustry, setCompanyLink, ranks, deck, deckCount, reviewed, radar, compass, startFromContacts, introPaths, weekly, touch, setCircle, setEdit, followUp, markReplied, addNote,
   importTexts, importSnapshot, yearInReview, teamPack, teamShare, addTeamPack, setTeamShares, removeTeamPack, teamList, teamOverview, demoTeamShares, matchEnrichment, readNotes, memory, applyMail, clearMail, addProspects, clearProspects, addPursuit, updatePursuit, removePursuit, assignRole, setSeatOwner, pursuits, pursuit, coldSeats, pipeline, pursuitSheet, callPlan, matchAttendeeList, tagAttendees,
-  applyInbox, awardRequests, awardPage, demoAwardPages, recompetes, pursueAward, teamingPartners, federalAsOf: () => FEDERAL_AS_OF, moves, setRoleSince, quickLog, addIntro, setIntro, intros, trend, snapshot, targetChanges, ask, importSocial, clearSocial, socials, agencyCoverage, matchOpportunities, opportunityFilters, opportunityRequests, opportunityPage, demoOpportunities, markOpportunitiesSeen, orgChart, structureFor, setReportsTo, backup, restore, exportCSV, reminders, watch, constants, quote,
-  flightInfo, flightInfos, feedTrips, eventTrips, icsEvents};
+  applyInbox, inboxRest, awardRequests, awardPage, mergeAwardPages, demoAwardPages, recompetes, pursueAward, teamingPartners, federalAsOf: () => FEDERAL_AS_OF, moves, setRoleSince, quickLog, addIntro, setIntro, intros, trend, snapshot, targetChanges, ask, importSocial, clearSocial, socials, agencyCoverage, matchOpportunities, opportunityFilters, opportunityRequests, opportunityPage, demoOpportunities, markOpportunitiesSeen, orgChart, structureFor, setReportsTo, backup, restore, exportCSV, reminders, watch, constants, quote,
+  flightInfo, flightInfos, feedTrips, feedCheck, eventTrips, icsEvents, mergeOpportunities};
 // Every call goes through here: JSON string in, JSON string out, errors as {error}.
 globalThis.Bearings = {
   call(name, argsJSON){

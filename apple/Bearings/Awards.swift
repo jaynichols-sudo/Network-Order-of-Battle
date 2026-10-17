@@ -210,14 +210,12 @@ final class AwardFeed {
             req.httpBody = body
             do {
                 let (data, resp) = try await URLSession.shared.data(for: req)
-                let page = try await model.engine.call("awardPage", [String(decoding: data, as: UTF8.self)], as: AwardPage.self)
+                let status = (resp as? HTTPURLResponse)?.statusCode ?? 0
+                // the engine reads the status too, so a 429 or an HTML error page reads in plain English
+                let page = try await model.engine.call("awardPage", [String(decoding: data, as: UTF8.self), status], as: AwardPage.self)
                 if let e = page.error, !e.isEmpty {
                     err = e
                     if page.code == "rate" { break }
-                    continue
-                }
-                if let h = resp as? HTTPURLResponse, h.statusCode >= 400 {
-                    err = "USASpending.gov didn’t answer (error \(h.statusCode)). Northfix will try again later."
                     continue
                 }
                 got.append(AwardPageSet(agencyId: r.agencyId, items: page.items))
@@ -226,12 +224,15 @@ final class AwardFeed {
                 err = "Couldn’t reach USASpending.gov. Check your connection and try again."
             }
         }
+        lastError = answered ? "" : err
+        // only a good answer starts the once-a-day clock, so a dropped connection tries again next time
+        guard answered else { return }
         last = Date()
         UserDefaults.standard.set(last, forKey: "awards.last")
-        lastError = answered ? "" : err
-        guard answered else { return }
         UserDefaults.standard.set(key, forKey: "awards.key")
-        pages = got
+        // an agency that failed this time keeps its last answer
+        let asked = reqs.map(\.agencyId)
+        pages = (try? await model.engine.call("mergeAwardPages", [Self.jsonObject(pages), Self.jsonObject(got), asked], as: [AwardPageSet].self)) ?? got
         rev += 1
         saveCache()
     }

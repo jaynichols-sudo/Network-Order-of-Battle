@@ -186,7 +186,9 @@ final class SamFeed {
         let reqs = (try? await model.engine.call("opportunityRequests", [SamSettings.filters, 14], as: [SamRequest].self)) ?? []
         var got: [SamNotice] = []
         var err = ""
+        var code = ""
         var answered = false
+        var failed: [SamRequest] = []
         for r in reqs {
             guard var c = URLComponents(string: "https://api.sam.gov/opportunities/v2/search") else { continue }
             var q: [URLQueryItem] = [.init(name: "api_key", value: key), .init(name: "postedFrom", value: r.postedFrom), .init(name: "postedTo", value: r.postedTo),
@@ -199,27 +201,36 @@ final class SamFeed {
             req.setValue("application/json", forHTTPHeaderField: "Accept")
             do {
                 let (data, resp) = try await URLSession.shared.data(for: req)
-                let page = try await model.engine.call("opportunityPage", [String(decoding: data, as: UTF8.self)], as: SamPage.self)
+                let status = (resp as? HTTPURLResponse)?.statusCode ?? 0
+                // the engine reads the status too, so a 429 or an HTML error page reads in plain English
+                let page = try await model.engine.call("opportunityPage", [String(decoding: data, as: UTF8.self), status], as: SamPage.self)
                 if let e = page.error, !e.isEmpty {
                     err = e
-                    if page.code == "key" || page.code == "rate" { break }
-                    continue
-                }
-                if let h = resp as? HTTPURLResponse, h.statusCode >= 400 {
-                    err = "SAM.gov didn’t answer (error \(h.statusCode)). Northfix will try again later."
+                    code = page.code ?? ""
+                    failed.append(r)
+                    if code == "key" || code == "rate" { break }
                     continue
                 }
                 got += page.items
                 answered = true
             } catch {
                 err = "Couldn’t reach SAM.gov. Check your connection and try again."
+                code = ""
+                failed.append(r)
             }
         }
-        // a failed check still waits six hours, so a bad key doesn't use up the daily limit
-        last = Date()
-        UserDefaults.standard.set(last, forKey: "sam.last")
-        lastError = answered ? "" : err
+        // a good answer, a bad key or a used-up limit waits six hours, so the daily limit lasts;
+        // a dropped connection or a server error tries again at the next check
+        if answered || code == "key" || code == "rate" {
+            last = Date()
+            UserDefaults.standard.set(last, forKey: "sam.last")
+        }
+        lastError = answered && failed.isEmpty ? "" : err
         guard answered else { await rematch(model: model); return }
+        // a search that failed keeps the notices it brought back last time
+        if !failed.isEmpty, let merged = try? await model.engine.call("mergeOpportunities", [Self.jsonObject(notices), Self.jsonObject(got), failed.map { ["ncode": $0.ncode ?? ""] }], as: [SamNotice].self) {
+            got = merged
+        }
         notices = got
         saveCache()
 

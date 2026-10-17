@@ -263,3 +263,53 @@ test('log_note leaves notes in ai-inbox.json and changes nothing else', async ()
   assert.equal(call('applyInbox', JSON.stringify(inbox)).filed, 2);
   assert.match(call('person', k).ed.note, /\(Claude\): Talked about the zero trust gateway/);
 });
+
+test('log_note never overwrites notes it can’t read, and writes whole files', async () => {
+  const dir = path.join(root, 'inbox-bad'); writeSample(dir, {pro: true});
+  const half = '{"kind":"northfix-ai-inbox","v":1,"notes":[{"k":"a","text":"waiting"';
+  fs.writeFileSync(path.join(dir, 'ai-inbox.json'), half);
+  const s = start({NORTHFIX_DATA: dir, NORTHFIX_STATE: path.join(root, 'state-inbox-bad')});
+  try {
+    await s.request('initialize', {protocolVersion: '2025-06-18', capabilities: {}, clientInfo: {name: 'test', version: '1'}});
+    const k = (await s.tool('search_people', {query: 'DISA', limit: 1})).structuredContent.people[0].key;
+    const r = await s.tool('log_note', {name_or_key: k, note: 'Should not clobber.'});
+    assert.equal(r.isError, true);
+    assert.match(text(r), /couldn’t be read/);
+    assert.equal(fs.readFileSync(path.join(dir, 'ai-inbox.json'), 'utf8'), half, 'left exactly as it was');
+    fs.writeFileSync(path.join(dir, 'ai-inbox.json'), '');
+    assert.equal((await s.tool('log_note', {name_or_key: k, note: 'Fresh.'})).structuredContent.saved, true);
+  } finally { s.stop(); }
+  assert.equal(JSON.parse(fs.readFileSync(path.join(dir, 'ai-inbox.json'), 'utf8')).notes.length, 1);
+  assert.deepEqual(fs.readdirSync(dir).filter(f => f.endsWith('.tmp')), [], 'no temporary files left');
+});
+
+test('a note Claude adds while the app files the others is kept', () => {
+  new Function(fs.readFileSync('apple/Bearings/Resources/engine.js', 'utf8'))();
+  const call = (name, ...args) => JSON.parse(globalThis.Bearings.call(name, JSON.stringify(args))).ok;
+  const a = {k: 'x', text: 'one', at: '2026-10-17T10:00:00Z'}, b = {k: 'y', text: 'two', at: '2026-10-17T10:00:05Z'};
+  const filed = JSON.stringify({notes: [a]}), now = JSON.stringify({notes: [a, b]});
+  assert.deepEqual(JSON.parse(call('inboxRest', filed, now)).notes, [b]);
+  assert.equal(call('inboxRest', filed, filed), '');
+  assert.equal(call('inboxRest', filed, ''), '');
+});
+
+test('stdio: bad lines, CRLF, several messages in one write, and no data flagged as an error', async () => {
+  const dir = path.join(root, 'stdio-empty'); fs.mkdirSync(dir, {recursive: true});
+  const p = spawn(process.execPath, [SERVER], {env: Object.assign({}, process.env, {NORTHFIX_DATA: dir, NORTHFIX_STATE: path.join(root, 'state-stdio')}), stdio: ['pipe', 'pipe', 'pipe']});
+  let out = '';
+  p.stdout.setEncoding('utf8');
+  p.stdout.on('data', c => { out += c; });
+  const closed = new Promise(r => p.on('close', r));
+  p.stdin.write('not json\r\n' + JSON.stringify({jsonrpc: '2.0', id: 1, method: 'ping'}) + '\r\n' + JSON.stringify({jsonrpc: '2.0', method: 'notifications/initialized'}) + '\n'
+    + JSON.stringify({jsonrpc: '2.0', id: 2, method: 'tools/call', params: {name: 'network_summary', arguments: {}}}) + '\n');
+  // closing stdin right away must not cut off the replies
+  p.stdin.end();
+  await closed;
+  const msgs = out.trim().split('\n').map(l => JSON.parse(l));
+  assert.equal(msgs.length, 3, 'a reply each for the bad line, ping and the tool call; none for the notification');
+  assert.equal(msgs.find(m => m.error && m.id === null).error.code, -32700);
+  assert.deepEqual(msgs.find(m => m.id === 1).result, {});
+  const r = msgs.find(m => m.id === 2).result;
+  assert.equal(r.isError, true);
+  assert.match(r.content[0].text, /no Northfix network/i);
+});

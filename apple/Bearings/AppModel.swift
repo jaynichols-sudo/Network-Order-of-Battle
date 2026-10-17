@@ -13,6 +13,19 @@ enum AppTab: String, Hashable, CaseIterable {
     /// The four tabs every device shows.
     static let main: [AppTab] = [.home, .people, .companies, .you]
 
+    /// A sidebar-only tab as a screen, for the phone's tab bar, which doesn't have it.
+    var route: Route? {
+        switch self {
+        case .explore: return .explore
+        case .pursuits: return .pursuits
+        case .opportunities: return .opportunities
+        case .socials: return .socials
+        case .trips: return .trips
+        case .team: return .team
+        case .home, .people, .companies, .you: return nil
+        }
+    }
+
     var title: String {
         switch self {
         case .home: return "Today"
@@ -447,7 +460,10 @@ final class AppModel {
         struct Filed: Decodable { var filed: Int; var people: [String]? }
         guard let r = try? await engine.call("applyInbox", [text], as: Filed.self) else { return }
         if r.filed > 0 { await saveFile("edits", "edits.json") }
-        await store.remove("ai-inbox.json")
+        // a note Claude left while these were filed stays for next time
+        let now = await store.readIfLocal("ai-inbox.json") ?? ""
+        let rest = now == text ? "" : ((try? await engine.call("inboxRest", [text, now], as: String.self)) ?? "")
+        if rest.isEmpty { await store.remove("ai-inbox.json") } else { try? await store.write("ai-inbox.json", rest) }
         if r.filed > 0 { show("Filed \(r.filed) \(r.filed == 1 ? "note" : "notes") from Claude") }
     }
 
@@ -470,6 +486,7 @@ final class AppModel {
         await runSearch()
         await refreshCompanyPlaces()
         mergePlaces()
+        CalendarService.shared.watchChanges(model: self)
         Task { await CalendarService.shared.scan(model: self) }
         SpotlightIndex.update(people, sample: info.isSample)
         Notifications.shared.schedule(model: self)

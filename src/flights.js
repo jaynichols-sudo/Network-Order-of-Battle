@@ -357,3 +357,18 @@ export function tripsFromEvents(events, home, opts = {}){
 export function tripsFromFeed(icsText, home){
   return tripsFromEvents(parseICS(icsText), home, {source: 'feed'});
 }
+
+/**
+ * Whether a fetched travel feed is safe to save over the last good copy. status: the HTTP
+ * status (0 when unknown); text: the body. {ok: true}, or {ok: false, code, error} where code is
+ * 'gone' (the link was revoked: 401, 403, 404, 410), 'down' (offline or a server error),
+ * 'notcal' (not a calendar) or 'partial' (cut off mid-download).
+ */
+export function feedCheck(text, status, name){
+  const who = name || 'your travel feed', st = +status || 0, t = typeof text === 'string' ? text : '';
+  if ([401, 403, 404, 410].includes(st)) return {ok: false, code: 'gone', error: `${who} says this feed link no longer works. Copy the link again from ${who === 'TripIt' ? 'TripIt (Settings, Calendar feed)' : 'the app that made it'}.`};
+  if (st >= 400 || (!st && !t)) return {ok: false, code: 'down', error: `Couldn’t reach ${who} at the last check. Northfix will try again later.`};
+  if (!/BEGIN:VCALENDAR/i.test(t)) return {ok: false, code: 'notcal', error: `That link didn’t return a calendar. Copy the feed link from ${who} again.`};
+  if (!/END:VCALENDAR\s*$/i.test(t)) return {ok: false, code: 'partial', error: `${who} sent back part of the feed. Northfix kept the last full copy and will try again later.`};
+  return {ok: true};
+}

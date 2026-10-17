@@ -82,20 +82,58 @@ function slim(o){
   if (o.demo) out.demo = true;
   return out;
 }
-/** One SAM.gov answer (the response text): the slim notices, the total, or a plain-English error. */
-export function opportunityPage(text){
+/**
+ * One SAM.gov answer: the slim notices, the total, or a plain-English error. `text` is the
+ * response body (or parsed JSON); `status` is the HTTP status when the app has it. `more` is
+ * true when SAM.gov has more notices than this page carried.
+ */
+export function opportunityPage(text, status){
+  const st = +status || 0;
+  const fail = (error, code) => code ? {total: 0, items: [], error, code} : {total: 0, items: [], error};
   let j;
-  try { j = typeof text === 'string' ? JSON.parse(text) : text; } catch { return {total: 0, items: [], error: 'SAM.gov sent back something Northfix couldn’t read. Try again later.'}; }
-  if (!j || typeof j !== 'object') return {total: 0, items: [], error: 'SAM.gov sent back an empty answer.'};
-  const err = j.error || (j.errorCode || j.errorMessage ? {code: j.errorCode, message: j.errorMessage} : null) || (j.code && j.message && !j.opportunitiesData ? j : null);
+  try { j = typeof text === 'string' ? (text.trim() ? JSON.parse(text) : null) : text; } catch { j = undefined; }
+  if (st === 429) return fail('SAM.gov’s daily search limit for this key is used up. Northfix will try again tomorrow.', 'rate');
+  if (j === undefined || ((j == null || typeof j !== 'object') && st >= 400)){
+    if (st === 401 || st === 403) return fail('SAM.gov didn’t accept that API key. Copy it again from your SAM.gov account (Account Details, Public API Key).', 'key');
+    if (st >= 500) return fail(`SAM.gov is having trouble (error ${st}). Northfix will try again later.`, 'down');
+    if (st >= 400) return fail(`SAM.gov didn’t answer (error ${st}). Northfix will try again later.`);
+    return fail('SAM.gov sent back something Northfix couldn’t read. Try again later.');
+  }
+  if (j == null || typeof j !== 'object') return fail('SAM.gov sent back an empty answer.');
+  // the api.data.gov gateway: {error: {code, message}}; SAM.gov itself: {errorCode, errorMessage},
+  // {title, detail}, {code, message} or a plain {error: "..."}
+  const err = (j.error && typeof j.error === 'object') ? j.error : typeof j.error === 'string' ? {message: j.error}
+    : (j.errorCode || j.errorMessage) ? {code: j.errorCode, message: j.errorMessage}
+    : (j.detail || j.title) && !j.opportunitiesData ? {code: j.title, message: j.detail || j.title}
+    : (j.code && j.message && !j.opportunitiesData) ? j : null;
   if (err){
     const code = String(err.code || ''), msg = String(err.message || err.description || '');
-    if (/API_KEY|key/i.test(code + ' ' + msg)) return {total: 0, items: [], error: 'SAM.gov didn’t accept that API key. Copy it again from your SAM.gov account (Account Details, Public API Key).', code: 'key'};
-    if (/OVER_RATE|rate|limit/i.test(code + ' ' + msg)) return {total: 0, items: [], error: 'SAM.gov’s daily search limit for this key is used up. Northfix will try again later.', code: 'rate'};
-    return {total: 0, items: [], error: `SAM.gov said: ${msg || code || 'something went wrong'}`};
+    if (/API_KEY|NO_API_KEY/i.test(code) || /api[ _]?key/i.test(msg) || st === 401 || st === 403) return fail('SAM.gov didn’t accept that API key. Copy it again from your SAM.gov account (Account Details, Public API Key).', 'key');
+    if (/^OVER_RATE_LIMIT$/i.test(code) || /rate limit|exceeded your|too many requests/i.test(msg)) return fail('SAM.gov’s daily search limit for this key is used up. Northfix will try again tomorrow.', 'rate');
+    if (st >= 500) return fail(`SAM.gov is having trouble (error ${st}). Northfix will try again later.`, 'down');
+    return fail(`SAM.gov said: ${(msg || code || 'something went wrong').slice(0, 200)}`);
   }
-  const list = Array.isArray(j.opportunitiesData) ? j.opportunitiesData : Array.isArray(j) ? j : [];
-  return {total: +j.totalRecords || list.length, items: list.filter(o => o && o.noticeId).map(slim)};
+  if (st >= 400) return fail(st >= 500 ? `SAM.gov is having trouble (error ${st}). Northfix will try again later.` : `SAM.gov didn’t answer (error ${st}). Northfix will try again later.`, st >= 500 ? 'down' : undefined);
+  const list = Array.isArray(j.opportunitiesData) ? j.opportunitiesData : Array.isArray(j) ? j : null;
+  // a 200 with no list is not "no notices": keep what the app already has
+  if (!list) return fail(j.message ? `SAM.gov said: ${String(j.message).slice(0, 200)}` : 'SAM.gov sent back an answer Northfix couldn’t read. Try again later.');
+  const items = list.filter(o => o && typeof o === 'object' && o.noticeId).map(slim);
+  const total = Math.max(+j.totalRecords || 0, items.length);
+  return {total, items, more: total > (+j.offset || 0) + list.length};
+}
+
+/**
+ * The notices to keep after a check: the fresh ones, plus the saved ones a failed search would
+ * have brought back (the same NAICS code), so one failed search doesn't hide notices.
+ * failed: the request objects that failed.
+ */
+export function mergeOpportunities(old, got, failed){
+  const fresh = Array.isArray(got) ? got.filter(Boolean) : [];
+  const codes = (Array.isArray(failed) ? failed : []).map(r => r && r.ncode).filter(Boolean).map(String);
+  if (!codes.length) return fresh;
+  const have = new Set(fresh.map(n => n.noticeId));
+  const keep = (Array.isArray(old) ? old : []).filter(n => n && !n.demo && n.noticeId && !have.has(n.noticeId) && codes.includes(String(n.naicsCode || '')));
+  return fresh.concat(keep);
 }
 
 /* ---------- which agency ---------- */
