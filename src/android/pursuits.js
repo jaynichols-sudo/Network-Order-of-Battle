@@ -1,12 +1,14 @@
 // Pursuits: an opportunity (a bid, a deal) and the people who decide it. Each seat shows who
 // you know in it, or who could fill it, and the warmest ways into the agency. Ports Pursuits.swift.
-import { M, person, isSample, pursuits, pursuit, addPursuit, updatePursuit, assignRole, removePursuit, setSeatOwner, pipeline, pursuitSheet, callPlan, show } from './model.js';
+import { M, person, isSample, pursuits, pursuit, addPursuit, updatePursuit, assignRole, removePursuit, setSeatOwner, pipeline, pursuitSheet, callPlan, show, setPursuitDate, setBidAnswer, captureDigest } from './model.js';
 import { esc, fmt, icon, avatar, empty, progressRing, flag, menu, Day, $ } from './ui.js';
 import { registerRoute, openSheet, closeSheet, push, popPage, setPageTitle } from './nav.js';
 import { openPerson, register, open } from './actions.js';
 import { personRow } from './people.js';
 import { openPicker } from './events.js';
 import { fx, ls, copy, shareText, shareFile, NATIVE } from './platform.js';
+import { awardPages } from './recompetes.js';
+import { available, match } from './opportunities.js';
 
 export function dueText(days){
   if (days == null) return '';
@@ -25,13 +27,17 @@ export function money(n){
   return '$' + Math.round(v);
 }
 const coldFlag = days => flag(days == null ? 'Cold' : `Cold: ${days} days`, 'var(--info)');
+const q4Flag = () => flag('Q4', 'var(--accent)');
+const compFlag = () => flag('Competitor', 'var(--needs)');
+/** "Questions due in 6 days", "Orals tomorrow". */
+const nextLine = n => `${n.label} ${n.days === 0 ? 'today' : n.days === 1 ? 'tomorrow' : `in ${n.days} days`}`;
 
 /* ---------- the list ---------- */
 function row(p){
   const meta = [p.agency, p.stage, dueText(p.days)].filter(Boolean).join(' · ');
   const odds = p.amount > 0 && p.stage !== 'Won' && p.stage !== 'Lost' ? ` · ${p.pwin}% of ${money(p.amount)}` : '';
   return `<button type="button" class="row purow" data-a="pursuit" data-v="${esc(p.id)}">${progressRing(p.filled, p.roles, 38, 4)}
-    <span class="purow-main"><b>${esc(p.name)}</b>${meta ? `<span class="muted small">${esc(meta + odds)}</span>` : ''}<span class="small strong ${p.filled < 3 ? 'needs' : 'good'}">${esc(`${p.filled} of ${p.roles} seats known${p.warm > 0 ? ` · ${p.warm} warm` : ''}`)}</span>${p.cold ? `<span class="pu-cold">${flag(`${p.cold} cold ${p.cold === 1 ? 'seat' : 'seats'}`, 'var(--info)')}</span>` : ''}</span>${icon('chevR', 'chev')}</button>`;
+    <span class="purow-main"><b>${esc(p.name)}</b>${meta ? `<span class="muted small">${esc(meta + odds)}</span>` : ''}${p.next ? `<span class="small strong ${p.next.days <= 7 ? 'needs' : 'muted'}">${esc(nextLine(p.next))}</span>` : ''}${p.fiscal && p.fiscal.q4 && p.stage !== 'Won' && p.stage !== 'Lost' ? `<span class="pu-cold">${q4Flag()}</span>` : ''}<span class="small strong ${p.filled < 3 ? 'needs' : 'good'}">${esc(`${p.filled} of ${p.roles} seats known${p.warm > 0 ? ` · ${p.warm} warm` : ''}`)}</span>${p.cold ? `<span class="pu-cold">${flag(`${p.cold} cold ${p.cold === 1 ? 'seat' : 'seats'}`, 'var(--info)')}</span>` : ''}</span>${icon('chevR', 'chev')}</button>`;
 }
 function pipelineRow(){
   const pl = pipeline(false);
@@ -44,7 +50,7 @@ registerRoute('pursuits', () => {
     title: 'Pursuits',
     mount(body, page){
       const r = $('.bar-right', page);
-      r.insertAdjacentHTML('beforeend', `<button type="button" class="bar-act" data-a="add" aria-label="Add a pursuit">${icon('plus')}</button>`);
+      r.insertAdjacentHTML('beforeend', `<button type="button" class="bar-act" data-a="digest" aria-label="Weekly digest">${icon('share')}</button><button type="button" class="bar-act" data-a="add" aria-label="Add a pursuit">${icon('plus')}</button>`);
       this.update(body);
     },
     update(body){
@@ -55,6 +61,7 @@ registerRoute('pursuits', () => {
     },
     handlers: {
       add: () => openNewPursuit(),
+      digest: () => openDigest(),
       pursuit: id => push('pursuit', id),
       pipeline: () => { fx.tap(); push('pipeline'); },
     },
@@ -70,6 +77,7 @@ registerRoute('pursuit', id => {
     menu: () => [
       {label: 'Share one-pager', icon: 'share', run: () => openOnePager(id)},
       {label: 'Pipeline', icon: 'trend', run: () => push('pipeline')},
+      {label: 'Weekly digest', icon: 'share', run: () => openDigest()},
       {label: 'Delete pursuit', icon: 'trash', danger: true, run: () => del()},
     ],
     mount(body){ this.render(body); },
@@ -92,8 +100,9 @@ registerRoute('pursuit', id => {
       const odds = d.amount > 0 ? `${d.pwin}% of ${money(d.amount)} is ${money(d.weighted)} weighted` : `${d.pwin}% chance of winning`;
       body.innerHTML = `<div class="pursuit">
         <section class="card pad pu-head">
-          ${d.agency ? `<p class="eyebrow mono muted">${esc(d.agency.toUpperCase())}</p>` : ''}
+          ${d.agency || d.fiscal ? `<p class="eyebrow mono muted">${esc([d.agency, d.fiscal && d.fiscal.label].filter(Boolean).join(' · ').toUpperCase())}</p>` : ''}
           <h1 class="serif">${esc(d.name)}</h1>
+          ${(d.fiscal && d.fiscal.q4) || (d.competitors || []).length ? `<p class="pu-flags">${d.fiscal && d.fiscal.q4 ? q4Flag() : ''}${(d.competitors || []).length ? ` ${compFlag()} <span class="muted small">${esc(d.competitors.join(', '))}</span>` : ''}</p>` : ''}
           <div class="pu-ring">${progressRing(d.filled, d.roles, 46, 5)}<span class="pu-ring-t"><b>${esc(`${d.filled} of ${d.roles} seats known`)}</b>${meta ? `<span class="muted small">${esc(meta)}</span>` : ''}${d.cold ? `<span class="pu-cold">${flag(`${d.cold} cold ${d.cold === 1 ? 'seat' : 'seats'}`, 'var(--info)')}</span>` : ''}</span></div>
           <label class="frow pu-stage"><span>Stage</span><div class="select"><select data-ch="stage" aria-label="Stage">${d.stages.map(s => `<option ${s === d.stage ? 'selected' : ''}>${esc(s)}</option>`).join('')}</select>${icon('chevD')}</div></label>
         </section>
@@ -104,6 +113,8 @@ registerRoute('pursuit', id => {
           <label class="frow pu-pwin"><span>Win chance</span><span class="pu-pwin-in"><input type="number" class="field" data-ch="pwin" min="0" max="100" step="5" inputmode="numeric" value="${d.pwinSet ? d.pwin : ''}" placeholder="${d.pwinSet ? '' : d.pwin}" aria-label="Win chance, percent"><span class="muted">%</span></span></label>
         </div>
         <p class="foot">${esc(d.pwinSet ? `${odds}.` : `${odds}. ${d.pwin}% is typical for ${d.stage}. Type your own number to change it.`)}${d.pwinSet ? ' <button type="button" class="link small" data-a="pwinReset">Use the stage default</button>' : ''}</p>
+        ${keyDatesHTML(d)}
+        ${bidHTML(d)}
         <p class="sec-h">Who decides</p>
         <div class="card list roles">${gov.map(r => roleRow(r, team)).join('')}</div>
         <p class="foot">${esc(d.agency ? `Suggestions come from titles at ${d.agency}. Tap one to put them in the seat.` : 'Add an agency or company to get suggestions for each seat.')}</p>
@@ -136,6 +147,9 @@ registerRoute('pursuit', id => {
         fx.select(); await updatePursuit(id, {pwin: n});
       },
       async pwinReset(){ fx.tap(); await updatePursuit(id, {pwin: ''}); },
+      async date(v, t){ fx.select(); await setPursuitDate(id, t.dataset.kind, v || ''); },
+      async dateClear(kind){ fx.tap(); await setPursuitDate(id, kind, ''); },
+      async bid(v, t){ fx.select(); await setBidAnswer(id, t.dataset.key, v); },
       add(role){ openPicker(k => assignRole(id, role, k, true).then(() => { fx.success(); }), {title: role, none: 'No one matches. Try another name or company.'}); },
       async assign(k, t){ fx.tap(); await assignRole(id, t.dataset.role, k, true); },
       async unassign(k, t){ fx.tap(); await assignRole(id, t.dataset.role, k, false); },
@@ -156,6 +170,52 @@ registerRoute('pursuit', id => {
   async function del(){ await removePursuit(id); fx.success(); show('Pursuit deleted'); popPage(); }
   return view;
 });
+function keyDatesHTML(d){
+  const slots = d.dates || [];
+  if (!slots.length) return '';
+  return `<p class="sec-h">Key dates</p>
+    <div class="card form pu-form">${slots.map(s => `<label class="frow pu-date"><span>${esc(s.label)}</span><span class="pu-date-in"><input type="date" class="field" data-ch="date" data-kind="${esc(s.kind)}" value="${esc(s.date || '')}" aria-label="${esc(s.label)}">${s.date ? `<button type="button" class="link small" data-a="dateClear" data-v="${esc(s.kind)}" aria-label="Clear ${esc(s.label)}">Clear</button>` : ''}</span></label>`).join('')}</div>
+    <p class="foot">The next date shows on the pursuit list and in the weekly digest. Proposal due is the pursuit’s due date.</p>`;
+}
+const WORD = {yes: 'Yes', maybe: 'Maybe', no: 'No'};
+function bidHTML(d){
+  const b = d.bid; if (!b) return '';
+  const tone = b.call === 'Bid' ? 'good' : b.call === 'No bid' ? 'needs' : 'accent';
+  return `<p class="sec-h">Bid or no bid</p>
+    <div class="card list">
+      <div class="row static"><span class="grow"><span class="row-between"><b class="${tone}">${esc(b.call)}</b>${b.score != null ? `<span class="mono small muted">${esc(`${b.score} of 100`)}</span>` : ''}</span><span class="muted small">${esc(b.why)}</span></span></div>
+      ${b.questions.map(q => `<div class="row static pu-bid"><span class="grow"><span class="row-between"><span>${esc(q.text)}</span><span class="select small"><select data-ch="bid" data-key="${esc(q.key)}" aria-label="${esc(q.text)}">
+        <option value="" ${q.mine ? '' : 'selected'}>${esc(q.suggested ? `Suggested: ${WORD[q.suggested] || q.suggested}` : 'Not answered')}</option>
+        ${['yes', 'maybe', 'no'].map(a => `<option value="${a}" ${q.mine === a ? 'selected' : ''}>${WORD[a]}</option>`).join('')}</select>${icon('chevD')}</span></span>
+        ${!q.mine && q.why ? `<span class="muted small">${esc(`Suggested from your network: ${q.why}`)}</span>` : ''}</span></div>`).join('')}
+    </div>
+    <p class="foot">Northfix suggests answers from your own data. Pick an answer to overrule it.</p>`;
+}
+
+/* ---------- the weekly digest ---------- */
+/** One plain-English page across every open pursuit, to copy or share. */
+export function openDigest(){
+  fx.tap();
+  const m = available() ? match() : null;
+  const g = captureDigest({awards: awardPages(), notices: m ? m.items : []});
+  if (!g){ show('Couldn’t make the digest'); return; }
+  openSheet({
+    title: 'Weekly digest', right: ['Done'], full: true,
+    mount(body){
+      body.innerHTML = `<p class="foot">${esc(g.head)}</p>
+        ${g.empty ? '<p class="foot">Nothing needs attention this week. Add key dates and fill seats on your pursuits to see them here.</p>'
+          : g.sections.map(x => `<p class="sec-h">${esc(x.title)}</p><div class="card list">${x.lines.map(l => `<div class="row static"><span class="grow small">${esc(l)}</span></div>`).join('')}</div>`).join('')}
+        <div class="card list actions top12">
+          <button type="button" class="row act" data-a="share">${icon('share')}<span>Share digest</span></button>
+          <button type="button" class="row act" data-a="copyText">${icon('copy')}<span>Copy as text</span></button>
+        </div>`;
+    },
+    handlers: {
+      share: () => shareText(g.text, 'Weekly capture digest'),
+      async copyText(){ await copy(g.text); show('Copied'); },
+    },
+  });
+}
 const lastLine = m => m.last ? `Last in touch ${Day.ago(m.last)}` : 'Not in touch yet';
 function roleRow(r, team){
   const people = r.people.map(m => { const p = person(m.k); return p ? `<div class="pu-person">${personRow(p, {sub: lastLine(m)})}<button type="button" class="tool small" data-a="unassign" data-v="${esc(m.k)}" data-role="${esc(r.role)}" aria-label="Remove ${esc(m.name)}">${icon('x')}</button></div>
@@ -194,6 +254,8 @@ registerRoute('pipeline', () => {
         <p class="sec-h">By stage</p>
         <div class="card list">${open.map(s => `<div class="row static pipe-stage"><span class="grow"><span class="row-between"><b>${esc(s.stage)}</b><span class="mono small">${esc(s.count ? `${s.valueText} · ${s.weightedText} weighted` : 'None')}</span></span>
           <span class="pipe-bar"><i style="width:${s.value ? Math.max(2, s.value / max * 100) : 0}%;background:var(--accent)"></i></span><span class="muted small">${esc(`${fmt(s.count)} ${s.count === 1 ? 'pursuit' : 'pursuits'}`)}</span></span></div>`).join('')}</div>
+        ${(pl.quarters || []).length ? `<p class="sec-h">By fiscal quarter</p><div class="card list">${pl.quarters.map(q => `<div class="row static"><span class="grow"><span class="row-between"><b>${esc(q.label)} ${q.q4 ? q4Flag() : ''}</b><span class="mono small">${esc(`${q.valueText} · ${q.weightedText} weighted`)}</span></span><span class="muted small">${esc(`${fmt(q.count)} ${q.count === 1 ? 'pursuit' : 'pursuits'}`)}</span></span></div>`).join('')}</div>
+          <p class="foot">The federal fiscal year starts October 1. Q4, July to September, is when agencies award the most.</p>` : ''}
         ${openRows.length ? `<p class="sec-h">Open, biggest weighted first</p><div class="card list">${openRows.map(r => rowOf(r, `<span class="pipe-amt"><b class="mono">${esc(r.amount ? money(r.weighted) : 'No value')}</b><span class="muted small">${esc(`${r.pwin}%${r.amount ? ' of ' + money(r.amount) : ''}`)}</span></span>`)).join('')}</div>` : ''}
         ${pl.unpriced ? `<p class="foot">${esc(`${fmt(pl.unpriced)} ${pl.unpriced === 1 ? 'pursuit has' : 'pursuits have'} no value yet, so ${pl.unpriced === 1 ? 'it counts' : 'they count'} as $0. Add a value like $2.5M on the pursuit.`)}</p>` : ''}
         <p class="sec-h">Won and lost</p>

@@ -207,6 +207,12 @@ export const TOOLS = [
   {name: 'log_note', title: 'Log a note',
     description: 'Adds a dated note to one person in the user’s Northfix network, for example after a call. Northfix files it the next time the app opens on this Mac. Only use when the user asks to save a note.',
     inputSchema: {type: 'object', properties: {name_or_key: str('A person’s name, or the key from another tool’s result.'), note: str('The note, in plain words. Up to 480 characters.')}, required: ['name_or_key', 'note']}},
+  {name: 'bid_decision', title: 'Bid or no bid',
+    description: 'The bid/no-bid scorecard for one pursuit: eight standard capture questions (customer relationships, decision makers, incumbent, teaming partner, eligibility, time, cost, past performance), the user’s answers or Northfix’s suggestions from their data with the reason, a score out of 100, and a recommendation: bid, bid with conditions, or no bid.',
+    inputSchema: {type: 'object', properties: {pursuit: str('The pursuit’s name, or part of it.')}, required: ['pursuit']}},
+  {name: 'capture_digest', title: 'Weekly capture digest',
+    description: 'A short weekly summary across all open pursuits: key dates in the next two weeks (industry days, questions due, RFPs, proposals, orals), seats going cold, empty decision-maker seats, bid decisions to look at, and the open and weighted pipeline. Good for a Monday capture meeting.',
+    inputSchema: {type: 'object', properties: {}}},
   {name: 'network_summary', title: 'Network summary',
     description: 'A short overview of the user’s network: how many people, companies and industries, who’s senior, how many are waiting on a reply or changed jobs, and the watchlist. Always free.',
     inputSchema: {type: 'object', properties: {}}},
@@ -240,6 +246,18 @@ async function fetchAwards(names, months){
     } catch { errors.push('USASpending.gov didn’t answer. Check the internet connection and try again.'); }
   }));
   return {ok, errors: [...new Set(errors)], asked: reqs.map(r => r.short)};
+}
+
+/** One pursuit by name, part of a name, agency or id: {id}, or {answer} saying why not. */
+function pickPursuit(name){
+  const q = String(name || '').trim().toLowerCase();
+  if (!q) throw new Error('Say which pursuit.');
+  const ps = call('pursuits');
+  const hit = ps.find(p => p.id === name) || ps.find(p => p.name.toLowerCase() === q) || ps.filter(p => p.name.toLowerCase().includes(q) || (p.agency || '').toLowerCase().includes(q));
+  const list = Array.isArray(hit) ? hit : hit ? [hit] : [];
+  if (!list.length) return {answer: {text: ps.length ? `No pursuit called “${name}”. Your pursuits: ${ps.map(p => p.name).join(', ')}.` : 'No pursuits yet. Add one in Northfix (Pursuits).', data: {found: false, pursuits: ps.map(p => p.name)}}};
+  if (list.length > 1) return {answer: {text: `Several pursuits match: ${list.map(p => p.name).join(', ')}. Which one?`, data: {found: false, pursuits: list.map(p => p.name)}}};
+  return {id: list[0].id};
 }
 
 const handlers = {
@@ -348,14 +366,9 @@ const handlers = {
     return {text: [`${out.length} ${out.length === 1 ? 'pursuit' : 'pursuits'}:`, ...out.map(p => `- ${p.name}${p.agency ? ` (${p.agency})` : ''}: ${p.stage}${p.due ? `, due ${nice(p.due)}` : ''}${p.value ? `, ${p.value}` : ''}. ${p.seatsFilled} of ${p.seats} seats filled.`)].join('\n'), data: {pursuits: out}};
   },
   pursuit({name}){
-    const q = String(name || '').trim().toLowerCase();
-    if (!q) throw new Error('Say which pursuit.');
-    const ps = call('pursuits');
-    const hit = ps.find(p => p.id === name) || ps.find(p => p.name.toLowerCase() === q) || ps.filter(p => p.name.toLowerCase().includes(q) || (p.agency || '').toLowerCase().includes(q));
-    const list = Array.isArray(hit) ? hit : hit ? [hit] : [];
-    if (!list.length) return {text: ps.length ? `No pursuit called “${name}”. Your pursuits: ${ps.map(p => p.name).join(', ')}.` : 'No pursuits yet. Add one in Northfix (Pursuits).', data: {found: false, pursuits: ps.map(p => p.name)}};
-    if (list.length > 1) return {text: `Several pursuits match: ${list.map(p => p.name).join(', ')}. Which one?`, data: {found: false, pursuits: list.map(p => p.name)}};
-    const p = call('pursuit', list[0].id);
+    const pick = pickPursuit(name);
+    if (pick.answer) return pick.answer;
+    const p = call('pursuit', pick.id);
     const seats = p.roleList.map(r => ({role: r.role, side: r.side, people: r.people.map(x => brief(x.k)).filter(Boolean), suggestions: r.suggest.map(x => brief(x.k)).filter(Boolean),
       companies: r.companies || [], owner: r.owner || '', cold: !!r.cold}));
     const best = (p.best || []).map(b => brief(b.k, b.why)).filter(Boolean);
@@ -450,6 +463,22 @@ const handlers = {
     fs.renameSync(tmp, file);
     const who = state.people.get(f.k);
     return {text: `Saved for ${who ? who.name : 'them'}. Northfix files the note the next time it opens on this Mac.`, data: {saved: true, key: f.k, pending: list.length}};
+  },
+  bid_decision({pursuit}){
+    const pick = pickPursuit(pursuit);
+    if (pick.answer) return pick.answer;
+    const b = call('bidDecision', pick.id);
+    const label = {yes: 'Yes', maybe: 'Maybe', no: 'No'};
+    const data = {pursuit: b.name, recommendation: b.call, reason: b.why, score: b.score, answered: b.answered,
+      questions: b.questions.map(q => ({question: q.text, answer: q.answer || 'not answered', from: q.mine ? 'user' : q.suggested ? 'Northfix suggestion' : '', why: q.why}))};
+    const t = [`${b.name}: ${b.call}${b.score != null ? ` (${b.score} of 100)` : ''}. ${b.why}`,
+      ...b.questions.map(q => `- ${q.text} ${q.answer ? label[q.answer] : 'Not answered'}${q.mine ? '' : q.suggested ? ` (suggested: ${q.why})` : ''}`),
+      'The user can change any answer on the pursuit in Northfix.'];
+    return {text: t.join('\n'), data};
+  },
+  capture_digest(){
+    const d = call('captureDigest', {});
+    return {text: d.text, data: {date: d.date, summary: d.head, sections: d.sections}};
   },
   network_summary(){
     const info = call('info'), pay = call('payoff'), h = call('home', {});

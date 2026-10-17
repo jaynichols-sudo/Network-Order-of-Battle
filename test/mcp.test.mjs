@@ -75,7 +75,7 @@ test('initialize, tools/list and ping follow MCP', async () => {
     assert.deepEqual((await s.request('ping')).result, {});
     const list = (await s.request('tools/list')).result.tools;
     const names = list.map(t => t.name).sort();
-    assert.deepEqual(names, ['agency_coverage', 'call_plan', 'cold_seats', 'log_note', 'network_summary', 'person', 'pipeline', 'pursuit', 'pursuits', 'recompetes', 'search_people',
+    assert.deepEqual(names, ['agency_coverage', 'bid_decision', 'call_plan', 'capture_digest', 'cold_seats', 'log_note', 'network_summary', 'person', 'pipeline', 'pursuit', 'pursuits', 'recompetes', 'search_people',
       'teaming_partners', 'waiting_on_me', 'ways_in', 'weekly_five', 'who_changed_jobs']);
     for (const t of list){
       assert.match(t.name, /^[a-z_]+$/);
@@ -312,4 +312,21 @@ test('stdio: bad lines, CRLF, several messages in one write, and no data flagged
   const r = msgs.find(m => m.id === 2).result;
   assert.equal(r.isError, true);
   assert.match(r.content[0].text, /no Northfix network/i);
+});
+
+test('round 2 tools: bid decision and the weekly capture digest', async () => {
+  const dir = path.join(root, 'round2'); writeSample(dir, {pro: true});
+  const s = start({NORTHFIX_DATA: dir, NORTHFIX_STATE: path.join(root, 'state-round2')});
+  try {
+    await s.request('initialize', {protocolVersion: '2025-06-18', capabilities: {}, clientInfo: {name: 'test', version: '1'}});
+    const b = await s.tool('bid_decision', {pursuit: 'zero trust'});
+    assert.equal(b.structuredContent.ok, true);
+    assert.equal(b.structuredContent.questions.length, 8);
+    assert.match(text(b), /DISA zero trust gateway: (Bid|Bid with conditions|No bid|Not enough answers)/);
+    const none = await s.tool('bid_decision', {pursuit: 'nothing like this'});
+    assert.equal(none.structuredContent.found, false);
+    const d = await s.tool('capture_digest');
+    assert.match(text(d), /^Capture digest for the week of/);
+    assert.ok(Array.isArray(d.structuredContent.sections));
+  } finally { s.stop(); }
 });

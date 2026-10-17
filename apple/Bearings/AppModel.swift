@@ -601,7 +601,7 @@ final class AppModel {
         }
     }
 
-    private func refreshSummary() async {
+    func refreshSummary() async {
         if let i = try? await engine.call("info", as: EngineInfo.self) { info = i }
         home = (try? await engine.call("home", [["lastBackup": lastBackup]], as: HomeData.self)) ?? home
         targets = (try? await engine.call("targets", as: [TargetSummary].self)) ?? targets

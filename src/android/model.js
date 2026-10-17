@@ -442,6 +442,19 @@ export async function assignRole(id, role, k, on){ tryOr(() => api.assignRole(id
 export async function removePursuit(id){ tryOr(() => api.removePursuit(id), null); await savePursuits(); }
 /** Which teammate owns the relationship in one seat; '' clears it. */
 export async function setSeatOwner(id, role, owner){ tryOr(() => api.setSeatOwner(id, role, owner || ''), null); await savePursuits(); }
+/** One key date on a pursuit ('' clears it). */
+export async function setPursuitDate(id, kind, day){ tryOr(() => api.setPursuitDate(id, kind, day || ''), null); await savePursuits(); }
+/** One bid/no-bid answer: 'yes', 'maybe', 'no', or '' to take Northfix's suggestion. */
+export async function setBidAnswer(id, key, answer){ tryOr(() => api.setBidAnswer(id, key, answer || ''), null); await savePursuits(); }
+export const captureDigest = opts => tryOr(() => api.captureDigest(opts || {}), null);
+export const competitors = () => tryOr(() => api.competitors(), []);
+export async function setCompetitor(name, on){
+  tryOr(() => api.setCompetitor(name, on), null);
+  fx.tap();
+  show(on ? `Marked ${name} as a competitor` : `${name} is no longer marked as a competitor`);
+  await saveFile('targets', 'targets.json');
+  refreshSummary(); M.version++; emit('targets');
+}
 export const pipeline = withTeam => tryOr(() => api.pipeline(!!withTeam), null);
 export const pursuitSheet = id => tryOr(() => api.pursuitSheet(id), null);
 export const callPlan = (k, pursuitId) => tryOr(() => api.callPlan(k, pursuitId || null), null);

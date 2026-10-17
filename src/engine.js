@@ -10,13 +10,13 @@ import {
 import { parseQuery, matchNL } from './nlq.js';
 import { findAgency, officeOf } from './agencies.js';
 import {compileFederal, FEDERAL_AS_OF} from './federal.js';
-import { matchOpportunities as matchOpps, opportunityFilters, opportunityRequests as oppRequests, opportunityPage, demoOpportunities as demoOpps, markSeen, agencyFor, mergeOpportunities } from './opportunities.js';
+import { matchOpportunities as matchOpps, opportunityFilters, opportunityRequests as oppRequests, opportunityPage, demoOpportunities as demoOpps, markSeen, agencyFor, mergeOpportunities, SET_ASIDE_PROGRAMS } from './opportunities.js';
 import { parseFlight, parseICS, tripsFromEvents, tripsFromFeed, feedCheck } from './flights.js';
 import { awardRequests as awardReqs, awardPage, awardAgency, awardInCommand, mergeAwardPages, demoAwards as demoAwardList, dollars, money, AWARD_LINK } from './awards.js';
 import { INDUSTRIES, indColor, indShort, setIndustryOverrides, companyKey, UNCLASSIFIED, GOV_IND } from './industry.js';
 
 /* ---------- state ---------- */
-const S = {all: [], byK: new Map(), edits: {}, review: {}, targets: [], meta: null, mode: 'sample', coInd: Object.create(null), coLink: Object.create(null), coLoc: Object.create(null), lensPref: null, lens: false, hasRel: false, team: [], prospects: [], pursuits: [], snaps: {}, social: []};
+const S = {all: [], byK: new Map(), edits: {}, review: {}, targets: [], competitors: [], meta: null, mode: 'sample', coInd: Object.create(null), coLink: Object.create(null), coLoc: Object.create(null), lensPref: null, lens: false, hasRel: false, team: [], prospects: [], pursuits: [], snaps: {}, social: []};
 const SEG_COLORS = ['#7A9A1E', '#3E7BE0', '#1E9E8F', '#7556E8', '#C79100', '#D9467F', '#E0683A', '#A07C50', '#6B7F99', '#5B6B83'];
 const segColor = seg => SEG_COLORS[SEGI[seg] ?? 9];
 const GOV_SEGS3 = ['DoD & Military', 'Federal Civilian', 'State & Local'];
@@ -234,7 +234,7 @@ const bySenior = (a, b) => a.cl.lv - b.cl.lv || b.cl.gn - a.cl.gn;
 function targets(){
   return S.targets.map(t => {
     const ps = unitPeople(t.name), cov = coverage(ps), gaps = gapsOf(cov);
-    return {name: t.name, note: t.note || '', count: ps.length, stars: ps.filter(r => r.ed && r.ed.star).length, news: ps.filter(r => r.isNew || r.movedNow).length, score: cov.score, lv: cov.lv, gap: gaps[0] || 'Covered at every level', gaps};
+    return {name: t.name, note: t.note || '', competitor: isCompetitor(t.name), count: ps.length, stars: ps.filter(r => r.ed && r.ed.star).length, news: ps.filter(r => r.isNew || r.movedNow).length, score: cov.score, lv: cov.lv, gap: gaps[0] || 'Covered at every level', gaps};
   });
 }
 const LI = 'https://www.linkedin.com';
@@ -253,7 +253,7 @@ function unit(name){
   const isCo = S.all.some(r => r.c === name) && !S.all.some(r => r.cl.agency === name);
   const indCount = new Map(); ps.forEach(r => indCount.set(r.cl.ind, (indCount.get(r.cl.ind) || 0) + 1));
   const autoInd = ([...indCount.entries()].sort((a, b) => b[1] - a[1])[0] || [UNCLASSIFIED])[0];
-  return {name, count: ps.length, score: cov.score, lv: cov.lv, gaps, isTarget: !!target, note: (target && target.note) || '', isCompany: isCo,
+  return {name, count: ps.length, score: cov.score, lv: cov.lv, gaps, isTarget: !!target, competitor: isCo && isCompetitor(name), note: (target && target.note) || '', isCompany: isCo,
     industry: {auto: autoInd, set: S.coInd[companyKey(name)] || ''},
     rungs: ladder().map(([lv, label]) => ({lv, label, keys: ps.filter(r => Math.min(4, Math.max(1, r.cl.lv)) === lv).map(r => r.k)})),
     links: {company: links.company(name), companyExact: liExact(name), peopleAt: links.peopleAt(name), salesNav: links.snCompany(name)},
@@ -874,7 +874,8 @@ function pursuitSummary(p){
   const days = p.due ? -daysSince(p.due) : null;
   const amount = dollars(p.value);
   return {id: p.id, name: p.name, agency: p.agency, due: p.due, days, value: p.value, stage: p.stage, filled, roles: PURSUIT_ROLES.length, warm, people: people.length,
-    pwin: pwinOf(p), pwinSet: p.pwin != null, amount, weighted: Math.round(amount * pwinOf(p) / 100), incumbent: splitNames(p.incumbent)[0] || '', cold: coldOf(p).length};
+    pwin: pwinOf(p), pwinSet: p.pwin != null, amount, weighted: Math.round(amount * pwinOf(p) / 100), incumbent: splitNames(p.incumbent)[0] || '', cold: coldOf(p).length,
+    next: nextDateOf(p), fiscal: fiscalOf(p.due), competitor: isCompetitor(splitNames(p.incumbent)[0])};
 }
 function pursuits(){
   return S.pursuits.map(pursuitSummary).sort((a, b) => (STAGES.indexOf(a.stage) > 3) - (STAGES.indexOf(b.stage) > 3) || ((a.due || '9') < (b.due || '9') ? -1 : 1));
@@ -902,6 +903,8 @@ function pursuit(id){
   });
   const ways = p.agency ? introPaths(p.agency) : null;
   return Object.assign(pursuitSummary(p), {note: p.note, stages: STAGES, roleList: roles, partners: splitNames(p.partners), owners: p.owners || {},
+    dates: DATE_KINDS.map(([kind, label]) => ({kind, label, date: (kind === 'proposal' ? p.due : p.dates && p.dates[kind]) || ''})),
+    bid: bidDecision(p.id), competitors: [splitNames(p.incumbent)[0], ...splitNames(p.partners)].filter(c => c && isCompetitor(c)),
     teammates: S.team.map(t => t.owner), known: pool.length, best: ways ? ways.best : [], team: ways ? ways.team : []});
 }
 /** Every cold seat on every open pursuit, most urgent first: for Today and the weekly brief. */
@@ -912,6 +915,16 @@ function coldSeats(){
 }
 
 /* ---------- pipeline ---------- */
+/** Open pursuits by the fiscal quarter they're due in, soonest first; undated ones last. */
+function byQuarter(open){
+  const by = new Map();
+  for (const r of open){
+    const f = fiscalOf(r.due), key = f ? f.fy * 10 + f.q : 99999;
+    if (!by.has(key)) by.set(key, {label: f ? f.label : 'No due date', q4: !!(f && f.q4), count: 0, value: 0, weighted: 0});
+    const e = by.get(key); e.count++; e.value += r.amount; e.weighted += r.weighted;
+  }
+  return [...by.entries()].sort((a, b) => a[0] - b[0]).map(([, e]) => Object.assign(e, {valueText: money(e.value), weightedText: money(e.weighted)}));
+}
 // Pursuits as a pipeline: what's open at each stage, weighted by the chance of winning, and
 // what's been won and lost. With `withTeam`, teammates' shared pursuits count too.
 function pipeline(withTeam){
@@ -935,7 +948,182 @@ function pipeline(withTeam){
     winRate: decided ? Math.round(won.length / decided * 100) : null,
     dueThisQuarter: {count: dueSoon.length, weighted: sum(dueSoon, 'weighted'), weightedText: money(sum(dueSoon, 'weighted'))},
     history: won.concat(lost).sort((a, b) => (b.closed || b.due || '').localeCompare(a.closed || a.due || '')).slice(0, 20),
+    quarters: byQuarter(open),
     rows: rows.sort((a, b) => b.weighted - a.weighted), withTeam: !!withTeam, hasTeam: S.team.length > 0, unpriced: rows.filter(r => !r.amount).length};
+}
+
+/* ---------- fiscal year ---------- */
+// The federal fiscal year starts October 1: October 2026 is FY27 Q1. Q4 (July to September) is
+// when agencies spend what's left of the year's money, so most awards land then.
+/** "2027-08-14" → {fy: 2027, q: 4, label: 'FY27 Q4', q4: true}; null for no date. */
+function fiscalOf(day){
+  const m = /^(\d{4})-(\d{2})/.exec(String(day || '')); if (!m) return null;
+  const y = +m[1], mo = +m[2], fy = mo >= 10 ? y + 1 : y, q = mo >= 10 ? 1 : Math.floor((mo - 1) / 3) + 2;
+  return {fy, q, label: `FY${String(fy).slice(2)} Q${q}`, q4: q === 4};
+}
+
+/* ---------- key dates ---------- */
+// The dates that drive a pursuit. "Proposal due" is the pursuit's due date.
+const DATE_KINDS = [['industryDay', 'Industry day'], ['questions', 'Questions due'], ['draftRfp', 'Draft RFP'], ['rfp', 'Final RFP'],
+  ['proposal', 'Proposal due'], ['orals', 'Orals'], ['award', 'Expected award']];
+const DATE_LABEL = Object.fromEntries(DATE_KINDS);
+const isDay = v => /^\d{4}-\d{2}-\d{2}$/.test(String(v || '')) && !isNaN(Date.parse(v));
+/** Every key date on a pursuit, in date order: [{kind, label, date, days}]. */
+function datesOf(p){
+  const out = [];
+  for (const [kind, label] of DATE_KINDS){
+    const date = kind === 'proposal' ? p.due : p.dates && p.dates[kind];
+    if (isDay(date)) out.push({kind, label, date, days: -daysSince(date)});
+  }
+  return out.sort((a, b) => a.date.localeCompare(b.date));
+}
+/** The next key date that hasn't passed, or null. */
+const nextDateOf = p => datesOf(p).find(d => d.date >= TODAY) || null;
+/** Sets (or, with an empty day, clears) one key date on a pursuit. */
+function setPursuitDate(id, kind, day){
+  const p = S.pursuits.find(x => x.id === id); if (!p) return null;
+  if (!DATE_LABEL[kind]) throw new Error('Unknown date ' + kind);
+  const v = String(day || '').slice(0, 10);
+  if (v && !isDay(v)) throw new Error('Use a date like 2026-11-03.');
+  if (kind === 'proposal'){ p.due = v; return p; }
+  p.dates = Object.assign({}, p.dates);
+  if (v) p.dates[kind] = v; else delete p.dates[kind];
+  if (!Object.keys(p.dates).length) delete p.dates;
+  return p;
+}
+/** Key dates across open pursuits in the next `days` days, soonest first. */
+function upcomingDates(days){
+  const until = isoDay(Date.parse(TODAY) + (Math.max(1, +days || 14)) * 864e5), out = [];
+  for (const p of S.pursuits) if (isOpen(p)) for (const d of datesOf(p)) if (d.date >= TODAY && d.date <= until) out.push(Object.assign({pursuitId: p.id, pursuit: p.name, agency: p.agency}, d));
+  return out.sort((a, b) => a.date.localeCompare(b.date));
+}
+
+/* ---------- bid/no-bid ---------- */
+// The questions a capture team asks before spending money on a proposal. Northfix suggests an
+// answer where your own data can say; you answer the rest, or overrule it.
+// [key, question, the gap when the answer is no]
+const BID_QUESTIONS = [
+  ['customer', 'Do we know the customer?', 'no relationship with the customer'],
+  ['deciders', 'Do we know the people who decide?', 'no one in the decision seats'],
+  ['incumbent', 'Can the incumbent be beaten?', 'a strong incumbent'],
+  ['partner', 'Do we have a teaming partner?', 'no teaming partner'],
+  ['eligible', 'Can we bid (right NAICS code and set-aside)?', 'not eligible to bid'],
+  ['time', 'Is there enough time to write a strong proposal?', 'not enough time'],
+  ['worth', 'Is it worth what it will cost to win?', 'not worth the cost'],
+  ['pastPerf', 'Do we have past performance that fits?', 'no past performance that fits'],
+];
+const BID_ANSWERS = ['yes', 'maybe', 'no'];
+/** What your data says for each question it can judge: {key: {answer, why}}. */
+function bidSuggestions(p){
+  const out = {};
+  const pool = p.agency ? atOrg(p.agency) : [];
+  const warm = pool.filter(r => r.wm.band === 'strong' || r.wm.band === 'warm').length;
+  if (p.agency) out.customer = pool.length >= 5 && warm >= 1 ? {answer: 'yes', why: `You know ${pool.length} at ${p.agency}, ${warm} warm.`}
+    : pool.length ? {answer: 'maybe', why: `You know ${pool.length} at ${p.agency}${warm ? `, ${warm} warm` : ', none warm yet'}.`}
+    : {answer: 'no', why: `You don’t know anyone at ${p.agency} yet.`};
+  const gov = PURSUIT_ROLES.filter(([, rx]) => rx).map(([role]) => role);
+  const filled = gov.filter(role => (p.roles[role] || []).some(k => S.byK.has(k)));
+  const keySeats = ['Executive sponsor', 'Program manager', 'Contracting officer'].filter(role => filled.includes(role)).length;
+  out.deciders = keySeats >= 2 && filled.length >= 3 ? {answer: 'yes', why: `${filled.length} of ${gov.length} government seats filled, including ${keySeats} of the 3 key ones.`}
+    : filled.length ? {answer: 'maybe', why: `${filled.length} of ${gov.length} government seats filled.`} : {answer: 'no', why: 'No government seats filled yet.'};
+  const inc = splitNames(p.incumbent)[0];
+  if (!inc) out.incumbent = {answer: 'yes', why: 'No incumbent listed: new work, or add who holds it today.'};
+  else if (isCompetitor(inc)) out.incumbent = {answer: 'maybe', why: `${inc} is a competitor you track. Know where they are weak.`};
+  const partners = splitNames(p.partners);
+  const partnerSeat = (p.roles['Teaming partner'] || []).some(k => S.byK.has(k));
+  out.partner = partners.length && partnerSeat ? {answer: 'yes', why: `${partners.join(', ')}, and you know someone there.`}
+    : partners.length ? {answer: 'maybe', why: `${partners.join(', ')} listed, but no one there in the seat yet.`} : {answer: 'no', why: 'No teaming partners listed.'};
+  if (isDay(p.due)){
+    const d = -daysSince(p.due);
+    out.time = d >= 45 ? {answer: 'yes', why: `${d} days to the due date.`} : d >= 21 ? {answer: 'maybe', why: `${d} days to the due date: tight.`}
+      : {answer: 'no', why: d >= 0 ? `Only ${d} days to the due date.` : 'The due date has passed.'};
+  }
+  return out;
+}
+/** The scorecard for one pursuit: each question with your answer or the suggestion, a score and a recommendation. */
+function bidDecision(id){
+  const p = S.pursuits.find(x => x.id === id); if (!p) return null;
+  const sug = bidSuggestions(p), mine = p.bid || {};
+  const questions = BID_QUESTIONS.map(([key, text, gap]) => {
+    const own = BID_ANSWERS.includes(mine[key]) ? mine[key] : '';
+    const s = sug[key] || null;
+    return {key, text, gap, answer: own || (s ? s.answer : ''), mine: own, suggested: s ? s.answer : '', why: s ? s.why : ''};
+  });
+  const answered = questions.filter(q => q.answer);
+  const points = answered.reduce((a, q) => a + (q.answer === 'yes' ? 2 : q.answer === 'maybe' ? 1 : 0), 0);
+  const score = answered.length ? Math.round(points / (answered.length * 2) * 100) : null;
+  const blocker = questions.find(q => q.key === 'eligible' && q.answer === 'no');
+  const noes = answered.filter(q => q.answer === 'no');
+  let call, why;
+  if (blocker){ call = 'No bid'; why = 'You can’t bid without the right NAICS code or set-aside. Look for a prime to team under.'; }
+  else if (answered.length < 4){ call = 'Not enough answers'; why = `Answer at least ${4 - answered.length} more ${answered.length === 3 ? 'question' : 'questions'}.`; }
+  else if (score >= 70 && noes.length <= 1){ call = 'Bid'; why = noes.length ? `Strong overall. Fix this first: ${noes[0].gap}.` : 'Strong on every question answered.'; }
+  else if (score >= 45){ call = 'Bid with conditions'; why = noes.length ? `Only if you can fix: ${noes.map(q => q.gap).join('; ')}.` : 'Several open questions. Settle them before the next gate.'; }
+  else { call = 'No bid'; why = 'Too many gaps for the cost of a proposal. Keep tracking it and build relationships for the next one.'; }
+  return {id: p.id, name: p.name, questions, score, answered: answered.length, call, why};
+}
+/** Sets (or, with '', clears back to the suggestion) your answer to one question. */
+function setBidAnswer(id, key, answer){
+  const p = S.pursuits.find(x => x.id === id); if (!p) return null;
+  if (!BID_QUESTIONS.some(([k]) => k === key)) throw new Error('Unknown question ' + key);
+  const a = String(answer || '').toLowerCase();
+  if (a && !BID_ANSWERS.includes(a)) throw new Error('Answer yes, maybe or no.');
+  p.bid = Object.assign({}, p.bid);
+  if (a) p.bid[key] = a; else delete p.bid[key];
+  if (!Object.keys(p.bid).length) delete p.bid;
+  return bidDecision(id);
+}
+
+/* ---------- competitors ---------- */
+// Companies you compete with, kept with the watchlist. Named in recompetes and teaming
+// partners, on pursuits, and when someone you know goes to work for one.
+const isCompetitor = name => { if (!name || !S.competitors.length) return false; const hit = coHit(name); return S.competitors.some(c => hit(c) || coHit(c)(name)); };
+function setCompetitor(name, on){
+  const n = String(name || '').trim().slice(0, 120); if (!n) return {competitors: S.competitors};
+  S.competitors = S.competitors.filter(c => coKey(c) !== coKey(n));
+  if (on !== false) S.competitors.push(n);
+  return {competitors: S.competitors};
+}
+/** Each competitor with who you know there, and who joined lately (people to be careful with, or to learn from). */
+function competitors(){
+  return S.competitors.map(name => {
+    const rs = atOrg(name).sort((a, b) => b.wm.score - a.wm.score || bySenior(a, b));
+    const joined = rs.filter(r => r.jc && daysAgo(r.jc) <= 180);
+    const pursuits = S.pursuits.filter(p => isOpen(p) && (coKey(splitNames(p.incumbent)[0] || '') === coKey(name) || splitNames(p.partners).some(x => coKey(x) === coKey(name)))).map(p => ({id: p.id, name: p.name}));
+    return {name, known: rs.length, people: rs.slice(0, 5).map(brief), joined: joined.slice(0, 5).map(r => Object.assign(brief(r), {jc: r.jc})), pursuits,
+      line: `${rs.length ? `You know ${rs.length} there` : 'No one there yet'}${joined.length ? `, ${joined.length} joined in the last six months` : ''}.`};
+  });
+}
+
+/* ---------- weekly capture digest ---------- */
+// One plain-English page across every open pursuit, for a Monday capture meeting. opts:
+// {awards (recompete pages, optional), notices (SAM.gov matches the app already has, optional)}.
+/** "Final RFP" as "final RFP": lowercases a leading word but leaves acronyms. */
+const lowerFirst = t => String(t || '').replace(/^[A-Z](?![A-Z])/, c => c.toLowerCase());
+function captureDigest(opts){
+  const o = opts || {};
+  const open = S.pursuits.filter(isOpen);
+  const sections = [];
+  const dates = upcomingDates(14);
+  if (dates.length) sections.push({title: 'Dates in the next two weeks', lines: dates.slice(0, 12).map(d => `${d.pursuit}: ${lowerFirst(d.label)} ${d.days === 0 ? 'today' : d.days === 1 ? 'tomorrow' : `in ${d.days} days`} (${niceDate(d.date)}).`)});
+  const cold = coldSeats();
+  if (cold.length) sections.push({title: 'Seats going cold', lines: cold.slice(0, 10).map(c => `${c.pursuit}: ${c.name} in the ${lowerFirst(c.role)} seat, ${c.days == null ? 'no contact yet' : `no contact in ${c.days} days`}.`)});
+  const empty = open.map(p => ({p, open: PURSUIT_ROLES.filter(([role]) => !(p.roles[role] || []).some(k => S.byK.has(k))).map(([role]) => role)})).filter(x => x.open.length);
+  if (empty.length) sections.push({title: 'Empty seats', lines: empty.slice(0, 10).map(x => `${x.p.name}: ${x.open.slice(0, 4).map(lowerFirst).join(', ')}${x.open.length > 4 ? ` and ${x.open.length - 4} more` : ''}.`)});
+  const calls = open.map(p => bidDecision(p.id)).filter(b => b && b.call !== 'Bid' && b.call !== 'Not enough answers');
+  if (calls.length) sections.push({title: 'Bid decisions to look at', lines: calls.slice(0, 8).map(b => `${b.name}: ${lowerFirst(b.call)}. ${b.why}`)});
+  if (Array.isArray(o.awards) && o.awards.length){
+    const rc = recompetes(o.awards, {months: 3, limit: 8});
+    if (rc.items.length) sections.push({title: 'Contracts ending in the next 90 days', lines: rc.items.map(x => `${x.agency}: ${x.title}, ${x.incumbent}${isCompetitor(x.incumbent) ? ' (competitor)' : ''}, ${x.amountText}, ends ${niceDate(x.end)}.`)});
+  }
+  if (Array.isArray(o.notices) && o.notices.length){
+    const fresh = o.notices.filter(n => n && n.isNew).slice(0, 8);
+    if (fresh.length) sections.push({title: 'New on SAM.gov', lines: fresh.map(n => `${n.agency}: ${n.title}${n.due ? `, responses due ${niceDate(n.due)}` : ''}.`)});
+  }
+  const pl = pipeline(false);
+  const head = open.length ? `${open.length} open ${open.length === 1 ? 'pursuit' : 'pursuits'}, ${pl.open.valueText} total, ${pl.open.weightedText} weighted.` : 'No open pursuits yet.';
+  const text = [`Capture digest for the week of ${niceDate(TODAY)}`, head, ...sections.flatMap(s => ['', s.title, ...s.lines.map(l => '- ' + l)])].join('\n');
+  return {date: TODAY, head, sections, text, empty: !sections.length};
 }
 
 /* ---------- pursuit one-pager ---------- */
@@ -956,6 +1144,9 @@ function pursuitSheet(id){
     ['Value', d.value || 'Not set'], ['Win chance', `${d.pwin}%${d.pwinSet ? '' : ' (typical for this stage)'}`], ['Incumbent', d.incumbent || 'Not set'],
     ['Teaming partners', d.partners.join(', ') || 'None yet'], ['Seats filled', `${d.filled} of ${d.roles}`], ['You know at the agency', String(d.known)],
   ];
+  if (d.fiscal) facts.splice(3, 0, ['Fiscal quarter', d.fiscal.label + (d.fiscal.q4 ? ' (end of year money)' : '')]);
+  for (const x of d.dates) if (x.date && x.kind !== 'proposal') facts.push([x.label, niceDate(x.date)]);
+  if (d.bid && d.bid.score != null) facts.push(['Bid decision', `${d.bid.call} (${d.bid.score} of 100)`]);
   return {title: d.name, made: TODAY, facts, seats, best, team, note: d.note || '', cold: d.cold,
     footer: `Made with Northfix on ${niceDate(TODAY)}. Private: contains your own relationship notes.`};
 }
@@ -1152,7 +1343,7 @@ function recompetes(pages, opts){
       start: x.start, end: x.end, days, agency: a.short, agencyName: a.name, agencyId: a.id, office: x.office ? companyName(x.office) : wide ? `filed under ${wide}` : '', naics: x.naics,
       link: x.demo ? '' : AWARD_LINK + encodeURIComponent(x.id), demo: !!x.demo,
       known: ps.length, warm, people: topPeople(ps, 3), incumbentKnown: inc.length, incumbentPeople: topPeople(inc, 3),
-      watched, pursuit: pursuit ? pursuit.name : '', pursuitId: pursuit ? pursuit.id : '', tracked: tracked.has(x.id), score: Math.round(score),
+      watched, pursuit: pursuit ? pursuit.name : '', pursuitId: pursuit ? pursuit.id : '', tracked: tracked.has(x.id), score: Math.round(score), competitor: isCompetitor(x.recipient),
       line: `${ps.length ? `You know ${ps.length} at ${a.short}` : `No one at ${a.short} yet`}${x.recipient ? `, ${inc.length ? inc.length + ' at ' + companyName(x.recipient) : 'no one at the incumbent'}` : ''}`});
   }
   out.sort((p, q) => q.score - p.score || p.end.localeCompare(q.end));
@@ -1188,7 +1379,7 @@ function teamingPartners(pages, opts){
     const team = teamPaths(hit).slice(0, 3).map(t => ({owner: t.owner, name: t.name, p: t.p, b: t.b}));
     const warm = rs.filter(r => r.wm.band === 'strong' || r.wm.band === 'warm').length;
     return {name: e.name, awards: e.awards, amount: e.amount, amountText: money(e.amount), agencies: [...e.agencies], ending: e.ending,
-      known: rs.length, warm, people: topPeople(rs, 3), team, watched: isTarget(e.name),
+      known: rs.length, warm, people: topPeople(rs, 3), team, watched: isTarget(e.name), competitor: isCompetitor(e.name),
       line: rs.length ? `You know ${rs.length} there${warm ? ', ' + warm + ' warm' : ''}` : team.length ? `${team[0].owner} knows someone there` : 'No one there yet'};
   });
   out.sort((p, q) => (q.known > 0) - (p.known > 0) || q.amount - p.amount);
@@ -1203,7 +1394,7 @@ function samplePursuits(){
   const day = n => isoDay(Date.parse(TODAY) + n * 864e5);
   const mk = (o, seats) => {
     const p = {id: 'sample-' + o.key, name: o.name, agency: o.agency, due: o.due, value: o.value, stage: o.stage, roles: {}, note: o.note || '', created: TODAY};
-    for (const f of ['incumbent', 'partners', 'pwin', 'closed']) if (o[f] != null) p[f] = o[f];
+    for (const f of ['incumbent', 'partners', 'pwin', 'closed', 'dates', 'bid']) if (o[f] != null) p[f] = o[f];
     for (const [role, k] of seats) if (k) p.roles[role] = [k];
     return p;
   };
@@ -1211,9 +1402,11 @@ function samplePursuits(){
   const pickT = (rs, rx) => (rs.find(r => rx.test(r.p)) || rs[0] || {}).k;
   return [
     mk({key: 'navfac', name: 'NAVFAC Southeast utility OT monitoring', agency: 'NAVFAC', due: day(34), value: '$14.2M', stage: 'Pursuing', incumbent: 'Leidos', partners: 'Dragos',
+      dates: {industryDay: day(12), questions: day(26), award: day(120)}, bid: {eligible: 'yes', worth: 'yes', pastPerf: 'maybe'},
       note: 'Example pursuit. Sources sought is out; industry day next month.'},
       [['Program manager', pickT(nav, /program|facilit/i)], ['Contracting officer', pickT(nav, /contract/i)], ['Incumbent', (leidos[0] || {}).k], ['Teaming partner', (dragos[0] || {}).k]]),
-    mk({key: 'disa', name: 'DISA cross domain services recompete', agency: 'DISA', due: day(78), value: '$48.5M', stage: 'Proposal', pwin: 35, incumbent: 'Booz Allen Hamilton', partners: 'Fortinet, World Wide Technology'},
+    mk({key: 'disa', name: 'DISA cross domain services recompete', agency: 'DISA', due: day(78), value: '$48.5M', stage: 'Proposal', pwin: 35, incumbent: 'Booz Allen Hamilton', partners: 'Fortinet, World Wide Technology',
+      dates: {rfp: day(9), orals: day(95)}, bid: {eligible: 'yes', incumbent: 'maybe', worth: 'yes', pastPerf: 'yes'}},
       [['Executive sponsor', pickT(disa, /senior executive|director/i)], ['Contracting officer', pickT(disa, /contract/i)], ['Incumbent', (booz[0] || {}).k]]),
     mk({key: 'cisa', name: 'CISA ICS assessment support', agency: 'CISA', due: day(120), value: '$31.7M', stage: 'Tracking', incumbent: 'SAIC'},
       [['Mission owner', pickT(cisa, /branch chief|ics/i)]]),
@@ -2156,6 +2349,7 @@ function load(st){
   S.edits = st.edits || {};
   S.review = st.review || {};
   S.targets = st.targets || [];
+  S.competitors = Array.isArray(st.competitors) ? st.competitors.filter(c => typeof c === 'string' && c.trim()) : [];
   S.coInd = Object.assign(Object.create(null), st.companies || {});
   S.coLink = Object.assign(Object.create(null), st.links || {});
   S.coLoc = Object.assign(Object.create(null), st.locations || {});
@@ -2180,14 +2374,14 @@ function loadFiles(f, lens){
   const p = t => { if (!t) return null; try { return JSON.parse(t); } catch { return null; } };
   const n = p(f.network), e = p(f.edits), rv = p(f.review), tg = p(f.targets), ci = p(f.industries), tm = p(f.team), pr = p(f.prospects), pu = p(f.pursuits), hi = p(f.history), so = p(f.social);
   if (!n || !n.rows) return Object.assign(loadSample(), {empty: true});
-  return load({mode: 'live', rows: n.rows, meta: n.meta || {}, edits: (e && e.edits) || {}, review: (rv && rv.review) || {}, targets: (tg && tg.targets) || [],
+  return load({mode: 'live', rows: n.rows, meta: n.meta || {}, edits: (e && e.edits) || {}, review: (rv && rv.review) || {}, targets: (tg && tg.targets) || [], competitors: (tg && tg.competitors) || [],
     companies: (ci && ci.companies) || {}, links: (ci && ci.links) || {}, locations: (ci && ci.locations) || {}, team: (tm && tm.packs) || [], prospects: (pr && pr.prospects) || [], pursuits: (pu && pu.pursuits) || [], snaps: (hi && hi.snaps) || {}, social: (so && so.social) || [], lens});
 }
 function fileData(name){
   if (name === 'network'){ if (!S.pending) throw new Error('Nothing to save'); const p = S.pending; S.pending = null; return p; }
   if (name === 'edits') return {edits: S.edits, rev: Date.now()};
   if (name === 'review') return {review: S.review};
-  if (name === 'targets') return {targets: S.targets};
+  if (name === 'targets') return S.competitors.length ? {targets: S.targets, competitors: S.competitors} : {targets: S.targets};
   if (name === 'industries') return {companies: S.coInd, links: S.coLink, locations: S.coLoc};
   if (name === 'team') return {packs: S.team};
   if (name === 'prospects') return {prospects: S.prospects};
@@ -2196,7 +2390,7 @@ function fileData(name){
   if (name === 'social') return {social: S.social};
   throw new Error('Unknown file ' + name);
 }
-function clearNotes(){ S.edits = {}; S.review = {}; S.targets = []; S.coInd = Object.create(null); S.coLink = Object.create(null); S.coLoc = Object.create(null); return true; }
+function clearNotes(){ S.edits = {}; S.review = {}; S.targets = []; S.competitors = []; S.coInd = Object.create(null); S.coLink = Object.create(null); S.coLoc = Object.create(null); return true; }
 function setLens(pref){ S.lensPref = pref == null ? null : !!pref; applyLens(); return info(); }
 // Leaves out empty values so a big network crosses to the app quickly; the app fills in defaults.
 const lean = o => {
@@ -2230,7 +2424,7 @@ function constants(){
 const api = {load, loadSample, loadFiles, clearNotes, clusters, placeClues, setCompanyLocation, companyPlaces, messages, matchAttendees, alsoAt, setLens, info, people, person, search, facets, home, payoff, targets, unit, addTargetCandidates, toggleTarget, setTargetNote, orgs,
   industries, industry, setCompanyIndustry, setCompanyLink, ranks, deck, deckCount, reviewed, radar, compass, startFromContacts, introPaths, weekly, touch, setCircle, setEdit, followUp, markReplied, addNote,
   importTexts, importSnapshot, yearInReview, teamPack, teamShare, addTeamPack, setTeamShares, removeTeamPack, teamList, teamOverview, demoTeamShares, matchEnrichment, readNotes, memory, applyMail, clearMail, addProspects, clearProspects, addPursuit, updatePursuit, removePursuit, assignRole, setSeatOwner, pursuits, pursuit, coldSeats, pipeline, pursuitSheet, callPlan, matchAttendeeList, tagAttendees,
-  applyInbox, inboxRest, awardRequests, awardPage, mergeAwardPages, demoAwardPages, recompetes, pursueAward, teamingPartners, federalAsOf: () => FEDERAL_AS_OF, moves, setRoleSince, quickLog, addIntro, setIntro, intros, trend, snapshot, targetChanges, ask, importSocial, clearSocial, socials, agencyCoverage, matchOpportunities, opportunityFilters, opportunityRequests, opportunityPage, demoOpportunities, markOpportunitiesSeen, orgChart, structureFor, setReportsTo, backup, restore, exportCSV, reminders, watch, constants, quote,
+  applyInbox, inboxRest, fiscalOf, setPursuitDate, upcomingDates, bidDecision, setBidAnswer, setCompetitor, competitors, captureDigest, setAsidePrograms: () => SET_ASIDE_PROGRAMS.map(([id, label]) => ({id, label})), awardRequests, awardPage, mergeAwardPages, demoAwardPages, recompetes, pursueAward, teamingPartners, federalAsOf: () => FEDERAL_AS_OF, moves, setRoleSince, quickLog, addIntro, setIntro, intros, trend, snapshot, targetChanges, ask, importSocial, clearSocial, socials, agencyCoverage, matchOpportunities, opportunityFilters, opportunityRequests, opportunityPage, demoOpportunities, markOpportunitiesSeen, orgChart, structureFor, setReportsTo, backup, restore, exportCSV, reminders, watch, constants, quote,
   flightInfo, flightInfos, feedTrips, feedCheck, eventTrips, icsEvents, mergeOpportunities};
 // Every call goes through here: JSON string in, JSON string out, errors as {error}.
 globalThis.Bearings = {

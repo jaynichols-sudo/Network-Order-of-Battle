@@ -86,6 +86,7 @@ struct AwardMini: Decodable, Hashable, Identifiable {
 
 struct Recompete: Decodable, Hashable, Identifiable {
     var id: String
+    var competitor: Bool?
     var piid: String?
     var title: String
     var incumbent: String
@@ -133,6 +134,7 @@ struct RecompeteList: Decodable {
 struct TeamingPartner: Decodable, Hashable, Identifiable {
     struct Mate: Decodable, Hashable { var owner: String; var name: String; var p: String?; var b: String? }
     var name: String
+    var competitor: Bool?
     var awards: Int
     var amount: Double
     var amountText: String
@@ -380,6 +382,7 @@ struct AwardsView: View {
                 HStack(spacing: 6) {
                     Text(c.name).font(Theme.geist(.subheadline, .semibold)).foregroundStyle(.primary).lineLimit(2)
                     if c.watched { Image(systemName: "star.fill").font(.caption2).foregroundStyle(Theme.amber).accessibilityLabel("On your watchlist") }
+                    if c.competitor == true { CompetitorBadge() }
                     Spacer()
                     Text(c.amountText).font(Theme.mono(.footnote, .semibold)).foregroundStyle(.primary)
                 }
@@ -438,7 +441,10 @@ struct RecompeteRow: View {
                 if r.watched { Image(systemName: "star.fill").font(.caption2).foregroundStyle(Theme.amber).accessibilityLabel("On your watchlist") }
             }
             Text(r.title).font(Theme.serif(.body)).foregroundStyle(.primary).multilineTextAlignment(.leading).lineLimit(3)
-            Text([r.incumbent, r.amountText].filter { !$0.isEmpty }.joined(separator: " · ")).font(Theme.geist(.footnote, .semibold)).foregroundStyle(.secondary)
+            HStack(spacing: 6) {
+                Text([r.incumbent, r.amountText].filter { !$0.isEmpty }.joined(separator: " · ")).font(Theme.geist(.footnote, .semibold)).foregroundStyle(.secondary)
+                if r.competitor == true { CompetitorBadge() }
+            }
             HStack(spacing: 8) {
                 let ps = model.persons(r.people.map(\.k))
                 if !ps.isEmpty { AvatarStack(people: ps, size: 22) }

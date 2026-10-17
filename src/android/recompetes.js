@@ -82,6 +82,8 @@ export function refreshAwards(force = false){
   return st.busy;
 }
 const months = () => [12, 18, 24].includes(+ls.get(MONTHS)) ? +ls.get(MONTHS) : 24;
+/** The saved award pages, for the weekly digest. */
+export const awardPages = () => { loadCache(); return st.pages; };
 export const recompeteList = (m = months()) => tryOr(() => M.api.recompetes(st.pages, {months: m}), null);
 export const partnerList = () => tryOr(() => M.api.teamingPartners(st.pages, {}), null);
 const recompete = id => { const r = recompeteList(36); return r ? r.items.find(x => x.id === id) || null : null; };
@@ -93,7 +95,7 @@ function recRow(x){
   return `<button type="button" class="row opp-row" data-a="rec" data-v="${esc(x.id)}">
     <span class="hl-main"><span class="eyebrow mono ${x.days <= 180 ? 'needs' : 'accent'}">${esc([x.agency, x.amountText].join(' · ').toUpperCase())}${x.watched ? ` ${icon('starFill', 'opp-star')}` : ''}</span>
       <b class="serif">${esc(x.title)}</b>
-      <span class="muted small">${esc(`Incumbent: ${x.incumbent || 'Not listed'} · ${endText(x)}`)}</span>
+      <span class="muted small">${esc(`Incumbent: ${x.incumbent || 'Not listed'} · ${endText(x)}`)}${x.competitor ? ` ${flag('Competitor', 'var(--needs)')}` : ''}</span>
       <span class="opp-who">${ps.length ? stack(ps, 22) : ''}<span class="muted small">${esc(x.line)}</span></span>
       ${x.tracked ? `<span class="small strong info">${icon('target')}Tracked as a pursuit</span>` : x.pursuit ? `<span class="small strong info">${icon('target')}${esc(x.pursuit)}</span>` : ''}</span>${icon('chevR', 'chev')}</button>`;
 }
@@ -101,7 +103,7 @@ function partnerRow(x, i){
   const ps = persons(x.people.map(p => p.k));
   const bits = [`${fmt(x.awards)} ${x.awards === 1 ? 'award' : 'awards'}`, x.amountText, x.agencies.join(', '), x.ending ? `${fmt(x.ending)} ending this year` : ''].filter(Boolean).join(' · ');
   return `<button type="button" class="row opp-row" data-a="partner" data-v="${i}">
-    <span class="hl-main"><b>${esc(x.name)}${x.watched ? ` ${icon('starFill', 'opp-star')}` : ''}</b><span class="muted small">${esc(bits)}</span>
+    <span class="hl-main"><b>${esc(x.name)}${x.watched ? ` ${icon('starFill', 'opp-star')}` : ''}${x.competitor ? ` ${flag('Competitor', 'var(--needs)')}` : ''}</b><span class="muted small">${esc(bits)}</span>
       <span class="opp-who">${ps.length ? stack(ps, 22) : ''}<span class="small ${x.known ? 'good strong' : 'muted'}">${esc(x.line)}</span></span></span>${icon('chevR', 'chev')}</button>`;
 }
 

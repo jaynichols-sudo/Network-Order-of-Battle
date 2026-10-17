@@ -1,8 +1,8 @@
 // Companies: your watchlist with coverage rings, industries, everyone by company,
 // a company page, an industry page, and "Ways in" (who can get you into a company).
 // Ports CompaniesView.swift, IndustriesView.swift and IntroFinder.swift.
-import { M, persons, person, isTarget, toggleTarget, setTargetNote, setCompanyIndustry, setCompanyLink, setCompanyLocation, show } from './model.js';
-import { esc, fmt, icon, ring, animateRings, mixBar, segmented, empty, menu, Day, $, plural } from './ui.js';
+import { M, persons, person, isTarget, toggleTarget, setTargetNote, setCompanyIndustry, setCompanyLink, setCompanyLocation, setCompetitor, show } from './model.js';
+import { esc, fmt, icon, ring, animateRings, mixBar, segmented, empty, menu, Day, $, plural, flag } from './ui.js';
 import { registerRoute, openSheet, closeSheet, setPageTitle, push } from './nav.js';
 import { openPerson, openUnit, openIndustry, showPeople, register, open } from './actions.js';
 import { personRow } from './people.js';
@@ -25,7 +25,7 @@ function knowLine(t){ let s = `You know ${fmt(t.count)}`; if (t.stars > 0) s += 
 
 function watchlist(){
   if (!M.targets.length) return empty('scope', 'No watchlist yet', 'Pick the companies you’re working. Northfix shows where you don’t know anyone senior yet.', '<button type="button" class="btn prominent" data-a="add">Add a company</button>');
-  return `<div class="card list">${M.targets.map(t => `<button type="button" class="row trow" data-a="unit" data-v="${esc(t.name)}">${ring(t.score, 50)}<span class="trow-main"><b>${esc(t.name)}</b><span class="muted">${esc(knowLine(t))}</span><span class="small ${t.gaps.length ? 'bad' : 'good'}">${esc(t.gap)}</span></span>${icon('chevR', 'chev')}</button>`).join('')}
+  return `<div class="card list">${M.targets.map(t => `<button type="button" class="row trow" data-a="unit" data-v="${esc(t.name)}">${ring(t.score, 50)}<span class="trow-main"><b>${esc(t.name)}${t.competitor ? ` ${flag('Competitor', 'var(--needs)')}` : ''}</b><span class="muted">${esc(knowLine(t))}</span><span class="small ${t.gaps.length ? 'bad' : 'good'}">${esc(t.gap)}</span></span>${icon('chevR', 'chev')}</button>`).join('')}
     <button type="button" class="row act accent" data-a="add">${icon('plusCircle')}<span>${M.info.lens ? 'Add a company, agency or command' : 'Add a company'}</span></button></div>
     <p class="foot">Coverage shows whether you know someone at each level: executive, director, manager and staff.</p>`;
 }
@@ -168,6 +168,7 @@ registerRoute('unit', name => {
         <div class="card list actions">
           <button type="button" class="row act ${u.isTarget ? '' : 'accent'}" data-a="target">${icon(u.isTarget ? 'minusCircle' : 'plusCircle')}<span>${u.isTarget ? 'Remove from watchlist' : 'Add to watchlist'}</span></button>
           <button type="button" class="row act" data-a="inPeople">${icon('people')}<span>Show in People</span></button>
+          ${u.isCompany ? `<button type="button" class="row act" data-a="competitor">${icon('target')}<span>${u.competitor ? 'Not a competitor' : 'Mark as a competitor'}</span></button>` : ''}
           <button type="button" class="row act" data-a="ways">${icon('waysIn')}<span>Find a way in</span></button>
           <button type="button" class="row act" data-a="pursue">${icon('target')}<span>Start a pursuit here</span></button>
           <button type="button" class="row act" data-a="org">${icon('org')}<span>Org chart</span>${icon('chevR', 'chev')}</button>
@@ -200,6 +201,7 @@ registerRoute('unit', name => {
       opp: id => { fx.tap(); push('opportunity', id); },
       oppAll: () => { fx.tap(); push('opportunities'); },
       async target(_, t){ await toggleTarget(name); view.render(t.closest('.page-body')); },
+      async competitor(_, t){ const u = M.api.unit(name); await setCompetitor(name, !(u && u.competitor)); view.render(t.closest('.page-body')); },
       inPeople(){ const u = M.api.unit(name); showPeople(M.info.lens && !u.isCompany ? {agency: name} : {company: name}); },
       ways: () => openIntro(name),
       pursue: () => { fx.tap(); openNewPursuit(name); },
