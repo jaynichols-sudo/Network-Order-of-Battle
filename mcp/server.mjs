@@ -207,6 +207,12 @@ export const TOOLS = [
   {name: 'log_note', title: 'Log a note',
     description: 'Adds a dated note to one person in the user’s Northfix network, for example after a call. Northfix files it the next time the app opens on this Mac. Only use when the user asks to save a note.',
     inputSchema: {type: 'object', properties: {name_or_key: str('A person’s name, or the key from another tool’s result.'), note: str('The note, in plain words. Up to 480 characters.')}, required: ['name_or_key', 'note']}},
+  {name: 'bid_decision', title: 'Bid or no bid',
+    description: 'The bid/no-bid scorecard for one pursuit: eight standard capture questions (customer relationships, decision makers, incumbent, teaming partner, eligibility, time, cost, past performance), the user’s answers or Northfix’s suggestions from their data with the reason, a score out of 100, and a recommendation: bid, bid with conditions, or no bid.',
+    inputSchema: {type: 'object', properties: {pursuit: str('The pursuit’s name, or part of it.')}, required: ['pursuit']}},
+  {name: 'capture_digest', title: 'Weekly capture digest',
+    description: 'A short weekly summary across all open pursuits: key dates in the next two weeks (industry days, questions due, RFPs, proposals, orals), seats going cold, empty decision-maker seats, bid decisions to look at, and the open and weighted pipeline. Good for a Monday capture meeting.',
+    inputSchema: {type: 'object', properties: {}}},
   {name: 'network_summary', title: 'Network summary',
     description: 'A short overview of the user’s network: how many people, companies and industries, who’s senior, how many are waiting on a reply or changed jobs, and the watchlist. Always free.',
     inputSchema: {type: 'object', properties: {}}},
@@ -235,11 +241,23 @@ async function fetchAwards(names, months){
       // NORTHFIX_USASPENDING_URL points tests at a local stand-in
       const url = usable(process.env.NORTHFIX_USASPENDING_URL) ? process.env.NORTHFIX_USASPENDING_URL : r.url;
       const res = await fetch(url, {method: 'POST', headers: {'Content-Type': 'application/json', Accept: 'application/json'}, body: JSON.stringify(r.body), signal: AbortSignal.timeout(20000)});
-      const page = call('awardPage', await res.text());
+      const page = call('awardPage', await res.text(), res.status);
       if (page.error) errors.push(page.error); else ok.push({agencyId: r.agencyId, items: page.items});
     } catch { errors.push('USASpending.gov didn’t answer. Check the internet connection and try again.'); }
   }));
   return {ok, errors: [...new Set(errors)], asked: reqs.map(r => r.short)};
+}
+
+/** One pursuit by name, part of a name, agency or id: {id}, or {answer} saying why not. */
+function pickPursuit(name){
+  const q = String(name || '').trim().toLowerCase();
+  if (!q) throw new Error('Say which pursuit.');
+  const ps = call('pursuits');
+  const hit = ps.find(p => p.id === name) || ps.find(p => p.name.toLowerCase() === q) || ps.filter(p => p.name.toLowerCase().includes(q) || (p.agency || '').toLowerCase().includes(q));
+  const list = Array.isArray(hit) ? hit : hit ? [hit] : [];
+  if (!list.length) return {answer: {text: ps.length ? `No pursuit called “${name}”. Your pursuits: ${ps.map(p => p.name).join(', ')}.` : 'No pursuits yet. Add one in Northfix (Pursuits).', data: {found: false, pursuits: ps.map(p => p.name)}}};
+  if (list.length > 1) return {answer: {text: `Several pursuits match: ${list.map(p => p.name).join(', ')}. Which one?`, data: {found: false, pursuits: list.map(p => p.name)}}};
+  return {id: list[0].id};
 }
 
 const handlers = {
@@ -348,14 +366,9 @@ const handlers = {
     return {text: [`${out.length} ${out.length === 1 ? 'pursuit' : 'pursuits'}:`, ...out.map(p => `- ${p.name}${p.agency ? ` (${p.agency})` : ''}: ${p.stage}${p.due ? `, due ${nice(p.due)}` : ''}${p.value ? `, ${p.value}` : ''}. ${p.seatsFilled} of ${p.seats} seats filled.`)].join('\n'), data: {pursuits: out}};
   },
   pursuit({name}){
-    const q = String(name || '').trim().toLowerCase();
-    if (!q) throw new Error('Say which pursuit.');
-    const ps = call('pursuits');
-    const hit = ps.find(p => p.id === name) || ps.find(p => p.name.toLowerCase() === q) || ps.filter(p => p.name.toLowerCase().includes(q) || (p.agency || '').toLowerCase().includes(q));
-    const list = Array.isArray(hit) ? hit : hit ? [hit] : [];
-    if (!list.length) return {text: ps.length ? `No pursuit called “${name}”. Your pursuits: ${ps.map(p => p.name).join(', ')}.` : 'No pursuits yet. Add one in Northfix (Pursuits).', data: {found: false, pursuits: ps.map(p => p.name)}};
-    if (list.length > 1) return {text: `Several pursuits match: ${list.map(p => p.name).join(', ')}. Which one?`, data: {found: false, pursuits: list.map(p => p.name)}};
-    const p = call('pursuit', list[0].id);
+    const pick = pickPursuit(name);
+    if (pick.answer) return pick.answer;
+    const p = call('pursuit', pick.id);
     const seats = p.roleList.map(r => ({role: r.role, side: r.side, people: r.people.map(x => brief(x.k)).filter(Boolean), suggestions: r.suggest.map(x => brief(x.k)).filter(Boolean),
       companies: r.companies || [], owner: r.owner || '', cold: !!r.cold}));
     const best = (p.best || []).map(b => brief(b.k, b.why)).filter(Boolean);
@@ -436,11 +449,36 @@ const handlers = {
     }
     const file = path.join(state.dir, INBOX);
     let list = [];
-    try { const j = JSON.parse(fs.readFileSync(file, 'utf8')); if (Array.isArray(j.notes)) list = j.notes; } catch { /* first note */ }
+    if (fs.existsSync(path.join(state.dir, '.' + INBOX + '.icloud'))) throw new Error('Earlier notes from Claude are still downloading from iCloud. Open Northfix on this Mac, then try again.');
+    if (fs.existsSync(file)){
+      const raw = fs.readFileSync(file, 'utf8');
+      // a file being written or in an iCloud conflict: never overwrite notes not filed yet
+      let j; try { j = raw.trim() ? JSON.parse(raw) : {notes: []}; } catch { throw new Error('Notes from Claude waiting for Northfix couldn’t be read. Open Northfix on this Mac to file them, then try again.'); }
+      if (j && Array.isArray(j.notes)) list = j.notes;
+    }
     list.push({k: f.k, text, at: new Date().toISOString()});
-    fs.writeFileSync(file, JSON.stringify({kind: 'northfix-ai-inbox', v: 1, notes: list.slice(-200)}));
+    // write a temporary file and rename it, so the app never reads half a file
+    const tmp = `${file}.${process.pid}.${Date.now()}.tmp`;
+    fs.writeFileSync(tmp, JSON.stringify({kind: 'northfix-ai-inbox', v: 1, notes: list.slice(-200)}));
+    fs.renameSync(tmp, file);
     const who = state.people.get(f.k);
     return {text: `Saved for ${who ? who.name : 'them'}. Northfix files the note the next time it opens on this Mac.`, data: {saved: true, key: f.k, pending: list.length}};
+  },
+  bid_decision({pursuit}){
+    const pick = pickPursuit(pursuit);
+    if (pick.answer) return pick.answer;
+    const b = call('bidDecision', pick.id);
+    const label = {yes: 'Yes', maybe: 'Maybe', no: 'No'};
+    const data = {pursuit: b.name, recommendation: b.call, reason: b.why, score: b.score, answered: b.answered,
+      questions: b.questions.map(q => ({question: q.text, answer: q.answer || 'not answered', from: q.mine ? 'user' : q.suggested ? 'Northfix suggestion' : '', why: q.why}))};
+    const t = [`${b.name}: ${b.call}${b.score != null ? ` (${b.score} of 100)` : ''}. ${b.why}`,
+      ...b.questions.map(q => `- ${q.text} ${q.answer ? label[q.answer] : 'Not answered'}${q.mine ? '' : q.suggested ? ` (suggested: ${q.why})` : ''}`),
+      'The user can change any answer on the pursuit in Northfix.'];
+    return {text: t.join('\n'), data};
+  },
+  capture_digest(){
+    const d = call('captureDigest', {});
+    return {text: d.text, data: {date: d.date, summary: d.head, sections: d.sections}};
   },
   network_summary(){
     const info = call('info'), pay = call('payoff'), h = call('home', {});
@@ -461,7 +499,7 @@ const handlers = {
 export async function runTool(name, args){
   if (!handlers[name]) return {isError: true, content: [{type: 'text', text: `Unknown tool ${name}.`}]};
   const problem = ensureLoaded();
-  if (problem) return {content: [{type: 'text', text: problem}], structuredContent: {ok: false, reason: problem}};
+  if (problem) return {isError: true, content: [{type: 'text', text: problem}], structuredContent: {ok: false, reason: problem}};
   if (!FREE_TOOLS.has(name) && !isPro()){
     if (usage().used >= FREE_DAILY) return {content: [{type: 'text', text: LIMIT_TEXT}], structuredContent: {ok: false, reason: 'free_limit', freeDaily: FREE_DAILY}};
   }
@@ -484,6 +522,9 @@ function reply(id, result){ send({jsonrpc: '2.0', id, result}); }
 function fail(id, code, message){ send({jsonrpc: '2.0', id, error: {code, message}}); }
 function send(o){ process.stdout.write(JSON.stringify(o) + '\n'); }
 
+/** Tool calls still running, so stdin closing doesn't cut their replies off. */
+const pending = new Set();
+
 export function handle(msg){
   if (!msg || msg.jsonrpc !== '2.0' || typeof msg.method !== 'string'){
     if (msg && msg.id != null && !('result' in msg) && !('error' in msg)) fail(msg.id, -32600, 'Invalid request');
@@ -503,7 +544,8 @@ export function handle(msg){
     case 'tools/call': {
       const name = params && params.name;
       if (!handlers[name]) return fail(id, -32602, `Unknown tool: ${name}`);
-      return runTool(name, params.arguments).then(r => reply(id, r), e => fail(id, -32603, (e && e.message) || 'Internal error'));
+      { const job = runTool(name, params.arguments).then(r => reply(id, r), e => fail(id, -32603, (e && e.message) || 'Internal error')).finally(() => pending.delete(job));
+        pending.add(job); return job; }
     }
     case 'resources/list': return reply(id, {resources: []});
     case 'resources/templates/list': return reply(id, {resourceTemplates: []});
@@ -526,7 +568,8 @@ function serve(){
       try { (Array.isArray(msg) ? msg : [msg]).forEach(handle); } catch (e) { if (msg && msg.id != null) fail(msg.id, -32603, e.message || 'Internal error'); }
     }
   });
-  process.stdin.on('end', () => process.exit(0));
+  // let replies still being worked out (a USASpending fetch) and large ones finish writing first
+  process.stdin.on('end', () => { const done = () => process.stdout.write('', () => process.exit(0)); pending.size ? Promise.allSettled([...pending]).then(done) : done(); });
   const f = findData();
   process.stderr.write(`Northfix MCP ${VERSION}: ${f.problem ? 'no network found yet (' + f.dir + ')' : 'reading ' + f.dir}\n`);
 }

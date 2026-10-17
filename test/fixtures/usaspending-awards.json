@@ -1,0 +1,30 @@
+{
+  "spending_level": "awards",
+  "limit": 100,
+  "results": [
+    {"internal_id": 182736451, "Award ID": "N6945024C0101", "Recipient Name": "LEIDOS, INC.", "Start Date": "2024-03-01", "End Date": "@END_200", "Award Amount": 12500000.0,
+     "Awarding Agency": "Department of Defense", "Awarding Sub Agency": "Department of the Navy", "Description": "UTILITY CONTROL SYSTEMS SUPPORT",
+     "NAICS": {"code": "541512", "description": "COMPUTER SYSTEMS DESIGN SERVICES"}, "generated_internal_id": "CONT_AWD_N6945024C0101_9700_-NONE-_-NONE-",
+     "awarding_agency_id": 1173, "agency_slug": "department-of-defense"},
+    {"internal_id": 182736452, "Award ID": "N0002424C0202", "Recipient Name": "HUNTINGTON INGALLS INDUSTRIES, INC.", "Start Date": "2024-01-15", "End Date": "@END_100", "Award Amount": 90000000.0,
+     "Awarding Agency": "Department of Defense", "Awarding Sub Agency": "Department of the Navy", "Description": "SHIP REPAIR AND MODERNIZATION",
+     "NAICS": {"code": "336611", "description": "SHIP BUILDING AND REPAIRING"}, "generated_internal_id": "CONT_AWD_N0002424C0202_9700_-NONE-_-NONE-",
+     "awarding_agency_id": 1173, "agency_slug": "department-of-defense"},
+    {"internal_id": 182736453, "Award ID": "N6247023F0303", "Recipient Name": "JACOBS ENGINEERING GROUP INC.", "Start Date": "2023-06-01", "End Date": "@END_-10", "Award Amount": 4000000.0,
+     "Awarding Agency": "Department of Defense", "Awarding Sub Agency": "Department of the Navy", "Description": null,
+     "NAICS": {"code": null, "description": null}, "generated_internal_id": "CONT_AWD_N6247023F0303_9700_N6247019D0001_9700",
+     "awarding_agency_id": 1173, "agency_slug": "department-of-defense"},
+    {"internal_id": 182736454, "Award ID": "N4008025C0404", "Recipient Name": "  PARSONS GOVERNMENT SERVICES INC.  ", "Start Date": "2025-02-01", "End Date": null, "Award Amount": null,
+     "Awarding Agency": "Department of Defense", "Awarding Sub Agency": "Department of the Navy", "Description": "BASE OPERATING SUPPORT",
+     "NAICS": null, "generated_internal_id": "CONT_AWD_N4008025C0404_9700_-NONE-_-NONE-", "awarding_agency_id": 1173, "agency_slug": "department-of-defense"},
+    {"internal_id": 182736455, "Award ID": "N4008525C0505", "Recipient Name": "AMENTUM SERVICES, INC.", "Start Date": "2025-04-01", "End Date": "@END_300T", "Award Amount": "7250000.50",
+     "Awarding Agency": "Department of Defense", "Awarding Sub Agency": "Department of the Navy", "Description": "FACILITIES\nSUPPORT   SERVICES",
+     "NAICS": {"code": "561210", "description": "FACILITIES SUPPORT SERVICES"}, "generated_internal_id": "CONT_AWD_N4008525C0505_9700_-NONE-_-NONE-",
+     "awarding_agency_id": 1173, "agency_slug": "department-of-defense"},
+    {"internal_id": 182736456, "Award ID": null, "Recipient Name": "NO ID LLC", "End Date": "@END_50", "Award Amount": 100,
+     "generated_internal_id": null},
+    null
+  ],
+  "page_metadata": {"page": 1, "hasNext": true, "last_record_unique_id": 182736456, "last_record_sort_value": "4000000.0"},
+  "messages": ["For searches, time period start and end dates are currently limited to an earliest date of 2007-10-01."]
+}

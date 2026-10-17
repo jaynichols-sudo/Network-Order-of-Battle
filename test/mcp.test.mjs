@@ -75,7 +75,7 @@ test('initialize, tools/list and ping follow MCP', async () => {
     assert.deepEqual((await s.request('ping')).result, {});
     const list = (await s.request('tools/list')).result.tools;
     const names = list.map(t => t.name).sort();
-    assert.deepEqual(names, ['agency_coverage', 'call_plan', 'cold_seats', 'log_note', 'network_summary', 'person', 'pipeline', 'pursuit', 'pursuits', 'recompetes', 'search_people',
+    assert.deepEqual(names, ['agency_coverage', 'bid_decision', 'call_plan', 'capture_digest', 'cold_seats', 'log_note', 'network_summary', 'person', 'pipeline', 'pursuit', 'pursuits', 'recompetes', 'search_people',
       'teaming_partners', 'waiting_on_me', 'ways_in', 'weekly_five', 'who_changed_jobs']);
     for (const t of list){
       assert.match(t.name, /^[a-z_]+$/);
@@ -262,4 +262,71 @@ test('log_note leaves notes in ai-inbox.json and changes nothing else', async ()
   call('loadFiles', texts, null);
   assert.equal(call('applyInbox', JSON.stringify(inbox)).filed, 2);
   assert.match(call('person', k).ed.note, /\(Claude\): Talked about the zero trust gateway/);
+});
+
+test('log_note never overwrites notes it can’t read, and writes whole files', async () => {
+  const dir = path.join(root, 'inbox-bad'); writeSample(dir, {pro: true});
+  const half = '{"kind":"northfix-ai-inbox","v":1,"notes":[{"k":"a","text":"waiting"';
+  fs.writeFileSync(path.join(dir, 'ai-inbox.json'), half);
+  const s = start({NORTHFIX_DATA: dir, NORTHFIX_STATE: path.join(root, 'state-inbox-bad')});
+  try {
+    await s.request('initialize', {protocolVersion: '2025-06-18', capabilities: {}, clientInfo: {name: 'test', version: '1'}});
+    const k = (await s.tool('search_people', {query: 'DISA', limit: 1})).structuredContent.people[0].key;
+    const r = await s.tool('log_note', {name_or_key: k, note: 'Should not clobber.'});
+    assert.equal(r.isError, true);
+    assert.match(text(r), /couldn’t be read/);
+    assert.equal(fs.readFileSync(path.join(dir, 'ai-inbox.json'), 'utf8'), half, 'left exactly as it was');
+    fs.writeFileSync(path.join(dir, 'ai-inbox.json'), '');
+    assert.equal((await s.tool('log_note', {name_or_key: k, note: 'Fresh.'})).structuredContent.saved, true);
+  } finally { s.stop(); }
+  assert.equal(JSON.parse(fs.readFileSync(path.join(dir, 'ai-inbox.json'), 'utf8')).notes.length, 1);
+  assert.deepEqual(fs.readdirSync(dir).filter(f => f.endsWith('.tmp')), [], 'no temporary files left');
+});
+
+test('a note Claude adds while the app files the others is kept', () => {
+  new Function(fs.readFileSync('apple/Bearings/Resources/engine.js', 'utf8'))();
+  const call = (name, ...args) => JSON.parse(globalThis.Bearings.call(name, JSON.stringify(args))).ok;
+  const a = {k: 'x', text: 'one', at: '2026-10-17T10:00:00Z'}, b = {k: 'y', text: 'two', at: '2026-10-17T10:00:05Z'};
+  const filed = JSON.stringify({notes: [a]}), now = JSON.stringify({notes: [a, b]});
+  assert.deepEqual(JSON.parse(call('inboxRest', filed, now)).notes, [b]);
+  assert.equal(call('inboxRest', filed, filed), '');
+  assert.equal(call('inboxRest', filed, ''), '');
+});
+
+test('stdio: bad lines, CRLF, several messages in one write, and no data flagged as an error', async () => {
+  const dir = path.join(root, 'stdio-empty'); fs.mkdirSync(dir, {recursive: true});
+  const p = spawn(process.execPath, [SERVER], {env: Object.assign({}, process.env, {NORTHFIX_DATA: dir, NORTHFIX_STATE: path.join(root, 'state-stdio')}), stdio: ['pipe', 'pipe', 'pipe']});
+  let out = '';
+  p.stdout.setEncoding('utf8');
+  p.stdout.on('data', c => { out += c; });
+  const closed = new Promise(r => p.on('close', r));
+  p.stdin.write('not json\r\n' + JSON.stringify({jsonrpc: '2.0', id: 1, method: 'ping'}) + '\r\n' + JSON.stringify({jsonrpc: '2.0', method: 'notifications/initialized'}) + '\n'
+    + JSON.stringify({jsonrpc: '2.0', id: 2, method: 'tools/call', params: {name: 'network_summary', arguments: {}}}) + '\n');
+  // closing stdin right away must not cut off the replies
+  p.stdin.end();
+  await closed;
+  const msgs = out.trim().split('\n').map(l => JSON.parse(l));
+  assert.equal(msgs.length, 3, 'a reply each for the bad line, ping and the tool call; none for the notification');
+  assert.equal(msgs.find(m => m.error && m.id === null).error.code, -32700);
+  assert.deepEqual(msgs.find(m => m.id === 1).result, {});
+  const r = msgs.find(m => m.id === 2).result;
+  assert.equal(r.isError, true);
+  assert.match(r.content[0].text, /no Northfix network/i);
+});
+
+test('round 2 tools: bid decision and the weekly capture digest', async () => {
+  const dir = path.join(root, 'round2'); writeSample(dir, {pro: true});
+  const s = start({NORTHFIX_DATA: dir, NORTHFIX_STATE: path.join(root, 'state-round2')});
+  try {
+    await s.request('initialize', {protocolVersion: '2025-06-18', capabilities: {}, clientInfo: {name: 'test', version: '1'}});
+    const b = await s.tool('bid_decision', {pursuit: 'zero trust'});
+    assert.equal(b.structuredContent.ok, true);
+    assert.equal(b.structuredContent.questions.length, 8);
+    assert.match(text(b), /DISA zero trust gateway: (Bid|Bid with conditions|No bid|Not enough answers)/);
+    const none = await s.tool('bid_decision', {pursuit: 'nothing like this'});
+    assert.equal(none.structuredContent.found, false);
+    const d = await s.tool('capture_digest');
+    assert.match(text(d), /^Capture digest for the week of/);
+    assert.ok(Array.isArray(d.structuredContent.sections));
+  } finally { s.stop(); }
 });

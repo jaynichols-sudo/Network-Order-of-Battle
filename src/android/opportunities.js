@@ -22,9 +22,9 @@ const DEFAULT_TYPES = ['r', 'p', 'k', 'o', 's'];
 /* ---------- settings and saved state ---------- */
 // The key is encrypted on this phone (secrets.js); filters, the cache and the seen list are local.
 const SET = 'bearings.sam', CACHE = 'bearings.sam.cache', SEEN = 'bearings.sam.seen', SEEN_PREV = 'bearings.sam.seenPrev';
-export const samPrefs = () => Object.assign({naics: '', keywords: '', types: DEFAULT_TYPES, notify: true}, ls.json(SET, {}));
+export const samPrefs = () => Object.assign({naics: '', keywords: '', types: DEFAULT_TYPES, notify: true, setAsides: [], hideIneligible: false}, ls.json(SET, {}));
 const saveSamPrefs = p => ls.set(SET, JSON.stringify(p));
-const filters = () => { const p = samPrefs(); return {naics: p.naics, keywords: p.keywords, types: p.types}; };
+const filters = () => { const p = samPrefs(); return {naics: p.naics, keywords: p.keywords, types: p.types, setAsides: p.setAsides, hideIneligible: p.hideIneligible}; };
 let hasKey = false;
 Secrets.get('sam.key').then(k => { hasKey = !!k; if (hasKey && M.loaded) refreshVisible('sam'); });
 export const available = () => isSample() || hasKey;
@@ -42,7 +42,7 @@ function saveCache(){ try { ls.set(CACHE, JSON.stringify({items: st.notices})); 
 /** Matches the saved notices to the network again, when the network or filters changed. */
 function rematch(force = false){
   const p = samPrefs();
-  const key = [isSample(), M.version, M.targets.length, st.notices.length, p.naics, p.keywords, p.types.join('')].join('|');
+  const key = [isSample(), M.version, M.targets.length, st.notices.length, p.naics, p.keywords, p.types.join(''), p.setAsides.join(''), p.hideIneligible].join('|');
   if (!force && key === st.key && st.match) return st.match;
   const opts = filters();
   const prev = ls.json(SEEN_PREV, null);
@@ -63,8 +63,13 @@ async function getText(url){
       return {status: r.status, text: typeof r.data === 'string' ? r.data : JSON.stringify(r.data || {})};
     } catch { /* fall through to fetch */ }
   }
-  const r = await fetch(url, {headers: {Accept: 'application/json'}});
-  return {status: r.status, text: await r.text()};
+  // a timeout, so a hung request can't block every later check
+  const ac = typeof AbortController === 'function' ? new AbortController() : null;
+  const timer = ac ? setTimeout(() => ac.abort(), 40000) : 0;
+  try {
+    const r = await fetch(url, {headers: {Accept: 'application/json'}, signal: ac ? ac.signal : undefined});
+    return {status: r.status, text: await r.text()};
+  } finally { clearTimeout(timer); }
 }
 /** Fetches at most every six hours (or when forced), then matches. Never throws. */
 export function refreshOpportunities(force = false){
@@ -85,21 +90,25 @@ export function refreshOpportunities(force = false){
     loadCache();
     if (!force && Date.now() - st.at < FRESH){ rematch(); return false; }
     const reqs = tryOr(() => M.api.opportunityRequests(filters(), 14), []);
-    let got = [], err = '', answered = false;
+    let got = [], err = '', code = '', answered = false;
+    const failed = [];
     for (const r of reqs){
       const q = new URLSearchParams(Object.assign({api_key: key}, Object.fromEntries(Object.entries(r).map(([k, v]) => [k, String(v)]))));
       try {
         const res = await getText(`${SAM_URL}?${q}`);
-        const page = M.api.opportunityPage(res.text);
-        if (page.error){ err = page.error; if (page.code === 'key' || page.code === 'rate') break; continue; }
-        if (res.status >= 400){ err = `SAM.gov didn’t answer (error ${res.status}). Northfix will try again later.`; continue; }
+        // the engine reads the status too, so a 429 or an HTML error page reads in plain English
+        const page = M.api.opportunityPage(res.text, res.status);
+        if (page.error){ err = page.error; code = page.code || ''; failed.push(r); if (code === 'key' || code === 'rate') break; continue; }
         got = got.concat(page.items); answered = true;
-      } catch { err = 'Couldn’t reach SAM.gov. Check your connection and try again.'; }
+      } catch { err = 'Couldn’t reach SAM.gov. Check your connection and try again.'; code = ''; failed.push(r); }
     }
-    // a failed check still waits six hours, so a bad key doesn't use up the daily limit
-    st.at = Date.now(); ls.set(CACHE + '.at', String(st.at));
-    st.error = answered ? '' : err;
+    // a good answer, a bad key or a used-up limit waits six hours, so the daily limit lasts;
+    // a dropped connection or a server error tries again at the next check
+    if (answered || code === 'key' || code === 'rate'){ st.at = Date.now(); ls.set(CACHE + '.at', String(st.at)); }
+    st.error = answered && !failed.length ? '' : err;
     if (!answered){ rematch(true); return true; }
+    // a search that failed keeps the notices it brought back last time
+    got = tryOr(() => M.api.mergeOpportunities(st.notices, got, failed), got);
     st.notices = got; saveCache();
     // what counts as new: anything not seen before this check
     const prior = ls.json(SEEN, null);
@@ -141,6 +150,7 @@ export function oppRow(o, act = 'opp'){
     <span class="hl-main"><span class="eyebrow mono ${o.days != null && o.days <= 7 ? 'needs' : 'accent'}">${o.isNew ? '<i class="dot sm opp-new" aria-label="New"></i>' : ''}${esc(top)}${o.watched ? ` ${icon('starFill', 'opp-star')}` : ''}</span>
       <b class="serif">${esc(o.title)}</b>
       <span class="opp-who">${ps.length ? stack(ps, 22) : ''}<span class="muted small">${esc(o.line)}</span></span>
+      ${o.fit === 'no' ? '<span class="small strong needs">Not eligible</span>' : o.fit === 'yes' ? '<span class="small strong good">Your set-aside</span>' : ''}
       ${o.pursuit ? `<span class="small strong info">${icon('target')}${esc(o.pursuit)}</span>` : ''}</span>${icon('chevR', 'chev')}</button>`;
 }
 
@@ -267,6 +277,9 @@ export function openSamSettings(){
           <input type="text" class="field" data-in="naics" value="${esc(p.naics)}" placeholder="NAICS codes (optional), like 541512, 541330" inputmode="numeric" aria-label="NAICS codes">
           <input type="text" class="field" data-in="keywords" value="${esc(p.keywords)}" placeholder="Keywords (optional), like SCADA, control systems" autocapitalize="none" aria-label="Keywords"></div>
         <p class="sec-h">Notice types</p><div class="card list">${TYPES.map(([c, l]) => toggle(c, l)).join('')}</div>
+        <p class="sec-h">Set-asides you qualify for</p><div class="card list">${M.api.setAsidePrograms().map(({id: c, label: l}) => `<label class="toggle-row"><span>${esc(l)}</span><input type="checkbox" class="switch" data-ch="setAside" data-k="${c}" ${p.setAsides.includes(c) ? 'checked' : ''}></label>`).join('')}
+          <label class="toggle-row"><span>Hide notices I can’t bid on</span><input type="checkbox" class="switch" data-ch="hideIneligible" ${p.hideIneligible ? 'checked' : ''}></label></div>
+        <p class="foot">Notices set aside for a program you don’t qualify for are marked Not eligible. Unrestricted notices always show.</p>
         <div class="card list"><label class="toggle-row"><span>Notify me about new ones<small class="muted">At an agency you watch, or where you know 3 or more people</small></span><input type="checkbox" class="switch" data-ch="notify" ${p.notify ? 'checked' : ''}></label>
           <button type="button" class="row act bad" data-a="forget">${icon('x')}<span>Remove key</span></button></div>
         <p class="foot">Your key and searches go straight from this phone to SAM.gov. Northfix looks at notices posted in the last 14 days, at most every 6 hours, and matches them to the people you know on this phone. Leave NAICS and keywords empty to see everything at agencies you know.</p>`
@@ -289,6 +302,12 @@ export function openSamSettings(){
         setPref({types: TYPES.map(x => x[0]).filter(x => types.includes(x))}); fx.select();
       },
       notify(v){ saveSamPrefs(Object.assign(samPrefs(), {notify: !!v})); fx.select(); },
+      setAside(v, t){
+        const p = samPrefs(), c = t.dataset.k;
+        const on = v ? [...new Set(p.setAsides.concat(c))] : p.setAsides.filter(x => x !== c);
+        setPref({setAsides: M.api.setAsidePrograms().map(x => x.id).filter(x => on.includes(x))}); fx.select();
+      },
+      hideIneligible(v){ setPref({hideIneligible: !!v}); fx.select(); },
       getKey: () => openURL(KEY_PAGE),
       async save(_, t){
         const body = t.closest('.sheet-body');

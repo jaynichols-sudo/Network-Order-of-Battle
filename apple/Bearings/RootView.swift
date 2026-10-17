@@ -56,6 +56,20 @@ struct RootView: View {
             Text("\(model.foundExport?.lastPathComponent ?? "A LinkedIn file") is in your Downloads. Only what changed is updated, and your notes stay put.")
         }
         .fullScreenCover(isPresented: $model.showOnboarding) { OnboardingView().environment(AppModel.shared) }
+        // folding an iPhone Duo (or a deep link on a phone) can leave a sidebar-only tab selected
+        .onChange(of: sizeClass) { fitTab() }
+        .onChange(of: model.tab) { fitTab() }
+        .onAppear { fitTab() }
+    }
+
+    /// The compact tab bar has only the four main tabs: a Workspace tab moves to Today, with its
+    /// screen pushed on top (and whatever was open under it), so nothing goes blank.
+    private func fitTab() {
+        guard sizeClass == .compact, !AppTab.main.contains(model.tab), let route = model.tab.route else { return }
+        let from = model.tab
+        model.paths[.home] = [route] + (model.paths[from] ?? [])
+        model.paths[from] = []
+        model.tab = .home
     }
 
     @TabContentBuilder<AppTab> private var mainTabs: some TabContent<AppTab> {
@@ -203,15 +217,27 @@ struct WideSplit<Content: View>: View {
         .task(id: "\(width >= Wide.splitThreshold)-\(model.loaded)-\(model.results.count)") { openFirst() }
     }
 
+    /// What openFirst put in the right pane, so folding back to one column returns to the list.
+    @State private var autoOpened: Route?
+
     /// Like Mail, a wide window opens the first item instead of leaving the right pane blank.
     private func openFirst() {
-        guard width >= Wide.splitThreshold, model.loaded, path.isEmpty else { return }
+        guard width > 0 else { return }
+        if width < Wide.splitThreshold {
+            // narrowed (an iPhone Duo folded): don't land on a profile nobody opened
+            if let a = autoOpened, path == [a] { model.paths[tab] = [] }
+            autoOpened = nil
+            return
+        }
+        guard model.loaded, path.isEmpty else { return }
+        var route: Route?
         switch tab {
-        case .people: if let k = model.results.first?.k { model.paths[tab] = [.person(k)] }
-        case .companies: if let t = model.targets.first { model.paths[tab] = [.unit(t.name)] }
-        case .you: model.paths[tab] = [.catchup]
+        case .people: route = model.results.first.map { .person($0.k) }
+        case .companies: route = model.targets.first.map { .unit($0.name) }
+        case .you: route = .catchup
         default: break
         }
+        if let route { model.paths[tab] = [route]; autoOpened = route }
     }
 }
 

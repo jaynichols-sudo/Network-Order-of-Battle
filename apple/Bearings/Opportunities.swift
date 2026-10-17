@@ -70,6 +70,8 @@ struct Opportunity: Decodable, Identifiable, Hashable {
     var days: Int?
     var naics: String
     var setAside: String
+    /// "yes", "no" or "open" when set-asides are picked, else "".
+    var fit: String?
     var link: String
     var award: Award?
     var known: Int
@@ -139,8 +141,19 @@ enum SamSettings {
         get { UserDefaults.standard.object(forKey: "sam.notify") as? Bool ?? true }
         set { UserDefaults.standard.set(newValue, forKey: "sam.notify") }
     }
+    /// Set-aside programs the company qualifies for (engine keys: small, 8a, hubzone, sdvosb, vosb, wosb, edwosb).
+    static let allSetAsides: [(String, String)] = [("small", "Small business"), ("8a", "8(a)"), ("hubzone", "HUBZone"), ("sdvosb", "Service-disabled veteran-owned"),
+                                                   ("vosb", "Veteran-owned"), ("wosb", "Women-owned"), ("edwosb", "Economically disadvantaged women-owned")]
+    static var setAsides: [String] {
+        get { UserDefaults.standard.stringArray(forKey: "sam.setAsides") ?? [] }
+        set { UserDefaults.standard.set(newValue, forKey: "sam.setAsides") }
+    }
+    static var hideIneligible: Bool {
+        get { UserDefaults.standard.bool(forKey: "sam.hideIneligible") }
+        set { UserDefaults.standard.set(newValue, forKey: "sam.hideIneligible") }
+    }
     /// The filters as the engine takes them.
-    static var filters: [String: Any] { ["naics": naics, "keywords": keywords, "types": types] }
+    static var filters: [String: Any] { ["naics": naics, "keywords": keywords, "types": types, "setAsides": setAsides, "hideIneligible": hideIneligible] }
     static func label(_ code: String) -> String { allTypes.first { $0.0 == code }?.1 ?? "Notice" }
 }
 
@@ -186,7 +199,9 @@ final class SamFeed {
         let reqs = (try? await model.engine.call("opportunityRequests", [SamSettings.filters, 14], as: [SamRequest].self)) ?? []
         var got: [SamNotice] = []
         var err = ""
+        var code = ""
         var answered = false
+        var failed: [SamRequest] = []
         for r in reqs {
             guard var c = URLComponents(string: "https://api.sam.gov/opportunities/v2/search") else { continue }
             var q: [URLQueryItem] = [.init(name: "api_key", value: key), .init(name: "postedFrom", value: r.postedFrom), .init(name: "postedTo", value: r.postedTo),
@@ -199,27 +214,36 @@ final class SamFeed {
             req.setValue("application/json", forHTTPHeaderField: "Accept")
             do {
                 let (data, resp) = try await URLSession.shared.data(for: req)
-                let page = try await model.engine.call("opportunityPage", [String(decoding: data, as: UTF8.self)], as: SamPage.self)
+                let status = (resp as? HTTPURLResponse)?.statusCode ?? 0
+                // the engine reads the status too, so a 429 or an HTML error page reads in plain English
+                let page = try await model.engine.call("opportunityPage", [String(decoding: data, as: UTF8.self), status], as: SamPage.self)
                 if let e = page.error, !e.isEmpty {
                     err = e
-                    if page.code == "key" || page.code == "rate" { break }
-                    continue
-                }
-                if let h = resp as? HTTPURLResponse, h.statusCode >= 400 {
-                    err = "SAM.gov didn’t answer (error \(h.statusCode)). Northfix will try again later."
+                    code = page.code ?? ""
+                    failed.append(r)
+                    if code == "key" || code == "rate" { break }
                     continue
                 }
                 got += page.items
                 answered = true
             } catch {
                 err = "Couldn’t reach SAM.gov. Check your connection and try again."
+                code = ""
+                failed.append(r)
             }
         }
-        // a failed check still waits six hours, so a bad key doesn't use up the daily limit
-        last = Date()
-        UserDefaults.standard.set(last, forKey: "sam.last")
-        lastError = answered ? "" : err
+        // a good answer, a bad key or a used-up limit waits six hours, so the daily limit lasts;
+        // a dropped connection or a server error tries again at the next check
+        if answered || code == "key" || code == "rate" {
+            last = Date()
+            UserDefaults.standard.set(last, forKey: "sam.last")
+        }
+        lastError = answered && failed.isEmpty ? "" : err
         guard answered else { await rematch(model: model); return }
+        // a search that failed keeps the notices it brought back last time
+        if !failed.isEmpty, let merged = try? await model.engine.call("mergeOpportunities", [Self.jsonObject(notices), Self.jsonObject(got), failed.map { ["ncode": $0.ncode ?? ""] }], as: [SamNotice].self) {
+            got = merged
+        }
         notices = got
         saveCache()
 
@@ -235,7 +259,7 @@ final class SamFeed {
 
     /// Matches the saved notices to the network again, when the network or the filters changed.
     func rematch(model: AppModel, force: Bool = false) async {
-        let key = "\(model.info.isSample)-\(model.info.rev)-\(model.info.edits)-\(model.info.count)-\(model.targets.count)-\(notices.count)-\(SamSettings.naics)|\(SamSettings.keywords)|\(SamSettings.types.joined())"
+        let key = "\(model.info.isSample)-\(model.info.rev)-\(model.info.edits)-\(model.info.count)-\(model.targets.count)-\(notices.count)-\(SamSettings.naics)|\(SamSettings.keywords)|\(SamSettings.types.joined())|\(SamSettings.setAsides.joined())|\(SamSettings.hideIneligible)"
         if !force && key == matchKey && match != nil { return }
         var opts = SamSettings.filters
         if !model.info.isSample, let seen = UserDefaults.standard.stringArray(forKey: "sam.seenPrev") { opts["seen"] = seen }
@@ -353,6 +377,8 @@ struct OpportunityRow: View {
                     .font(Theme.eyebrow).tracking(0.8).foregroundStyle(o.days.map { $0 <= 7 } == true ? Theme.needs : Theme.accent)
                     .lineLimit(1)
                 if o.watched { Image(systemName: "star.fill").font(.caption2).foregroundStyle(Theme.amber).accessibilityLabel("On your watchlist") }
+                if o.fit == "no" { Text("Not eligible").font(Theme.geist(.caption2, .semibold)).foregroundStyle(Theme.needs) }
+                else if o.fit == "yes" { Text("Your set-aside").font(Theme.geist(.caption2, .semibold)).foregroundStyle(Theme.good) }
             }
             Text(o.title).font(Theme.serif(.body)).foregroundStyle(.primary).multilineTextAlignment(.leading).lineLimit(3)
             HStack(spacing: 8) {
@@ -519,7 +545,7 @@ struct OpportunityView: View {
                     if !o.posted.isEmpty { LabeledContent("Posted", value: Day.nice(o.posted)) }
                     if !o.due.isEmpty { LabeledContent("Responses due", value: Day.nice(o.due)) }
                     if !o.naics.isEmpty { LabeledContent("NAICS", value: o.naics) }
-                    if !o.setAside.isEmpty { LabeledContent("Set-aside", value: o.setAside) }
+                    if !o.setAside.isEmpty { LabeledContent("Set-aside", value: o.setAside + (o.fit == "no" ? " (not eligible)" : o.fit == "yes" ? " (you qualify)" : "")) }
                     if let a = o.award {
                         if let w = a.awardee, !w.isEmpty { LabeledContent("Awarded to", value: w) }
                         if let amt = a.amount, let v = Double(amt), v > 0 { LabeledContent("Amount", value: v.formatted(.currency(code: "USD").precision(.fractionLength(0)))) }
@@ -577,6 +603,8 @@ struct SamSettingsSection: View {
     @State private var keywords = SamSettings.keywords
     @State private var types = Set(SamSettings.types)
     @State private var notify = SamSettings.notify
+    @State private var setAsides = Set(SamSettings.setAsides)
+    @State private var hideIneligible = SamSettings.hideIneligible
     @State private var status = ""
     @State private var checking = false
     @State private var dirty = false
@@ -604,6 +632,19 @@ struct SamSettingsSection: View {
                             dirty = true
                         }))
                 }
+                DisclosureGroup("Set-asides you qualify for\(setAsides.isEmpty ? "" : " (\(setAsides.count))")") {
+                    ForEach(SamSettings.allSetAsides, id: \.0) { t in
+                        Toggle(t.1, isOn: Binding(
+                            get: { setAsides.contains(t.0) },
+                            set: { on in
+                                if on { setAsides.insert(t.0) } else { setAsides.remove(t.0) }
+                                SamSettings.setAsides = SamSettings.allSetAsides.map(\.0).filter { setAsides.contains($0) }
+                                dirty = true
+                            }))
+                    }
+                    Toggle("Hide notices I can’t bid on", isOn: $hideIneligible)
+                        .onChange(of: hideIneligible) { _, v in SamSettings.hideIneligible = v; dirty = true }
+                }
                 Toggle("Notify me about new ones", isOn: $notify)
                     .onChange(of: notify) { _, v in SamSettings.notify = v }
                 Button("Remove key", role: .destructive) {
@@ -620,7 +661,7 @@ struct SamSettingsSection: View {
             Text("SAM.gov opportunities")
         } footer: {
             Text(hasKey
-                 ? "Your key and searches go straight from this device to SAM.gov. Northfix looks at notices posted in the last 14 days, at most every 6 hours, and matches them to the people you know on this device. Leave NAICS and keywords empty to see everything at agencies you know. You get a notification when a new one appears at an agency you watch or where you know 3 or more people."
+                 ? "Your key and searches go straight from this device to SAM.gov. Northfix looks at notices posted in the last 14 days, at most every 6 hours, and matches them to the people you know on this device. Leave NAICS and keywords empty to see everything at agencies you know. Pick your set-asides to mark notices you can’t bid on. You get a notification when a new one appears at an agency you watch or where you know 3 or more people."
                  : "Your key and searches go straight from this device to SAM.gov. To get a free key, sign in at SAM.gov, open Account Details, and choose Public API Key. You’ll need your password to see it. Copy it, then paste it here. It stays in this device’s Keychain.")
         }
         .onDisappear {
