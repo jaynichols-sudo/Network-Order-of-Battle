@@ -197,44 +197,50 @@ final class SiteClips: XCTestCase {
 
     /// The Product Hunt demo video and gallery, in the order of the 20-second script.
     private func productHuntClips() {
-        clip("ph-import", ["-demoOpen", "import"], settle: 3) { _ in
+        clip("ph-import", ["-demoOpen", "import"], settle: 10) { app in
+            // if the sheet didn't open from the launch argument, open it from the setup card
+            if !find(app, "Choose your LinkedIn file").exists {
+                let row = find(app, "LinkedIn connections")
+                if row.exists { row.tap(); pause(2) }
+            }
             pause(1); shot("ph-import"); pause(2)
         }
 
-        clip("ph-clusters", ["-startTab", "explore", "-exploreMode", "clusters"], settle: 3) { _ in
+        clip("ph-clusters", ["-startTab", "explore", "-exploreMode", "clusters"], settle: 10) { _ in
             pause(1.5); shot("ph-clusters"); pause(3)
         }
 
-        clip("ph-today", settle: 3) { app in
+        clip("ph-today", settle: 12) { app in
             pause(1); shot("ph-today"); pause(0.6)
-            let later = app.buttons["Later"]
-            if later.waitForExistence(timeout: 3) { later.tap(); pause(1.6) }
+            // the first pick's "Remind me later" moves on to the next one
+            let later = app.buttons.matching(NSPredicate(format: "label CONTAINS[c] %@", "later")).firstMatch
+            if later.waitForExistence(timeout: 5) { later.tap(); pause(1.6) }
             if later.exists { later.tap(); pause(1.6) }
             shot("ph-today-congrats")
             let congrats = app.buttons["Congratulate"]
-            if congrats.waitForExistence(timeout: 3) { congrats.tap(); pause(2.5); shot("ph-congrats-draft") }
+            if congrats.waitForExistence(timeout: 5) { congrats.tap(); pause(2.5); shot("ph-congrats-draft") }
             pause(1)
         }
 
-        clip("ph-intro", ["-startTab", "companies", "-demoOpen", "intro"], settle: 4) { app in
+        clip("ph-intro", ["-startTab", "companies", "-demoOpen", "intro"], settle: 10) { app in
             pause(1.2); shot("ph-intro"); pause(0.5)
             let ask = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Ask for an intro")).firstMatch
-            if ask.waitForExistence(timeout: 3) { ask.tap(); pause(2.5); shot("ph-intro-ask") }
+            if ask.waitForExistence(timeout: 5) { ask.tap(); pause(2.5); shot("ph-intro-ask") }
             pause(1.5)
         }
 
-        clip("ph-weekly", ["-demoOpen", "weekly"], settle: 3) { app in
+        clip("ph-weekly", ["-demoOpen", "weekly"], settle: 10) { app in
             pause(1.2); shot("ph-weekly")
             scroll(app, from: 0.8, to: 0.45); pause(1.5)
             scroll(app, from: 0.8, to: 0.45); pause(1.5)
         }
 
-        clip("ph-event", ["-demoOpen", "event"], settle: 4) { app in
+        clip("ph-event", ["-demoOpen", "event"], settle: 10) { app in
             pause(1); shot("ph-event")
             scroll(app); pause(1.5); shot("ph-event-followups")
         }
 
-        clip("ph-trips", ["-startTab", "explore", "-exploreMode", "map"], settle: 5) { app in
+        clip("ph-trips", ["-startTab", "explore", "-exploreMode", "map"], settle: 10) { app in
             pause(1); shot("ph-trips")
             scroll(app, from: 0.85, to: 0.5); pause(1.5); shot("ph-trips-people")
         }
