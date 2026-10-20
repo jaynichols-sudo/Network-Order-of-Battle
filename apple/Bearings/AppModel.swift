@@ -344,6 +344,10 @@ final class AppModel {
                 paths[tab, default: []].append(.pursuit(id))
             }
         case "moves": paths[tab, default: []].append(.moves)
+        case "pipeline": paths[tab, default: []].append(.pipeline)
+        case "recompetes": paths[tab, default: []].append(.recompetes)
+        case "teaming": paths[tab, default: []].append(.teaming)
+        case "trips": paths[tab, default: []].append(.trips)
         case "socials":
             // a believable sample: some of your LinkedIn people on each app, plus friends who aren't
             let ps = people.filter { $0.x == nil }.sorted { $0.score > $1.score }

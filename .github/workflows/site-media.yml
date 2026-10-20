@@ -164,7 +164,7 @@ jobs:
           r=$(grep -hE "Test Case .*(passed|failed|skipped)|error:" raw/*.test.log | tail -12 | sed 's/%/%25/g' | awk 'BEGIN{ORS="%0A"}{print}')
           echo "::notice title=Clips::$r"
           # keep a small copy of each full recording too, in case the cut points need adjusting
-          for s in ${{ inputs.sets }}; do [ -f raw/$s.mp4 ] && ffmpeg -y -loglevel error -i raw/$s.mp4 -vf scale=480:-2,fps=24 -c:v libx264 -crf 28 -an out/full-$s.mp4; cp raw/$s.marks raw/$s.t1 out/ 2>/dev/null; grep -E "Test Case|error|CLIP" raw/$s.test.log | tail -80 > out/$s.test.txt 2>/dev/null; done
+          for s in ${{ inputs.sets }}; do [ -f raw/$s.mp4 ] && ffmpeg -y -loglevel error -i raw/$s.mp4 -vf scale=720:-2,fps=30 -c:v libx264 -crf 21 -an out/full-$s.mp4; cp raw/$s.marks raw/$s.t1 out/ 2>/dev/null; grep -E "Test Case|error|CLIP" raw/$s.test.log | tail -80 > out/$s.test.txt 2>/dev/null; done
           true
       - name: Publish
         if: always()

@@ -7,7 +7,7 @@ final class SiteClips: XCTestCase {
     override func setUpWithError() throws {
         continueAfterFailure = true
         let s = ProcessInfo.processInfo.environment["SITE"] ?? ""
-        try XCTSkipUnless(["1", "dark", "ph"].contains(s), "Only for the site media workflow")
+        try XCTSkipUnless(["1", "dark", "ph", "tour"].contains(s), "Only for the site media workflow")
         Self.skipIdleWaits()
     }
 
@@ -74,6 +74,7 @@ final class SiteClips: XCTestCase {
     func testClips() {
         if set == "dark" { darkClips(); return }
         if set == "ph" { productHuntClips(); return }
+        if set == "tour" { tourClips(); return }
 
         clip("today") { app in
             pause(2.2)
@@ -244,5 +245,51 @@ final class SiteClips: XCTestCase {
             pause(1); shot("ph-trips")
             scroll(app, from: 0.85, to: 0.5); pause(1.5); shot("ph-trips-people")
         }
+    }
+
+    /// Every feature, one scene each, for the long tour video. The cut is picked by eye from
+    /// the full recording, so each scene just holds long enough to read.
+    private func tourClips() {
+        func scene(_ name: String, _ args: [String] = [], hold: Double = 5, _ body: ((XCUIApplication) -> Void)? = nil) {
+            clip("tour-" + name, args, settle: 10) { app in
+                pause(hold)
+                body?(app)
+            }
+        }
+        scene("import", ["-demoOpen", "import"]) { app in
+            if !self.find(app, "Choose your LinkedIn file").exists {
+                let row = self.find(app, "LinkedIn connections")
+                if row.exists { row.tap(); self.pause(4) }
+            }
+        }
+        scene("clusters", ["-startTab", "explore", "-exploreMode", "clusters"])
+        scene("compass", ["-startTab", "explore", "-exploreMode", "compass"])
+        scene("today", hold: 3) { app in self.scroll(app, from: 0.8, to: 0.35); self.pause(3) }
+        scene("weekly", ["-demoOpen", "weekly"], hold: 3) { app in self.scroll(app, from: 0.8, to: 0.45); self.pause(3) }
+        scene("person", ["-startTab", "people", "-demoOpen", "person"], hold: 3) { app in self.scroll(app); self.pause(3) }
+        scene("ask", ["-demoOpen", "ask"], hold: 2) { app in
+            let field = app.textFields.firstMatch
+            if field.waitForExistence(timeout: 3) {
+                field.tap(); field.typeText("Who do I know at NAVFAC"); self.pause(0.6); field.typeText("\n")
+            }
+            self.pause(5)
+        }
+        scene("intro", ["-startTab", "companies", "-demoOpen", "intro"], hold: 3) { app in
+            let ask = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Ask for an intro")).firstMatch
+            if ask.waitForExistence(timeout: 5) { ask.tap(); self.pause(5) }
+        }
+        scene("federal", ["-startTab", "companies", "-startCompanies", "agencies"], hold: 3) { app in self.scroll(app); self.pause(3) }
+        scene("org", ["-startTab", "companies", "-demoOpen", "org"], hold: 3) { app in self.scroll(app); self.pause(3) }
+        scene("pursuit", ["-startTab", "you", "-demoOpen", "pursuit"], hold: 3) { app in self.scroll(app); self.pause(3) }
+        scene("pipeline", ["-startTab", "you", "-demoOpen", "pipeline"], hold: 3) { app in self.scroll(app); self.pause(3) }
+        scene("opportunities", ["-demoOpen", "opportunities"], hold: 3) { app in self.scroll(app); self.pause(3) }
+        scene("recompetes", ["-startTab", "companies", "-demoOpen", "recompetes"], hold: 4) { app in self.scroll(app); self.pause(3) }
+        scene("teaming", ["-startTab", "companies", "-demoOpen", "teaming"], hold: 4) { app in self.scroll(app); self.pause(3) }
+        scene("event", ["-demoOpen", "event"], hold: 3) { app in self.scroll(app); self.pause(3) }
+        scene("notes", ["-demoOpen", "notes"], hold: 3) { app in self.scroll(app); self.pause(3) }
+        scene("trips", ["-startTab", "explore", "-exploreMode", "map"], hold: 6)
+        scene("socials", ["-startTab", "you", "-demoOpen", "socials"], hold: 3) { app in self.scroll(app); self.pause(3) }
+        scene("team", ["-demoOpen", "team"], hold: 6)
+        scene("year", ["-demoOpen", "year"], hold: 5)
     }
 }
