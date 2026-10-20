@@ -7,7 +7,7 @@ final class SiteClips: XCTestCase {
     override func setUpWithError() throws {
         continueAfterFailure = true
         let s = ProcessInfo.processInfo.environment["SITE"] ?? ""
-        try XCTSkipUnless(s == "1" || s == "dark", "Only for the site media workflow")
+        try XCTSkipUnless(["1", "dark", "ph"].contains(s), "Only for the site media workflow")
         Self.skipIdleWaits()
     }
 
@@ -46,6 +46,13 @@ final class SiteClips: XCTestCase {
         app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", s)).firstMatch
     }
 
+    /// Marks a moment to save as a full-resolution still.
+    private func shot(_ name: String) {
+        pause(0.3)
+        print(String(format: "CLIP|%@|shot|%.3f", name, Date().timeIntervalSince1970))
+        pause(0.3)
+    }
+
     private func pause(_ s: Double) { Thread.sleep(forTimeInterval: s) }
 
     private func scroll(_ app: XCUIApplication, from: CGFloat = 0.78, to: CGFloat = 0.38) {
@@ -66,6 +73,7 @@ final class SiteClips: XCTestCase {
 
     func testClips() {
         if set == "dark" { darkClips(); return }
+        if set == "ph" { productHuntClips(); return }
 
         clip("today") { app in
             pause(2.2)
@@ -184,6 +192,51 @@ final class SiteClips: XCTestCase {
         clip("today-dark", settle: 2) { app in
             pause(3)
             scroll(app, from: 0.8, to: 0.3); pause(5)
+        }
+    }
+
+    /// The Product Hunt demo video and gallery, in the order of the 20-second script.
+    private func productHuntClips() {
+        clip("ph-import", ["-demoOpen", "import"], settle: 3) { _ in
+            pause(1); shot("ph-import"); pause(2)
+        }
+
+        clip("ph-clusters", ["-startTab", "explore", "-exploreMode", "clusters"], settle: 3) { _ in
+            pause(1.5); shot("ph-clusters"); pause(3)
+        }
+
+        clip("ph-today", settle: 3) { app in
+            pause(1); shot("ph-today"); pause(0.6)
+            let later = app.buttons["Later"]
+            if later.waitForExistence(timeout: 3) { later.tap(); pause(1.6) }
+            if later.exists { later.tap(); pause(1.6) }
+            shot("ph-today-congrats")
+            let congrats = app.buttons["Congratulate"]
+            if congrats.waitForExistence(timeout: 3) { congrats.tap(); pause(2.5); shot("ph-congrats-draft") }
+            pause(1)
+        }
+
+        clip("ph-intro", ["-startTab", "companies", "-demoOpen", "intro"], settle: 4) { app in
+            pause(1.2); shot("ph-intro"); pause(0.5)
+            let ask = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Ask for an intro")).firstMatch
+            if ask.waitForExistence(timeout: 3) { ask.tap(); pause(2.5); shot("ph-intro-ask") }
+            pause(1.5)
+        }
+
+        clip("ph-weekly", ["-demoOpen", "weekly"], settle: 3) { app in
+            pause(1.2); shot("ph-weekly")
+            scroll(app, from: 0.8, to: 0.45); pause(1.5)
+            scroll(app, from: 0.8, to: 0.45); pause(1.5)
+        }
+
+        clip("ph-event", ["-demoOpen", "event"], settle: 4) { app in
+            pause(1); shot("ph-event")
+            scroll(app); pause(1.5); shot("ph-event-followups")
+        }
+
+        clip("ph-trips", ["-startTab", "explore", "-exploreMode", "map"], settle: 5) { app in
+            pause(1); shot("ph-trips")
+            scroll(app, from: 0.85, to: 0.5); pause(1.5); shot("ph-trips-people")
         }
     }
 }

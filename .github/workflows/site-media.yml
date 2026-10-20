@@ -10,6 +10,12 @@ on:
         description: "Also take the clean screenshots"
         type: boolean
         default: true
+      sets:
+        description: "Clip sets to record: 1, dark, ph (Product Hunt)"
+        default: "1 dark"
+      branch:
+        description: "Branch to publish to"
+        default: site-media
 
 permissions:
   contents: write
@@ -107,7 +113,7 @@ jobs:
           t 400 xcrun simctl bootstatus $DEV -b >/dev/null || true
           xcrun simctl status_bar $DEV override --time 9:41 --batteryState charged --batteryLevel 100 --cellularBars 4 || true
           mkdir -p raw out/clips
-          for set in 1 dark; do
+          for set in ${{ inputs.sets }}; do
             xcrun simctl ui $DEV appearance $([ $set = dark ] && echo dark || echo light)
             python3 -c "import time;print('%.3f'%time.time())" > raw/$set.t0
             xcrun simctl io $DEV recordVideo --codec=h264 --force raw/$set.mp4 2> raw/$set.rec.log &
@@ -130,16 +136,21 @@ jobs:
         if: always()
         continue-on-error: true
         run: |
-          mkdir -p out/clips
-          for set in 1 dark; do [ -f raw/$set.test.log ] && grep -h "CLIP|" raw/$set.test.log | sed -E 's/.*(CLIP\|)/\1/' | awk '!s[$0]++' > raw/$set.marks || true; done
+          mkdir -p out/clips out/shots
+          for set in ${{ inputs.sets }}; do [ -f raw/$set.test.log ] && grep -h "CLIP|" raw/$set.test.log | sed -E 's/.*(CLIP\|)/\1/' | awk '!s[$0]++' > raw/$set.marks || true; done
           python3 - <<'EOF'
           import subprocess, os
-          for s in ['1', 'dark']:
+          for s in '${{ inputs.sets }}'.split():
               if not os.path.exists(f'raw/{s}.mp4'): continue
               t1 = float(open(f'raw/{s}.t1').read())
               marks = {}
               for line in open(f'raw/{s}.marks'):
                   _, name, edge, ts = line.strip().split('|')
+                  if edge == 'shot':
+                      # a full-resolution still from the recording
+                      subprocess.run(['ffmpeg', '-y', '-loglevel', 'error', '-ss', f'{max(0, float(ts) - t1):.2f}', '-i', f'raw/{s}.mp4',
+                                      '-frames:v', '1', f'out/shots/{name}.png'])
+                      continue
                   marks.setdefault(name, {})[edge] = float(ts)
               for name, m in marks.items():
                   if 'start' not in m or 'end' not in m: continue
@@ -153,14 +164,14 @@ jobs:
           r=$(grep -hE "Test Case .*(passed|failed|skipped)|error:" raw/*.test.log | tail -12 | sed 's/%/%25/g' | awk 'BEGIN{ORS="%0A"}{print}')
           echo "::notice title=Clips::$r"
           # keep a small copy of each full recording too, in case the cut points need adjusting
-          for s in 1 dark; do [ -f raw/$s.mp4 ] && ffmpeg -y -loglevel error -i raw/$s.mp4 -vf scale=480:-2,fps=24 -c:v libx264 -crf 28 -an out/full-$s.mp4; cp raw/$s.marks raw/$s.t1 out/ 2>/dev/null; grep -E "Test Case|error|CLIP" raw/$s.test.log | tail -80 > out/$s.test.txt 2>/dev/null; done
+          for s in ${{ inputs.sets }}; do [ -f raw/$s.mp4 ] && ffmpeg -y -loglevel error -i raw/$s.mp4 -vf scale=480:-2,fps=24 -c:v libx264 -crf 28 -an out/full-$s.mp4; cp raw/$s.marks raw/$s.t1 out/ 2>/dev/null; grep -E "Test Case|error|CLIP" raw/$s.test.log | tail -80 > out/$s.test.txt 2>/dev/null; done
           true
-      - name: Publish to the site-media branch
+      - name: Publish
         if: always()
         run: |
           cd out
-          git init -q -b site-media
+          git init -q -b "${{ inputs.branch }}"
           git config user.name "ci"; git config user.email "ci@users.noreply.github.com"
           echo "${{ github.sha }}" > SHA
           git add -A && git commit -qm "site media ${{ github.sha }}"
-          git push -qf "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" site-media
+          git push -qf "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" "${{ inputs.branch }}"
