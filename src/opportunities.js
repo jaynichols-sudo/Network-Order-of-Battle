@@ -37,6 +37,39 @@ export function typeCode(t){
   return 's';
 }
 
+/* ---------- set-asides ---------- */
+// The socioeconomic programs a company can qualify for, and the SAM.gov set-aside codes each
+// one can bid. Every program here is also a small business, so each can bid small business
+// set-asides. EDWOSB firms can also bid WOSB set-asides, and SDVOSB firms can bid VOSB ones.
+export const SET_ASIDE_PROGRAMS = [
+  ['small', 'Small business'], ['8a', '8(a)'], ['hubzone', 'HUBZone'], ['sdvosb', 'Service-disabled veteran-owned (SDVOSB)'],
+  ['vosb', 'Veteran-owned (VOSB)'], ['wosb', 'Women-owned (WOSB)'], ['edwosb', 'Economically disadvantaged women-owned (EDWOSB)'],
+];
+const SMALL = ['SBA', 'SBP'];
+const PROGRAM_CODES = {small: SMALL, '8a': [...SMALL, '8A', '8AN'], hubzone: [...SMALL, 'HZC', 'HZS'], sdvosb: [...SMALL, 'SDVOSBC', 'SDVOSBS', 'VSA', 'VSS'],
+  vosb: [...SMALL, 'VSA', 'VSS'], wosb: [...SMALL, 'WOSB', 'WOSBSS'], edwosb: [...SMALL, 'WOSB', 'WOSBSS', 'EDWOSB', 'EDWOSBSS']};
+// when a notice has only the description
+const SET_ASIDE_TEXT = [[/economically disadvantaged women/i, 'EDWOSB'], [/women[- ]owned/i, 'WOSB'], [/service[- ]disabled/i, 'SDVOSBC'], [/veteran/i, 'VSA'],
+  [/hubzone/i, 'HZC'], [/8\(?a\)?/i, '8A'], [/small business/i, 'SBA']];
+/** The set-aside code on a notice, '' for none (full and open). */
+export function setAsideCode(n){
+  const c = String((n && n.typeOfSetAside) || '').trim().toUpperCase();
+  if (c && c !== 'NONE') return c;
+  const d = String((n && n.typeOfSetAsideDescription) || '');
+  if (!d || /^none$|no set aside|full and open/i.test(d)) return '';
+  for (const [rx, code] of SET_ASIDE_TEXT) if (rx.test(d)) return code;
+  return 'OTHER';
+}
+/** 'open' (anyone can bid), 'yes', 'no', or '' when you haven't said which programs you qualify for. */
+export function setAsideFit(n, programs){
+  const ps = (Array.isArray(programs) ? programs : []).filter(p => PROGRAM_CODES[p]);
+  if (!ps.length) return '';
+  const code = setAsideCode(n);
+  if (!code) return 'open';
+  if (code === 'OTHER') return '';
+  return ps.some(p => PROGRAM_CODES[p].includes(code)) ? 'yes' : 'no';
+}
+
 /* ---------- filters ---------- */
 const splitList = v => (Array.isArray(v) ? v : String(v || '').split(/[,;\n]+/)).map(x => String(x).trim()).filter(Boolean);
 /** NAICS codes (2 to 6 digits), keywords and notice types, cleaned up from what the user typed. */
@@ -47,7 +80,9 @@ export function opportunityFilters(input){
   const known = new Set(NOTICE_TYPES.map(t => t[0]));
   let types = [...new Set(splitList(f.types).map(x => x.toLowerCase()).filter(x => known.has(x)))];
   if (!types.length) types = DEFAULT_TYPES.slice();
-  return {naics, keywords, types};
+  const programs = new Set(SET_ASIDE_PROGRAMS.map(p => p[0]));
+  const setAsides = [...new Set(splitList(f.setAsides).map(x => x.toLowerCase()).filter(x => programs.has(x)))];
+  return {naics, keywords, types, setAsides, hideIneligible: !!f.hideIneligible && setAsides.length > 0};
 }
 
 /* ---------- the requests ---------- */
@@ -72,7 +107,7 @@ export function opportunityRequests(filters, days, today){
 
 /* ---------- reading an answer ---------- */
 const KEEP = ['noticeId', 'title', 'solicitationNumber', 'fullParentPathName', 'department', 'subTier', 'office', 'postedDate', 'type', 'baseType',
-  'responseDeadLine', 'naicsCode', 'classificationCode', 'uiLink', 'typeOfSetAsideDescription', 'active'];
+  'responseDeadLine', 'naicsCode', 'classificationCode', 'uiLink', 'typeOfSetAsideDescription', 'typeOfSetAside', 'active'];
 function slim(o){
   const out = {};
   // every field as text, so the apps can read them without guessing types
@@ -82,20 +117,58 @@ function slim(o){
   if (o.demo) out.demo = true;
   return out;
 }
-/** One SAM.gov answer (the response text): the slim notices, the total, or a plain-English error. */
-export function opportunityPage(text){
+/**
+ * One SAM.gov answer: the slim notices, the total, or a plain-English error. `text` is the
+ * response body (or parsed JSON); `status` is the HTTP status when the app has it. `more` is
+ * true when SAM.gov has more notices than this page carried.
+ */
+export function opportunityPage(text, status){
+  const st = +status || 0;
+  const fail = (error, code) => code ? {total: 0, items: [], error, code} : {total: 0, items: [], error};
   let j;
-  try { j = typeof text === 'string' ? JSON.parse(text) : text; } catch { return {total: 0, items: [], error: 'SAM.gov sent back something Northfix couldn’t read. Try again later.'}; }
-  if (!j || typeof j !== 'object') return {total: 0, items: [], error: 'SAM.gov sent back an empty answer.'};
-  const err = j.error || (j.errorCode || j.errorMessage ? {code: j.errorCode, message: j.errorMessage} : null) || (j.code && j.message && !j.opportunitiesData ? j : null);
+  try { j = typeof text === 'string' ? (text.trim() ? JSON.parse(text) : null) : text; } catch { j = undefined; }
+  if (st === 429) return fail('SAM.gov’s daily search limit for this key is used up. Northfix will try again tomorrow.', 'rate');
+  if (j === undefined || ((j == null || typeof j !== 'object') && st >= 400)){
+    if (st === 401 || st === 403) return fail('SAM.gov didn’t accept that API key. Copy it again from your SAM.gov account (Account Details, Public API Key).', 'key');
+    if (st >= 500) return fail(`SAM.gov is having trouble (error ${st}). Northfix will try again later.`, 'down');
+    if (st >= 400) return fail(`SAM.gov didn’t answer (error ${st}). Northfix will try again later.`);
+    return fail('SAM.gov sent back something Northfix couldn’t read. Try again later.');
+  }
+  if (j == null || typeof j !== 'object') return fail('SAM.gov sent back an empty answer.');
+  // the api.data.gov gateway: {error: {code, message}}; SAM.gov itself: {errorCode, errorMessage},
+  // {title, detail}, {code, message} or a plain {error: "..."}
+  const err = (j.error && typeof j.error === 'object') ? j.error : typeof j.error === 'string' ? {message: j.error}
+    : (j.errorCode || j.errorMessage) ? {code: j.errorCode, message: j.errorMessage}
+    : (j.detail || j.title) && !j.opportunitiesData ? {code: j.title, message: j.detail || j.title}
+    : (j.code && j.message && !j.opportunitiesData) ? j : null;
   if (err){
     const code = String(err.code || ''), msg = String(err.message || err.description || '');
-    if (/API_KEY|key/i.test(code + ' ' + msg)) return {total: 0, items: [], error: 'SAM.gov didn’t accept that API key. Copy it again from your SAM.gov account (Account Details, Public API Key).', code: 'key'};
-    if (/OVER_RATE|rate|limit/i.test(code + ' ' + msg)) return {total: 0, items: [], error: 'SAM.gov’s daily search limit for this key is used up. Northfix will try again later.', code: 'rate'};
-    return {total: 0, items: [], error: `SAM.gov said: ${msg || code || 'something went wrong'}`};
+    if (/API_KEY|NO_API_KEY/i.test(code) || /api[ _]?key/i.test(msg) || st === 401 || st === 403) return fail('SAM.gov didn’t accept that API key. Copy it again from your SAM.gov account (Account Details, Public API Key).', 'key');
+    if (/^OVER_RATE_LIMIT$/i.test(code) || /rate limit|exceeded your|too many requests/i.test(msg)) return fail('SAM.gov’s daily search limit for this key is used up. Northfix will try again tomorrow.', 'rate');
+    if (st >= 500) return fail(`SAM.gov is having trouble (error ${st}). Northfix will try again later.`, 'down');
+    return fail(`SAM.gov said: ${(msg || code || 'something went wrong').slice(0, 200)}`);
   }
-  const list = Array.isArray(j.opportunitiesData) ? j.opportunitiesData : Array.isArray(j) ? j : [];
-  return {total: +j.totalRecords || list.length, items: list.filter(o => o && o.noticeId).map(slim)};
+  if (st >= 400) return fail(st >= 500 ? `SAM.gov is having trouble (error ${st}). Northfix will try again later.` : `SAM.gov didn’t answer (error ${st}). Northfix will try again later.`, st >= 500 ? 'down' : undefined);
+  const list = Array.isArray(j.opportunitiesData) ? j.opportunitiesData : Array.isArray(j) ? j : null;
+  // a 200 with no list is not "no notices": keep what the app already has
+  if (!list) return fail(j.message ? `SAM.gov said: ${String(j.message).slice(0, 200)}` : 'SAM.gov sent back an answer Northfix couldn’t read. Try again later.');
+  const items = list.filter(o => o && typeof o === 'object' && o.noticeId).map(slim);
+  const total = Math.max(+j.totalRecords || 0, items.length);
+  return {total, items, more: total > (+j.offset || 0) + list.length};
+}
+
+/**
+ * The notices to keep after a check: the fresh ones, plus the saved ones a failed search would
+ * have brought back (the same NAICS code), so one failed search doesn't hide notices.
+ * failed: the request objects that failed.
+ */
+export function mergeOpportunities(old, got, failed){
+  const fresh = Array.isArray(got) ? got.filter(Boolean) : [];
+  const codes = (Array.isArray(failed) ? failed : []).map(r => r && r.ncode).filter(Boolean).map(String);
+  if (!codes.length) return fresh;
+  const have = new Set(fresh.map(n => n.noticeId));
+  const keep = (Array.isArray(old) ? old : []).filter(n => n && !n.demo && n.noticeId && !have.has(n.noticeId) && codes.includes(String(n.naicsCode || '')));
+  return fresh.concat(keep);
 }
 
 /* ---------- which agency ---------- */
@@ -195,6 +268,8 @@ export function matchOpportunities(list, opts, ctx){
     const due = dayOf(n.responseDeadLine), days = daysUntil(due, today);
     if (days != null && days < 0) continue;
     if (n.active === 'No') continue;
+    const fit = setAsideFit(n, f.setAsides);
+    if (fit === 'no' && f.hideIneligible) continue;
     const {a, i, segs} = samAgency(n, F);
     if (want && (!a || a.id !== want.id)) continue;
     const ps = a ? (by.get(a.id) || []) : [];
@@ -226,11 +301,13 @@ export function matchOpportunities(list, opts, ctx){
     if (watched) score += 25;
     if (pursuit) score += 30;
     if (isNew) score += 5;
+    if (fit === 'yes') score += 10;
+    if (fit === 'no') score -= 40;
     typeCounts[kind] = (typeCounts[kind] || 0) + 1;
     out.push({
       id: n.noticeId, title: titleFix(n.title), sol: n.solicitationNumber || '', kind, type: TYPE_LABEL[kind] || 'Notice',
       agency: a ? a.short : titleCase(segs[1] || segs[0] || ''), agencyName: a ? a.name : titleCase(segs[1] || segs[0] || ''), agencyId: a ? a.id : '', dept: a ? a.dept : titleCase(readable(segs[0] || '')),
-      office, area, path: segs.join(' › '), posted: dayOf(n.postedDate), due, days, naics: String(n.naicsCode || ''), setAside: n.typeOfSetAsideDescription || '',
+      office, area, path: segs.join(' › '), posted: dayOf(n.postedDate), due, days, naics: String(n.naicsCode || ''), setAside: n.typeOfSetAsideDescription || '', fit,
       link: n.uiLink || (n.noticeId ? `https://sam.gov/opp/${encodeURIComponent(n.noticeId)}/view` : ''), award: n.award || null,
       known: ps.length, senior, warm, officeKnown, people: top, watched, pursuit: pursuit ? pursuit.name : '', pursuitId: pursuit ? pursuit.id : '',
       isNew, demo: !!n.demo, score, line: knownLine(ps.length, warm, officeKnown, area),

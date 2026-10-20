@@ -171,7 +171,7 @@ test('opportunities: the searches to run stay few', () => {
   assert.equal(call('opportunityRequests', {naics: '541512, 541330'}, 14).length, 2);
   assert.equal(call('opportunityRequests', {naics: '5415, 541330'}, 14).length, 1, 'a prefix is filtered on the phone');
   const f = call('opportunityFilters', {naics: '541512; 5415x, 1', keywords: 'OT\nSCADA', types: 'r,zz'});
-  assert.deepEqual(f, {naics: ['541512', '5415'], keywords: ['OT', 'SCADA'], types: ['r']});
+  assert.deepEqual(f, {naics: ['541512', '5415'], keywords: ['OT', 'SCADA'], types: ['r'], setAsides: [], hideIneligible: false});
 });
 
 test('opportunities: the sample network has demo notices, a real one does not', () => {

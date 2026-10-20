@@ -22,6 +22,9 @@ struct PursuitSummary: Decodable, Identifiable, Hashable {
     var weighted: Double?
     var incumbent: String?
     var cold: Int?
+    var next: KeyDate?
+    var fiscal: Fiscal?
+    var competitor: Bool?
 }
 
 struct PursuitDetail: Decodable {
@@ -66,6 +69,12 @@ struct PursuitDetail: Decodable {
     var partners: [String]?
     var owners: [String: String]?
     var teammates: [String]?
+    var next: KeyDate?
+    var fiscal: Fiscal?
+    var dates: [DateSlot]?
+    var bid: BidDecision?
+    var competitor: Bool?
+    var competitors: [String]?
 }
 
 extension AppModel {
@@ -127,6 +136,7 @@ struct PursuitsView: View {
     @Environment(AppModel.self) private var model
     @State private var list: [PursuitSummary] = []
     @State private var adding = false
+    @State private var digest = false
 
     var body: some View {
         List {
@@ -158,8 +168,14 @@ struct PursuitsView: View {
             }
         }
         .navigationTitle("Pursuits")
-        .toolbar { ToolbarItem(placement: .primaryAction) { Button { adding = true } label: { Image(systemName: "plus") }.accessibilityLabel("Add a pursuit") } }
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) { Button { adding = true } label: { Image(systemName: "plus") }.accessibilityLabel("Add a pursuit") }
+            if !list.isEmpty {
+                ToolbarItem(placement: .secondaryAction) { Button { digest = true } label: { Label("Weekly digest", systemImage: "doc.plaintext") } }
+            }
+        }
         .sheet(isPresented: $adding) { NewPursuitSheet().environment(AppModel.shared) }
+        .sheet(isPresented: $digest) { CaptureDigestSheet().environment(AppModel.shared) }
         .task(id: "\(model.pursuitsRev)-\(model.info.rev)") { list = await model.pursuits() }
     }
 
@@ -181,6 +197,10 @@ struct PursuitsView: View {
                     Text("\(p.filled) of \(p.roles) seats known\(p.warm > 0 ? " · \(p.warm) warm" : "")")
                         .font(Theme.geist(.caption)).foregroundStyle(p.filled < 3 ? Theme.needs : Theme.good)
                     if let c = p.cold, c > 0 { ColdBadge(text: c == 1 ? "1 cold" : "\(c) cold") }
+                    if p.fiscal?.q4 == true, p.stage != "Won", p.stage != "Lost" { Q4Badge() }
+                }
+                if let n = p.next, n.kind != "proposal" {
+                    Text(n.line).font(Theme.geist(.caption, .semibold)).foregroundStyle(n.days <= 7 ? Theme.needs : Theme.text2)
                 }
             }
         }
@@ -234,8 +254,24 @@ struct PursuitView: View {
                             ForEach(d.stages, id: \.self) { Text($0) }
                         }
                         .pickerStyle(.menu)
+                        if let f = d.fiscal {
+                            HStack(spacing: 6) {
+                                Text("Due in \(f.label)").font(Theme.geist(.footnote)).foregroundStyle(.secondary)
+                                if f.q4 { Q4Badge() }
+                            }
+                        }
+                        if let cs = d.competitors, !cs.isEmpty {
+                            Label("Competitor\(cs.count == 1 ? "" : "s") on this one: \(cs.joined(separator: ", "))", systemImage: "flag.2.crossed")
+                                .font(Theme.geist(.footnote, .semibold)).foregroundStyle(Theme.needs)
+                        }
                     }
                     .padding(.vertical, 4)
+                }
+                if let slots = d.dates {
+                    KeyDatesSection(pursuitId: id, slots: slots) { await load() }
+                }
+                if let b = d.bid {
+                    BidSection(pursuitId: id, bid: b) { await load() }
                 }
                 Section {
                     ForEach(d.roleList.filter { !$0.isIndustry }) { r in roleRow(r, d) }

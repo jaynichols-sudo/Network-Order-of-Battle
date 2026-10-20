@@ -36,8 +36,13 @@ async function postJSON(url, body){
       return {status: r.status, text: typeof r.data === 'string' ? r.data : JSON.stringify(r.data || {})};
     } catch { /* fall through to fetch */ }
   }
-  const r = await fetch(url, {method: 'POST', headers: {'Content-Type': 'application/json', Accept: 'application/json'}, body: JSON.stringify(body)});
-  return {status: r.status, text: await r.text()};
+  // a timeout, so a hung request can't block every later check
+  const ac = typeof AbortController === 'function' ? new AbortController() : null;
+  const timer = ac ? setTimeout(() => ac.abort(), 40000) : 0;
+  try {
+    const r = await fetch(url, {method: 'POST', headers: {'Content-Type': 'application/json', Accept: 'application/json'}, body: JSON.stringify(body), signal: ac ? ac.signal : undefined});
+    return {status: r.status, text: await r.text()};
+  } finally { clearTimeout(timer); }
 }
 /** Fetches at most once a day (or when forced or the agencies changed). Never throws. Resolves true when something changed. */
 export function refreshAwards(force = false){
@@ -59,21 +64,26 @@ export function refreshAwards(force = false){
     for (const r of reqs){
       try {
         const res = await postJSON(r.url, r.body);
-        const page = M.api.awardPage(res.text);
+        // the engine reads the status too, so a 429 or an HTML error page reads in plain English
+        const page = M.api.awardPage(res.text, res.status);
         if (page.error){ err = page.error; if (page.code === 'rate') break; continue; }
-        if (res.status >= 400){ err = `USASpending.gov didn’t answer (error ${res.status}). Northfix will try again later.`; continue; }
         got.push({agencyId: r.agencyId, items: page.items}); answered = true;
       } catch { err = 'Couldn’t reach USASpending.gov. Check your connection and try again.'; }
     }
-    st.at = Date.now(); ls.set(CACHE + '.at', String(st.at));
     st.error = answered ? '' : err;
+    // only a good answer starts the once-a-day clock, so a dropped connection tries again next time
     if (!answered) return true;
-    st.pages = got; st.sig = sig; saveCache();
+    st.at = Date.now();
+    // an agency that failed this time keeps its last answer
+    st.pages = tryOr(() => M.api.mergeAwardPages(st.pages, got, reqs.map(r => r.agencyId)), got);
+    st.sig = sig; saveCache();
     return true;
   })().catch(e => { console.error(e); return false; }).finally(() => { st.busy = null; });
   return st.busy;
 }
 const months = () => [12, 18, 24].includes(+ls.get(MONTHS)) ? +ls.get(MONTHS) : 24;
+/** The saved award pages, for the weekly digest. */
+export const awardPages = () => { loadCache(); return st.pages; };
 export const recompeteList = (m = months()) => tryOr(() => M.api.recompetes(st.pages, {months: m}), null);
 export const partnerList = () => tryOr(() => M.api.teamingPartners(st.pages, {}), null);
 const recompete = id => { const r = recompeteList(36); return r ? r.items.find(x => x.id === id) || null : null; };
@@ -85,7 +95,7 @@ function recRow(x){
   return `<button type="button" class="row opp-row" data-a="rec" data-v="${esc(x.id)}">
     <span class="hl-main"><span class="eyebrow mono ${x.days <= 180 ? 'needs' : 'accent'}">${esc([x.agency, x.amountText].join(' · ').toUpperCase())}${x.watched ? ` ${icon('starFill', 'opp-star')}` : ''}</span>
       <b class="serif">${esc(x.title)}</b>
-      <span class="muted small">${esc(`Incumbent: ${x.incumbent || 'Not listed'} · ${endText(x)}`)}</span>
+      <span class="muted small">${esc(`Incumbent: ${x.incumbent || 'Not listed'} · ${endText(x)}`)}${x.competitor ? ` ${flag('Competitor', 'var(--needs)')}` : ''}</span>
       <span class="opp-who">${ps.length ? stack(ps, 22) : ''}<span class="muted small">${esc(x.line)}</span></span>
       ${x.tracked ? `<span class="small strong info">${icon('target')}Tracked as a pursuit</span>` : x.pursuit ? `<span class="small strong info">${icon('target')}${esc(x.pursuit)}</span>` : ''}</span>${icon('chevR', 'chev')}</button>`;
 }
@@ -93,7 +103,7 @@ function partnerRow(x, i){
   const ps = persons(x.people.map(p => p.k));
   const bits = [`${fmt(x.awards)} ${x.awards === 1 ? 'award' : 'awards'}`, x.amountText, x.agencies.join(', '), x.ending ? `${fmt(x.ending)} ending this year` : ''].filter(Boolean).join(' · ');
   return `<button type="button" class="row opp-row" data-a="partner" data-v="${i}">
-    <span class="hl-main"><b>${esc(x.name)}${x.watched ? ` ${icon('starFill', 'opp-star')}` : ''}</b><span class="muted small">${esc(bits)}</span>
+    <span class="hl-main"><b>${esc(x.name)}${x.watched ? ` ${icon('starFill', 'opp-star')}` : ''}${x.competitor ? ` ${flag('Competitor', 'var(--needs)')}` : ''}</b><span class="muted small">${esc(bits)}</span>
       <span class="opp-who">${ps.length ? stack(ps, 22) : ''}<span class="small ${x.known ? 'good strong' : 'muted'}">${esc(x.line)}</span></span></span>${icon('chevR', 'chev')}</button>`;
 }
 

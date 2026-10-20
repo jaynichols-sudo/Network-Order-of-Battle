@@ -171,6 +171,20 @@ final class CalendarService {
         hasFeed = feedURL != nil
     }
 
+    @ObservationIgnored private var watchingStore = false
+    /// Meetings cancelled or declined since they were scheduled: their pending prompts go.
+    @ObservationIgnored private var dropped: Set<String> = []
+    /// Scans again when the calendar changes (a meeting moved, cancelled or declined), so an
+    /// after-meeting prompt never fires for the old time.
+    func watchChanges(model: AppModel) {
+        guard !watchingStore else { return }
+        watchingStore = true
+        NotificationCenter.default.addObserver(forName: .EKEventStoreChanged, object: store, queue: .main) { [weak self, weak model] _ in
+            guard let self, let model else { return }
+            Task { @MainActor in await self.scan(model: model, force: true) }
+        }
+    }
+
     func requestAccess() async -> Bool {
         let ok = (try? await store.requestFullAccessToEvents()) ?? false
         authorized = ok
@@ -235,6 +249,11 @@ final class CalendarService {
         var found: [Meeting] = []
         let soon = cal.date(byAdding: .day, value: 7, to: now) ?? now
         for e in events where !e.isAllDay && e.endDate > now && e.startDate < soon {
+            // no prompt for a meeting that was cancelled or that you declined
+            if e.status == .canceled || e.attendees?.first(where: { $0.isCurrentUser })?.participantStatus == .declined {
+                dropped.insert(e.calendarItemIdentifier + "-" + String(Int(e.startDate.timeIntervalSince1970)))
+                continue
+            }
             let people = (e.attendees ?? []).filter { !$0.isCurrentUser && $0.participantType == .person }
             guard !people.isEmpty else {
                 // no invitees (a copied or hand-made event, like on an "All Work" calendar):
@@ -381,7 +400,14 @@ final class CalendarService {
             guard let lat = c["lat"] as? Double, let lon = c["lon"] as? Double, let n = c["n"] as? String else { return nil }
             return (CLLocationCoordinate2D(latitude: lat, longitude: lon), n)
         }
-        guard let m = try? await CLGeocoder().geocodeAddressString(text).first, let l = m.location else {
+        let found: CLPlacemark?
+        do { found = try await CLGeocoder().geocodeAddressString(text).first }
+        catch {
+            // offline or rate-limited: try again next scan; only "no such place" is remembered
+            if (error as? CLError)?.code == .geocodeFoundNoResult { cache[text] = ["none": true]; UserDefaults.standard.set(cache, forKey: "geoCache") }
+            return nil
+        }
+        guard let m = found, let l = m.location else {
             cache[text] = ["none": true]
             UserDefaults.standard.set(cache, forKey: "geoCache")
             return nil
@@ -435,8 +461,11 @@ final class CalendarService {
             return nil
         }
         guard let url = CalendarService.feedLink(text) else { return "That doesn’t look like a feed link. It should start with https:// or webcal://." }
-        guard let body = await fetch(url) else { return "Couldn’t read that link. Check that you copied the whole thing and that you’re online." }
-        guard body.contains("BEGIN:VCALENDAR") else { return "That link didn’t return a calendar. Copy the feed link from TripIt again." }
+        let got = await fetch(url)
+        if got.status == 0 || (got.body.isEmpty && got.status < 400) { return "Couldn’t read that link. Check that you copied the whole thing and that you’re online." }
+        let check = await feedCheck(got, model: model)
+        if !check.ok { return check.code == "gone" ? "That link doesn’t work anymore. Copy the feed link from TripIt again." : (check.error ?? "That link didn’t return a calendar. Copy the feed link from TripIt again.") }
+        let body = got.body
         SecretStore.set(CalendarService.feedSecret, url.absoluteString)
         save(body)
         hasFeed = true
@@ -449,8 +478,7 @@ final class CalendarService {
     /// Fetches the feed now, ignoring the six-hour wait. For "Check now" in Settings.
     func refreshFeedNow(model: AppModel) async {
         guard let s = feedURL, let url = CalendarService.feedLink(s) else { return }
-        if let body = await fetch(url), body.contains("BEGIN:VCALENDAR") { save(body); feedError = nil }
-        else { feedError = "Couldn’t reach \(feedName) just now. Northfix will try again later." }
+        await fetchAndSave(url, model: model)
         await parseFeed(model: model)
         scheduleNotifications(model: model)
     }
@@ -462,18 +490,34 @@ final class CalendarService {
         let d = UserDefaults.standard, now = Date().timeIntervalSince1970
         if now - d.double(forKey: "tripFeedAt") > 6 * 3600 && now - d.double(forKey: "tripFeedTried") > 30 * 60 {
             d.set(now, forKey: "tripFeedTried")
-            if let body = await fetch(url), body.contains("BEGIN:VCALENDAR") { save(body); feedError = nil }
-            else { feedError = "Couldn’t reach \(feedName) at the last check. Northfix will try again later." }
+            await fetchAndSave(url, model: model)
         }
         await parseFeed(model: model)
     }
 
-    private func fetch(_ url: URL) async -> String? {
+    /// The feed's answer. status is 0 when the request never got one; body is empty unless it's a 2xx.
+    private func fetch(_ url: URL) async -> (status: Int, body: String) {
         var req = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 20)
         req.setValue("text/calendar, */*", forHTTPHeaderField: "Accept")
-        guard let got = try? await URLSession.shared.data(for: req),
-              let http = got.1 as? HTTPURLResponse, (200..<300).contains(http.statusCode) else { return nil }
-        return String(decoding: got.0, as: UTF8.self)
+        guard let got = try? await URLSession.shared.data(for: req), let http = got.1 as? HTTPURLResponse else { return (0, "") }
+        return (http.statusCode, (200..<300).contains(http.statusCode) ? String(decoding: got.0, as: UTF8.self) : "")
+    }
+
+    struct FeedCheck: Decodable { var ok: Bool; var code: String?; var error: String? }
+
+    /// Whether the answer is a whole calendar (src/flights.js feedCheck): a revoked link, an
+    /// error page or a download cut off partway never replaces the last good copy.
+    private func feedCheck(_ got: (status: Int, body: String), model: AppModel) async -> FeedCheck {
+        if let c = try? await model.engine.call("feedCheck", [got.body, got.status, feedName], as: FeedCheck.self) { return c }
+        let whole = got.body.contains("BEGIN:VCALENDAR") && got.body.contains("END:VCALENDAR")
+        return FeedCheck(ok: whole, code: whole ? nil : "down", error: whole ? nil : "Couldn’t reach \(feedName) at the last check. Northfix will try again later.")
+    }
+
+    private func fetchAndSave(_ url: URL, model: AppModel) async {
+        let got = await fetch(url)
+        let check = await feedCheck(got, model: model)
+        if check.ok { save(got.body); feedError = nil }
+        else { feedError = check.error ?? "Couldn’t reach \(feedName) at the last check. Northfix will try again later." }
     }
 
     private func save(_ body: String) {
@@ -508,7 +552,14 @@ final class CalendarService {
         }
         guard lookups < 15 else { return nil }
         lookups += 1
-        guard let m = try? await CLGeocoder().geocodeAddressString(text).first, let l = m.location else {
+        let found: CLPlacemark?
+        do { found = try await CLGeocoder().geocodeAddressString(text).first }
+        catch {
+            // offline or rate-limited: try again next scan; only "no such place" is remembered
+            if (error as? CLError)?.code == .geocodeFoundNoResult { cache[text] = ["none": true]; UserDefaults.standard.set(cache, forKey: "geoCache") }
+            return nil
+        }
+        guard let m = found, let l = m.location else {
             cache[text] = ["none": true]
             UserDefaults.standard.set(cache, forKey: "geoCache")
             return nil
@@ -560,6 +611,7 @@ final class CalendarService {
             let ask = CalendarService.askAfterMeetings && (UserDefaults.standard.object(forKey: "notify") as? Bool ?? true)
             center.removePendingNotificationRequests(withIdentifiers: pending.filter { r in
                 if r.identifier.hasPrefix("a-") {
+                    if dropped.contains(String(r.identifier.dropFirst(2))) { return true }
                     // a meeting that just ended drops out of the scan, so keep its prompt when it's minutes away
                     if ask, let d = (r.trigger as? UNCalendarNotificationTrigger)?.nextTriggerDate(), d < now.addingTimeInterval(10 * 60) { return false }
                     return true
@@ -582,7 +634,7 @@ final class CalendarService {
                 c.relevanceScore = 1
                 c.userInfo = ["meeting": m.id]
                 c.sound = .default
-                let comps = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: at)
+                let comps = Calendar.current.dateComponents([.timeZone, .year, .month, .day, .hour, .minute], from: at)
                 try? await center.add(UNNotificationRequest(identifier: "m-\(m.id)", content: c, trigger: UNCalendarNotificationTrigger(dateMatching: comps, repeats: false)))
             }
             // after the meeting: "How did it go?", answered right in the notification or on the watch
@@ -604,7 +656,7 @@ final class CalendarService {
                     c.categoryIdentifier = Notifications.meetingEnd
                     c.sound = .default
                     c.userInfo = ["k": first.k, "ks": people.map(\.k), "after": m.id, "mt": String(m.title.prefix(60))]
-                    let comps = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: at)
+                    let comps = Calendar.current.dateComponents([.timeZone, .year, .month, .day, .hour, .minute], from: at)
                     try? await center.add(UNNotificationRequest(identifier: id, content: c, trigger: UNCalendarNotificationTrigger(dateMatching: comps, repeats: false)))
                 }
             }
@@ -618,7 +670,7 @@ final class CalendarService {
                 c.title = "\(t.city) on \(t.when)"
                 c.body = "\(n) \(n == 1 ? "person" : "people") you know \(n == 1 ? "is" : "are") nearby. Worth setting up a coffee?"
                 c.userInfo = ["trip": t.id]
-                let comps = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: at)
+                let comps = Calendar.current.dateComponents([.timeZone, .year, .month, .day, .hour, .minute], from: at)
                 try? await center.add(UNNotificationRequest(identifier: "t-\(t.id)", content: c, trigger: UNCalendarNotificationTrigger(dateMatching: comps, repeats: false)))
             }
             // the evening before you land: when, and who's close by
@@ -639,7 +691,7 @@ final class CalendarService {
                 c.body = "You land in \(city) \(day) at \(CalendarService.clock(land, tz: t.landTZ)). \(n) \(n == 1 ? "person" : "people") you know \(n == 1 ? "is" : "are") within 25 miles."
                 c.userInfo = ["trip": t.id]
                 c.sound = .default
-                let comps = cal.dateComponents([.year, .month, .day, .hour, .minute], from: at)
+                let comps = cal.dateComponents([.timeZone, .year, .month, .day, .hour, .minute], from: at)
                 try? await center.add(UNNotificationRequest(identifier: "l-\(t.id)", content: c, trigger: UNCalendarNotificationTrigger(dateMatching: comps, repeats: false)))
             }
         }

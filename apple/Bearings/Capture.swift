@@ -58,6 +58,7 @@ struct PipelineData: Decodable {
     var dueThisQuarter: Total
     var history: [Row]
     var rows: [Row]
+    var quarters: [PipelineQuarter]?
     var withTeam: Bool?
     var hasTeam: Bool?
     var unpriced: Int?
@@ -193,6 +194,7 @@ struct PipelineView: View {
                         .padding(.vertical, 2)
                     }
                 }
+                if let q = p.quarters, !q.isEmpty { QuarterSection(quarters: q) }
                 let open = p.rows.filter { $0.stage != "Won" && $0.stage != "Lost" }
                 if !open.isEmpty {
                     Section("Open, biggest weighted first") {

@@ -438,6 +438,8 @@ enum SortOrder: String, CaseIterable, Identifiable {
 struct TargetSummary: Decodable, Identifiable, Hashable {
     var name: String
     var note: String
+    /// Marked as a competitor (round 2).
+    var competitor: Bool?
     var count: Int
     var stars: Int
     var news: Int
@@ -462,6 +464,7 @@ struct UnitDetail: Decodable {
     var lv: [Int]
     var gaps: [String]
     var isTarget: Bool
+    var competitor: Bool?
     var note: String
     var isCompany: Bool
     var industry: Ind

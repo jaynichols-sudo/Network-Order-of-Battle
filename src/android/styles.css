@@ -1112,3 +1112,10 @@ input[type=range] { accent-color: var(--accent); }
 .cplan-facts { margin: 0; padding-left: 18px; color: var(--text2); font-size: 14px; line-height: 1.45; }
 .cplan-facts li + li { margin-top: 4px; }
 .fed-asof { margin-top: 6px; }
+
+/* round 2: key dates, bid scorecard, flags */
+.pu-flags { margin-top: 6px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.pu-date-in { display: flex; gap: 8px; align-items: center; }
+.pu-date-in .field { width: auto; min-width: 9.5em; }
+.pu-bid .row-between { gap: 10px; align-items: center; }
+.pu-bid .select.small select { font-size: 14px; }

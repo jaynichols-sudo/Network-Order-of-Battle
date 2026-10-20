@@ -51,7 +51,10 @@ struct WatchlistList: View {
                         HStack(spacing: 14) {
                             CoverageRing(score: t.score, size: 50).zoomSource(unit: t.name)
                             VStack(alignment: .leading, spacing: 3) {
-                                Text(t.name).font(Theme.geist(.body, .semibold))
+                                HStack(spacing: 6) {
+                                    Text(t.name).font(Theme.geist(.body, .semibold))
+                                    if t.competitor == true { CompetitorBadge() }
+                                }
                                 Text(knowLine(t)).font(Theme.geist(.subheadline)).foregroundStyle(.secondary)
                                 Text(t.gap).font(Theme.geist(.footnote, .medium)).foregroundStyle(t.gaps.isEmpty ? Theme.good : Theme.bad)
                             }
@@ -62,6 +65,10 @@ struct WatchlistList: View {
                         Button(role: .destructive) {
                             Task { await model.toggleTarget(t.name) }
                         } label: { Label("Remove", systemImage: "minus.circle") }
+                        Button {
+                            Task { await model.setCompetitor(t.name, on: t.competitor != true) }
+                        } label: { Label(t.competitor == true ? "Not a competitor" : "Competitor", systemImage: "flag.2.crossed") }
+                        .tint(Theme.needs)
                     }
                 }
                 Button {
@@ -70,8 +77,9 @@ struct WatchlistList: View {
                     Label(model.info.lens ? "Add a company, agency or command" : "Add a company", systemImage: "plus.circle.fill")
                 }
             } footer: {
-                Text("Coverage shows whether you know someone at each level: executive, director, manager and staff.")
+                Text("Coverage shows whether you know someone at each level: executive, director, manager and staff. Swipe a company to mark it as a competitor.")
             }
+            CompetitorsSection()
         }
         .listStyle(.insetGrouped)
         .overlay {
@@ -291,6 +299,14 @@ struct UnitView: View {
             }
             Button { showInPeople(u) } label: { Label("Show in People", systemImage: "person.2") }
             if u.isCompany {
+                Button {
+                    Task {
+                        await model.setCompetitor(name, on: u.competitor != true)
+                        await load()
+                    }
+                } label: {
+                    Label(u.competitor == true ? "Not a competitor" : "Mark as a competitor", systemImage: u.competitor == true ? "flag.slash" : "flag.2.crossed")
+                }
                 Picker("Industry", selection: industryBinding(u)) {
                     Text("Automatic: \(u.industry.auto)").tag("")
                     ForEach(model.constants.industries.filter { $0.id != model.constants.unclassified }) { i in
