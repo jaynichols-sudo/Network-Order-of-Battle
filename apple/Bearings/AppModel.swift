@@ -343,6 +343,27 @@ final class AppModel {
                 }
                 paths[tab, default: []].append(.pursuit(id))
             }
+        case "capture":
+            // a pursuit with seats, key dates and a competitor, for the round 2 screens
+            Task {
+                guard let id = await addPursuit(name: "DISA OT gateway pilot", agency: "DISA", due: Date().addingTimeInterval(45 * 86400), value: "$2.4M") else { return }
+                if let d = await pursuit(id) {
+                    for r in d.roleList.prefix(3) { if let s = r.suggest.first { await assignRole(id, role: r.role, k: s.k, on: true) } }
+                }
+                for (kind, days) in [("industryDay", 6), ("questions", 12), ("rfp", 30), ("award", 120)] {
+                    await setPursuitDate(id, kind: kind, date: Date().addingTimeInterval(Double(days) * 86400))
+                }
+                await setCompetitor("Leidos", on: true)
+                await setCompetitor("Booz Allen Hamilton", on: true)
+                let open = prefs.string(forKey: "captureOpen") ?? "pursuit"
+                switch open {
+                case "pipeline": paths[tab, default: []].append(.pipeline)
+                case "recompetes": paths[tab, default: []].append(.recompetes)
+                case "teaming": paths[tab, default: []].append(.teaming)
+                case "pursuits": paths[tab, default: []].append(.pursuits)
+                default: paths[tab, default: []].append(.pursuit(id))
+                }
+            }
         case "moves": paths[tab, default: []].append(.moves)
         case "pipeline": paths[tab, default: []].append(.pipeline)
         case "recompetes": paths[tab, default: []].append(.recompetes)

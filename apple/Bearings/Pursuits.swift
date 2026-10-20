@@ -176,6 +176,7 @@ struct PursuitsView: View {
         }
         .sheet(isPresented: $adding) { NewPursuitSheet().environment(AppModel.shared) }
         .sheet(isPresented: $digest) { CaptureDigestSheet().environment(AppModel.shared) }
+        .task { if UserDefaults.standard.string(forKey: "captureOpen") == "pursuits" { try? await Task.sleep(nanoseconds: 1_500_000_000); digest = true } }
         .task(id: "\(model.pursuitsRev)-\(model.info.rev)") { list = await model.pursuits() }
     }
 

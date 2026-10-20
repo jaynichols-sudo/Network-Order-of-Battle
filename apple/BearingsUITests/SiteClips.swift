@@ -250,7 +250,9 @@ final class SiteClips: XCTestCase {
     /// Every feature, one scene each, for the long tour video. The cut is picked by eye from
     /// the full recording, so each scene just holds long enough to read.
     private func tourClips() {
+        let only = ProcessInfo.processInfo.environment["TOUR_ONLY"].flatMap { $0.isEmpty ? nil : Set($0.split(separator: ",").map(String.init)) }
         func scene(_ name: String, _ args: [String] = [], hold: Double = 5, _ body: ((XCUIApplication) -> Void)? = nil) {
+            if let only, !only.contains(name) { return }
             clip("tour-" + name, args, settle: 10) { app in
                 pause(hold)
                 body?(app)
@@ -282,6 +284,16 @@ final class SiteClips: XCTestCase {
         scene("org", ["-startTab", "companies", "-demoOpen", "org"], hold: 3) { app in self.scroll(app); self.pause(3) }
         scene("pursuit", ["-startTab", "you", "-demoOpen", "pursuit"], hold: 3) { app in self.scroll(app); self.pause(3) }
         scene("pipeline", ["-startTab", "you", "-demoOpen", "pipeline"], hold: 3) { app in self.scroll(app); self.pause(3) }
+        // round 2: bid/no-bid, key dates, fiscal quarters, competitors, the weekly digest and set-asides
+        scene("bid", ["-startTab", "you", "-demoOpen", "capture"], hold: 3) { app in
+            for _ in 0..<5 { self.scroll(app, from: 0.8, to: 0.35); self.pause(2.5) }
+        }
+        scene("quarters", ["-startTab", "you", "-demoOpen", "capture", "-captureOpen", "pipeline"], hold: 3) { app in
+            for _ in 0..<3 { self.scroll(app, from: 0.8, to: 0.35); self.pause(2.5) }
+        }
+        scene("competitors", ["-startTab", "companies", "-demoOpen", "capture", "-captureOpen", "teaming"], hold: 5) { app in self.scroll(app); self.pause(3) }
+        scene("digest", ["-startTab", "you", "-demoOpen", "capture", "-captureOpen", "pursuits"], hold: 6) { app in self.scroll(app); self.pause(3) }
+        scene("setasides", ["-demoOpen", "opportunities", "-sam.setAsides", "(small, sdvosb)"], hold: 4) { app in self.scroll(app); self.pause(3) }
         scene("opportunities", ["-demoOpen", "opportunities"], hold: 3) { app in self.scroll(app); self.pause(3) }
         scene("recompetes", ["-startTab", "companies", "-demoOpen", "recompetes"], hold: 4) { app in self.scroll(app); self.pause(3) }
         scene("teaming", ["-startTab", "companies", "-demoOpen", "teaming"], hold: 4) { app in self.scroll(app); self.pause(3) }

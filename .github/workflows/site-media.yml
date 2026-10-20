@@ -13,6 +13,9 @@ on:
       sets:
         description: "Clip sets to record: 1, dark, ph (Product Hunt)"
         default: "1 dark"
+      only:
+        description: "Tour set only: comma-separated scene names to record"
+        default: ""
       branch:
         description: "Branch to publish to"
         default: site-media
@@ -121,7 +124,7 @@ jobs:
             # the recorder logs once it has started; note that moment as the video's zero
             for i in $(seq 1 40); do grep -qi "record" raw/$set.rec.log 2>/dev/null && break; sleep 0.25; done
             python3 -c "import time;print('%.3f'%time.time())" > raw/$set.t1
-            SITE=$set TEST_RUNNER_SITE=$set t 900 xcodebuild -project apple/Bearings.xcodeproj -scheme Bearings -configuration Debug \
+            SITE=$set TEST_RUNNER_SITE=$set TEST_RUNNER_TOUR_ONLY="${{ inputs.only }}" t 900 xcodebuild -project apple/Bearings.xcodeproj -scheme Bearings -configuration Debug \
               -destination "id=$DEV" -derivedDataPath build/dd CODE_SIGNING_ALLOWED=NO \
               -only-testing:BearingsUITests/SiteClips test-without-building > raw/$set.test.log 2>&1 || true
             sleep 1
