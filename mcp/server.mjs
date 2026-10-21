@@ -3,8 +3,9 @@
 // network, on your own Mac. It reads the files the Northfix app saves in your iCloud
 // Drive and runs the same engine the apps use. Nothing about your network is sent anywhere:
 // the only way out is the stdio pipe to the AI app that started it. Recompetes and teaming
-// partners ask USASpending.gov for public contract data, sending only agency names. The one
-// write is ai-inbox.json, where log_note leaves notes for the app to file.
+// partners ask USASpending.gov for public contract data, sending only agency names. The only
+// write is ai-inbox.json, where log_note, log_call, update_pursuit_stage and draft_follow_up
+// (the last three only with confirm: true) leave changes for the app to file.
 //
 // Zero dependencies. MCP over stdio: JSON-RPC 2.0, one message per line.
 import fs from 'node:fs';
@@ -12,7 +13,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-export const VERSION = '1.1.0';
+export const VERSION = '1.2.0';
 const PROTOCOLS = ['2025-06-18', '2025-03-26', '2024-11-05'];
 const FREE_DAILY = 3;
 const FREE_TOOLS = new Set(['network_summary']);
@@ -159,7 +160,10 @@ const str = (description, extra) => Object.assign({type: 'string', description},
 const RO = {readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false};
 // Recompetes and teaming partners ask USASpending.gov (public data, agency names only). Logging a
 // note is the one write, and it only adds a file the app picks up (see INBOX below).
-const ANNOTATIONS = {recompetes: {openWorldHint: true}, teaming_partners: {openWorldHint: true}, log_note: {readOnlyHint: false, idempotentHint: false}};
+const WRITE = {readOnlyHint: false, idempotentHint: false};
+const ANNOTATIONS = {recompetes: {openWorldHint: true}, teaming_partners: {openWorldHint: true}, log_note: WRITE, log_call: WRITE, update_pursuit_stage: WRITE, draft_follow_up: WRITE};
+export const WRITE_TOOLS = new Set(['log_note', 'log_call', 'update_pursuit_stage', 'draft_follow_up']);
+const confirmProp = {type: 'boolean', description: 'Must be true to save. Leave it false first to show the user exactly what will be saved, and only set it to true after the user says yes.'};
 export const TOOLS = [
   {name: 'search_people', title: 'Search your network',
     description: 'Find people in the user’s own LinkedIn network with a plain-English question or keywords, for example “colonels at Fort Liberty”, “who do I know at Duke Energy”, “contracting officers at NAVFAC”, “who used to be at Leidos”. Returns up to 25 matching people with title, company and how close the user is to each.',
@@ -213,6 +217,17 @@ export const TOOLS = [
   {name: 'capture_digest', title: 'Weekly capture digest',
     description: 'A short weekly summary across all open pursuits: key dates in the next two weeks (industry days, questions due, RFPs, proposals, orals), seats going cold, empty decision-maker seats, bid decisions to look at, and the open and weighted pipeline. Good for a Monday capture meeting.',
     inputSchema: {type: 'object', properties: {}}},
+  {name: 'log_call', title: 'Log a call',
+    description: 'Records a call with one person in the user’s Northfix network: a dated “Call:” note, marks them as contacted today, and optionally sets a follow-up. With confirm false (or missing) it only previews and saves nothing; set confirm true only after the user approves the preview. Northfix files it the next time the app opens on this Mac.',
+    inputSchema: {type: 'object', properties: {name_or_key: str('A person’s name, or the key from another tool’s result.'), summary: str('What was discussed, in plain words. Up to 470 characters.'),
+      follow_up_days: {type: 'integer', minimum: 1, maximum: 365, description: 'Optional: follow up in this many days.'}, confirm: confirmProp}, required: ['name_or_key', 'summary', 'confirm']}},
+  {name: 'update_pursuit_stage', title: 'Move a pursuit to a new stage',
+    description: 'Moves one pursuit to a new stage: Tracking, Pursuing, Proposal, Submitted, Won or Lost. With confirm false (or missing) it only previews; set confirm true only after the user approves. Northfix applies it the next time the app opens on this Mac.',
+    inputSchema: {type: 'object', properties: {pursuit: str('The pursuit’s name, or part of it.'), stage: str('The new stage.', {enum: ['Tracking', 'Pursuing', 'Proposal', 'Submitted', 'Won', 'Lost']}), confirm: confirmProp}, required: ['pursuit', 'stage', 'confirm']}},
+  {name: 'draft_follow_up', title: 'Draft a follow-up',
+    description: 'Drafts a short follow-up message to one person from what Northfix knows (last conversation, notes, pursuit), for the user to send themselves. Northfix never sends it. Optionally saves a follow-up date and the purpose as a note, only with confirm true after the user approves.',
+    inputSchema: {type: 'object', properties: {name_or_key: str('A person’s name, or the key from another tool’s result.'), purpose: str('Optional: what the follow-up is for, like “send the zero trust brief”.'),
+      follow_up_on: str('Optional: a follow-up date, YYYY-MM-DD, to save with confirm true.'), confirm: confirmProp}, required: ['name_or_key', 'confirm']}},
   {name: 'network_summary', title: 'Network summary',
     description: 'A short overview of the user’s network: how many people, companies and industries, who’s senior, how many are waiting on a reply or changed jobs, and the watchlist. Always free.',
     inputSchema: {type: 'object', properties: {}}},
@@ -259,6 +274,30 @@ function pickPursuit(name){
   if (list.length > 1) return {answer: {text: `Several pursuits match: ${list.map(p => p.name).join(', ')}. Which one?`, data: {found: false, pursuits: list.map(p => p.name)}}};
   return {id: list[0].id};
 }
+
+/* ---------- the inbox the app files ---------- */
+// Every write goes to ai-inbox.json next to the network files; the app files it when it opens.
+// Never overwrites entries it can't read, and always writes whole files.
+function appendInbox(entry){
+  const file = path.join(state.dir, INBOX);
+  let list = [];
+  if (fs.existsSync(path.join(state.dir, '.' + INBOX + '.icloud'))) throw new Error('Earlier notes from Claude are still downloading from iCloud. Open Northfix on this Mac, then try again.');
+  if (fs.existsSync(file)){
+    const raw = fs.readFileSync(file, 'utf8');
+    // a file being written or in an iCloud conflict: never overwrite notes not filed yet
+    let j; try { j = raw.trim() ? JSON.parse(raw) : {notes: []}; } catch { throw new Error('Notes from Claude waiting for Northfix couldn’t be read. Open Northfix on this Mac to file them, then try again.'); }
+    if (j && Array.isArray(j.notes)) list = j.notes;
+  }
+  list.push(entry);
+  // write a temporary file and rename it, so the app never reads half a file
+  const tmp = `${file}.${process.pid}.${Date.now()}.tmp`;
+  fs.writeFileSync(tmp, JSON.stringify({kind: 'northfix-ai-inbox', v: 1, notes: list.slice(-200)}));
+  fs.renameSync(tmp, file);
+  return list;
+}
+const preview = (what, data) => ({text: `${what}\nNothing is saved yet. If the user agrees, call again with confirm: true.`, data: Object.assign({saved: false, needsConfirm: true}, data)});
+const whoIs = (f, q) => !f.k ? (!f.choices.length ? {text: `No one called “${q}” in your network. Nothing saved.`, data: {saved: false, choices: []}}
+  : {text: listText(`Several people match “${q}”. Which one? Nothing saved yet.`, f.choices), data: {saved: false, choices: f.choices}}) : null;
 
 const handlers = {
   search_people({query, limit}){
@@ -447,22 +486,52 @@ const handlers = {
       if (!f.choices.length) return {text: `No one called “${name_or_key}” in your network. Nothing saved.`, data: {saved: false, choices: []}};
       return {text: listText(`Several people match “${name_or_key}”. Which one? Nothing saved yet.`, f.choices), data: {saved: false, choices: f.choices}};
     }
-    const file = path.join(state.dir, INBOX);
-    let list = [];
-    if (fs.existsSync(path.join(state.dir, '.' + INBOX + '.icloud'))) throw new Error('Earlier notes from Claude are still downloading from iCloud. Open Northfix on this Mac, then try again.');
-    if (fs.existsSync(file)){
-      const raw = fs.readFileSync(file, 'utf8');
-      // a file being written or in an iCloud conflict: never overwrite notes not filed yet
-      let j; try { j = raw.trim() ? JSON.parse(raw) : {notes: []}; } catch { throw new Error('Notes from Claude waiting for Northfix couldn’t be read. Open Northfix on this Mac to file them, then try again.'); }
-      if (j && Array.isArray(j.notes)) list = j.notes;
-    }
-    list.push({k: f.k, text, at: new Date().toISOString()});
-    // write a temporary file and rename it, so the app never reads half a file
-    const tmp = `${file}.${process.pid}.${Date.now()}.tmp`;
-    fs.writeFileSync(tmp, JSON.stringify({kind: 'northfix-ai-inbox', v: 1, notes: list.slice(-200)}));
-    fs.renameSync(tmp, file);
+    const list = appendInbox({k: f.k, text, at: new Date().toISOString()});
     const who = state.people.get(f.k);
     return {text: `Saved for ${who ? who.name : 'them'}. Northfix files the note the next time it opens on this Mac.`, data: {saved: true, key: f.k, pending: list.length}};
+  },
+  log_call({name_or_key, summary, follow_up_days, confirm}){
+    const text = String(summary || '').replace(/\s+/g, ' ').trim().slice(0, 470);
+    if (!text) throw new Error('Say what the call was about.');
+    const f = findPerson(name_or_key);
+    const miss = whoIs(f, name_or_key); if (miss) return miss;
+    const who = state.people.get(f.k), name = who ? who.name : 'them';
+    const days = +follow_up_days > 0 ? Math.min(365, Math.round(+follow_up_days)) : 0;
+    const what = `Log a call with ${name}: “${text}”, mark them as contacted today${days ? `, and follow up in ${days} days` : ''}.`;
+    if (confirm !== true) return preview(what, {key: f.k, summary: text, followUpDays: days || null});
+    const list = appendInbox({kind: 'call', k: f.k, text, followUpDays: days || undefined, at: new Date().toISOString()});
+    return {text: `Saved the call with ${name}. Northfix files it the next time it opens on this Mac.`, data: {saved: true, key: f.k, pending: list.length}};
+  },
+  update_pursuit_stage({pursuit, stage, confirm}){
+    const STAGES = ['Tracking', 'Pursuing', 'Proposal', 'Submitted', 'Won', 'Lost'];
+    const want = STAGES.find(x => x.toLowerCase() === String(stage || '').trim().toLowerCase());
+    if (!want) throw new Error(`Pick a stage: ${STAGES.join(', ')}.`);
+    const pick = pickPursuit(pursuit);
+    if (pick.answer) return {text: pick.answer.text + ' Nothing saved.', data: Object.assign({saved: false}, pick.answer.data)};
+    const p = call('pursuit', pick.id);
+    if (p.stage === want) return {text: `${p.name} is already at ${want}. Nothing to change.`, data: {saved: false, pursuit: p.name, stage: want}};
+    const what = `Move ${p.name} from ${p.stage} to ${want}.`;
+    if (confirm !== true) return preview(what, {pursuit: p.name, from: p.stage, to: want});
+    const list = appendInbox({kind: 'stage', pursuit: pick.id, name: p.name, stage: want, at: new Date().toISOString()});
+    return {text: `Saved: ${p.name} moves to ${want} the next time Northfix opens on this Mac.`, data: {saved: true, pursuit: p.name, from: p.stage, to: want, pending: list.length}};
+  },
+  draft_follow_up({name_or_key, purpose, follow_up_on, confirm}){
+    const f = findPerson(name_or_key);
+    const miss = whoIs(f, name_or_key); if (miss) return miss;
+    const cp = call('callPlan', f.k, null);
+    const first = String(cp.name || '').replace(/^(?:[A-Z]{2,5}|[A-Z][a-z]{1,3}\.?)\s+(?=[A-Z])/, '').split(' ')[0] || 'there';
+    const why = String(purpose || '').replace(/\s+/g, ' ').trim().slice(0, 200);
+    const draft = [`Hi ${first},`, '', why ? `Following up on ${why.replace(/[.]$/, '')}.` : 'Following up on our last conversation.',
+      cp.pursuit ? `I’d value your view on ${cp.pursuit} as it moves forward.` : 'I’d love to hear what you’re focused on over the next few months.',
+      'Would a short call next week work?'].join('\n');
+    const due = String(follow_up_on || '').trim();
+    if (due && !/^\d{4}-\d{2}-\d{2}$/.test(due)) throw new Error('Give the follow-up date as YYYY-MM-DD.');
+    const data = {key: f.k, name: cp.name, draft, facts: cp.facts, followUpOn: due || null};
+    const head = `Draft for ${cp.name} (Northfix never sends it; copy it into your email or LinkedIn):\n\n${draft}\n\nWhat it’s based on:\n${cp.facts.map(x => '- ' + x).join('\n')}`;
+    if (!due) return {text: head, data: Object.assign({saved: false}, data)};
+    if (confirm !== true) return {text: `${head}\n\nSave a follow-up with ${cp.name} on ${nice(due)}${why ? ` (“${why}”)` : ''}? Nothing is saved yet. If the user agrees, call again with confirm: true.`, data: Object.assign({saved: false, needsConfirm: true}, data)};
+    const list = appendInbox({kind: 'followup', k: f.k, due, text: why ? `Follow-up drafted: ${why}` : '', at: new Date().toISOString()});
+    return {text: `${head}\n\nSaved a follow-up on ${nice(due)}. Northfix files it the next time it opens on this Mac.`, data: Object.assign({saved: true, pending: list.length}, data)};
   },
   bid_decision({pursuit}){
     const pick = pickPursuit(pursuit);

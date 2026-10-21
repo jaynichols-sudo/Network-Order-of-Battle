@@ -1301,7 +1301,7 @@ function tagAttendees(keys, event){
  */
 function inboxRest(filed, now){
   const read = t => { try { const d = typeof t === 'string' ? JSON.parse(t) : t; return d && Array.isArray(d.notes) ? d.notes : []; } catch { return []; } };
-  const id = n => n && `${n.k}|${n.at}|${n.text}`;
+  const id = n => n && `${n.k || n.pursuit}|${n.at}|${n.text || n.stage || n.due}`;
   const done = new Set(read(filed).map(id));
   const rest = read(now).filter(n => n && !done.has(id(n)));
   return rest.length ? JSON.stringify({kind: 'northfix-ai-inbox', v: 1, notes: rest}) : '';
@@ -1311,14 +1311,36 @@ function inboxRest(filed, now){
 function applyInbox(text){
   let d; try { d = typeof text === 'string' ? JSON.parse(text) : text; } catch { d = null; }
   const list = d && Array.isArray(d.notes) ? d.notes : [];
-  let filed = 0;
+  let filed = 0, pursuits = 0;
   const people = new Set();
   for (const n of list.slice(0, 200)){
-    if (!n || !S.byK.has(n.k) || !n.text) continue;
-    addNote(n.k, String(n.text).slice(0, 480), 'Claude');
+    if (!n) continue;
+    // a pursuit moved to a new stage (update_pursuit_stage, confirmed in the AI app)
+    if (n.kind === 'stage'){
+      if (!STAGES.includes(n.stage) || !S.pursuits.some(p => p.id === n.pursuit)) continue;
+      updatePursuit(n.pursuit, {stage: n.stage});
+      filed++; pursuits++;
+      continue;
+    }
+    if (!S.byK.has(n.k)) continue;
+    // a follow-up date, with the drafted message's purpose as a note (draft_follow_up)
+    if (n.kind === 'followup'){
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(n.due || '')) continue;
+      setEdit(n.k, {due: n.due});
+      if (n.text) addNote(n.k, String(n.text).slice(0, 480), 'Claude');
+      filed++; people.add(n.k);
+      continue;
+    }
+    if (!n.text) continue;
+    // a call (log_call): the note, marked as a touch, with an optional follow-up
+    if (n.kind === 'call'){
+      addNote(n.k, ('Call: ' + String(n.text)).slice(0, 480), 'Claude');
+      touch(n.k);
+      if (+n.followUpDays > 0) followUp(n.k, Math.min(365, Math.round(+n.followUpDays)));
+    } else addNote(n.k, String(n.text).slice(0, 480), 'Claude');
     filed++; people.add(n.k);
   }
-  return {filed, people: [...people]};
+  return {filed, people: [...people], pursuits};
 }
 
 /* ---------- recompetes and teaming partners (src/awards.js) ---------- */

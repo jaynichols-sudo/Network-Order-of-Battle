@@ -452,19 +452,22 @@ final class AppModel {
         await refreshAll()
     }
 
-    /// Notes an AI app left through the Northfix connector (mcp/server.mjs writes ai-inbox.json
+    /// Notes, calls, follow-ups and pursuit stage changes an AI app left through the Northfix
+    /// connector (mcp/server.mjs writes ai-inbox.json; the last three only after the user confirms)
     /// next to network.json). Filed on each person's timeline, saved, then the file is deleted.
     /// A file iCloud hasn't downloaded yet is left for the next load.
     private func fileAIInbox() async {
         guard !info.isSample, let text = await store.readIfLocal("ai-inbox.json") else { return }
-        struct Filed: Decodable { var filed: Int; var people: [String]? }
+        struct Filed: Decodable { var filed: Int; var people: [String]?; var pursuits: Int? }
         guard let r = try? await engine.call("applyInbox", [text], as: Filed.self) else { return }
-        if r.filed > 0 { await saveFile("edits", "edits.json") }
+        if r.filed > (r.pursuits ?? 0) { await saveFile("edits", "edits.json") }
+        // stage changes from update_pursuit_stage
+        if (r.pursuits ?? 0) > 0 { await savePursuits() }
         // a note Claude left while these were filed stays for next time
         let now = await store.readIfLocal("ai-inbox.json") ?? ""
         let rest = now == text ? "" : ((try? await engine.call("inboxRest", [text, now], as: String.self)) ?? "")
         if rest.isEmpty { await store.remove("ai-inbox.json") } else { try? await store.write("ai-inbox.json", rest) }
-        if r.filed > 0 { show("Filed \(r.filed) \(r.filed == 1 ? "note" : "notes") from Claude") }
+        if r.filed > 0 { show("Filed \(r.filed) \(r.filed == 1 ? "change" : "changes") from your AI app") }
     }
 
     func loadSample() async {
