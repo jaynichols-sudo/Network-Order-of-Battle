@@ -2260,6 +2260,35 @@ function orgChart(q){
   if (ag) out.structure = officeStructure(ag, cards, coOf, bySeat);
   return out;
 }
+// The team's shared picture of one agency: the org chart from you and every teammate's share
+// (decrypted on this device by setTeamShares; nothing new is sent or stored), with every open
+// pursuit there, yours and theirs, and the government seats nobody fills yet, with who on the
+// chart could fill each.
+function teamAgencyOrg(q){
+  const chart = orgChart(q);
+  const F = fedRows();
+  const ag = agencyFor(q, F);
+  const want = coKey(q);
+  const atAgency = name => { if (!name) return false; const a = agencyFor(name, F); return ag && a ? a.id === ag.id : coKey(name) === want; };
+  const cards = chart.levels.flatMap(l => l.people).filter(c => c.src !== 'list');
+  const govSeats = PURSUIT_ROLES.filter(([, rx, field]) => rx && !field);
+  const seatList = (name, owner, stage, filledBy) => govSeats.map(([role, rx]) => {
+    const holders = filledBy(role);
+    const candidates = holders.length ? [] : cards.filter(c => rx.test(c.p || '')).sort((a, b) => BAND_RANK[b.band] - BAND_RANK[a.band] || a.name.localeCompare(b.name)).slice(0, 3)
+      .map(c => ({name: c.name, p: c.p, band: c.band, k: c.k || '', via: c.src === 'team' ? c.owner : 'You'}));
+    return {pursuit: name, owner, stage, role, filled: holders.length > 0, holders, candidates};
+  });
+  const pursuitsOut = [];
+  for (const p of S.pursuits) if (isOpen(p) && atAgency(p.agency))
+    pursuitsOut.push({id: p.id, name: p.name, owner: 'You', stage: p.stage, due: p.due, seats: seatList(p.name, 'You', p.stage, role => (p.roles[role] || []).map(k => S.byK.get(k)).filter(Boolean).map(r => fullName(r)))});
+  for (const t of S.team) for (const p of t.pursuits || []) if (STAGES.indexOf(p.stage) < 4 && atAgency(p.agency))
+    pursuitsOut.push({id: '', name: p.name, owner: t.owner, stage: p.stage, due: p.due || '', seats: seatList(p.name, t.owner, p.stage, role => (p.roles || []).filter(x => x.role === role).map(x => x.name))});
+  const open = pursuitsOut.flatMap(p => p.seats.filter(s => !s.filled));
+  const contributors = [{owner: 'You', people: chart.known || 0}].concat(S.team.map(t => ({owner: t.owner, people: cards.filter(c => c.src === 'team' && c.owner === t.owner).length}))).filter(c => c.people > 0);
+  return {agency: ag ? {id: ag.id, short: ag.short, name: ag.name} : null, company: chart.company, total: chart.total || 0, known: chart.known || 0, team: chart.team || 0,
+    levels: chart.levels || [], gaps: chart.gaps || [], structure: chart.structure || null, contributors, pursuits: pursuitsOut,
+    openSeats: open.length, fillable: open.filter(s => s.candidates.length).length};
+}
 // An agency's top-level offices with the people placed in them (by title, then company).
 function officeStructure(ag, cards, coOf, order){
   const a = ag.a;
@@ -2567,6 +2596,7 @@ const api = {load, loadSample, loadFiles, clearNotes, clusters, placeClues, setC
   importTexts, importSnapshot, yearInReview, teamPack, teamShare, addTeamPack, setTeamShares, removeTeamPack, teamList, teamOverview, demoTeamShares, matchEnrichment, readNotes, memory, applyMail, clearMail, addProspects, clearProspects, addPursuit, updatePursuit, removePursuit, assignRole, setSeatOwner, pursuits, pursuit, coldSeats, pipeline, pursuitSheet, callPlan, matchAttendeeList, tagAttendees,
   teamingFinder, requestTeamingIntro,
   applyInbox, inboxRest, fiscalOf, setPursuitDate, upcomingDates, bidDecision, setBidAnswer, setCompetitor, competitors, captureDigest, setAsidePrograms: () => SET_ASIDE_PROGRAMS.map(([id, label]) => ({id, label})), awardRequests, awardPage, mergeAwardPages, demoAwardPages, recompetes, pursueAward, teamingPartners, federalAsOf: () => FEDERAL_AS_OF, moves, setRoleSince, quickLog, addIntro, setIntro, intros, trend, snapshot, targetChanges, ask, importSocial, clearSocial, socials, agencyCoverage, matchOpportunities, opportunityFilters, opportunityRequests, opportunityPage, demoOpportunities, markOpportunitiesSeen, orgChart, structureFor, setReportsTo, backup, restore, exportCSV, reminders, watch, constants, quote,
+  teamAgencyOrg,
   flightInfo, flightInfos, feedTrips, feedCheck, eventTrips, icsEvents, mergeOpportunities};
 // Every call goes through here: JSON string in, JSON string out, errors as {error}.
 globalThis.Bearings = {
