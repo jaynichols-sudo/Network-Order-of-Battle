@@ -107,6 +107,17 @@ function cardMenu(k, anchor, chart){
   ]);
 }
 
+/* ---------- team pursuits at this agency ---------- */
+// Open pursuits here (yours and your teammates', from shares already decrypted on this phone)
+// and the government seats nobody fills, with who on the chart could fill each.
+function teamSeats(company){
+  let o = null; try { o = M.api.teamAgencyOrg(company); } catch (e) { console.error(e); }
+  if (!o || !o.pursuits.length) return '';
+  return `<section class="card pad top12"><p class="eyebrow mono muted">TEAM PURSUITS HERE</p>
+    <p class="muted small">${esc(`${o.openSeats} open ${o.openSeats === 1 ? 'seat' : 'seats'}, ${o.fillable} with someone on the chart who could fill it`)}</p>
+    ${o.pursuits.map(p => `<p class="top8"><b>${esc(`${p.name} · ${p.owner} · ${p.stage}`)}</b></p>${p.seats.filter(x => !x.filled).map(x => `<div class="lrow"><span>${esc(x.role)}</span><span class="${x.candidates.length ? 'accent' : 'muted'} small">${esc(x.candidates.length ? x.candidates.map(c => `${c.name} (${c.via})`).join(', ') : 'No one yet')}</span></div>`).join('')}`).join('')}</section>`;
+}
+
 registerRoute('org', name => {
   let chart = null, wired = false;
   const view = {
@@ -123,6 +134,7 @@ registerRoute('org', name => {
       body.innerHTML = `<div class="org">
         <header class="org-head"><h1>${esc(chart.company)}</h1><p>${esc(`${fmt((chart.total || 0) - team)} you know${team ? ` · ${fmt(team)} through your team` : ''}`)}</p>
           ${chart.gaps.length ? `<div class="gapchips">${chart.gaps.map(g => `<span class="gapchip">${icon('alert')}No one senior in ${esc(g)}</span>`).join('')}</div>` : ''}</header>
+        ${teamSeats(chart.company)}
         ${levels}
         <p class="org-foot">LinkedIn doesn’t share who reports to whom. Press and hold a card and drop it on their manager, or use the menu on a card. Only you see this.</p></div>`;
       body.scrollTop = sc;

@@ -465,6 +465,14 @@ export async function pursueAward(item){
   return p && p.id;
 }
 
+/** One tap from the teaming finder into a pursuit's teaming seat (or an intro request). */
+export async function requestTeamingIntro(id, o){
+  let r = null;
+  await edit(o.via, () => { r = api.requestTeamingIntro(id, o); return r; });
+  await savePursuits();
+  return r;
+}
+
 /* ---------- event attendee lists ---------- */
 /** Matches an attendee CSV to the network. Throws a plain-English error when it has no name columns. */
 export async function matchAttendeeList(text, event){
