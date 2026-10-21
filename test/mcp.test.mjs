@@ -75,13 +75,14 @@ test('initialize, tools/list and ping follow MCP', async () => {
     assert.deepEqual((await s.request('ping')).result, {});
     const list = (await s.request('tools/list')).result.tools;
     const names = list.map(t => t.name).sort();
-    assert.deepEqual(names, ['agency_coverage', 'bid_decision', 'call_plan', 'capture_digest', 'cold_seats', 'log_note', 'network_summary', 'person', 'pipeline', 'pursuit', 'pursuits', 'recompetes', 'search_people',
-      'teaming_partners', 'waiting_on_me', 'ways_in', 'weekly_five', 'who_changed_jobs']);
+    assert.deepEqual(names, ['agency_coverage', 'bid_decision', 'call_plan', 'capture_digest', 'cold_seats', 'draft_follow_up', 'log_call', 'log_note', 'network_summary', 'person', 'pipeline', 'pursuit', 'pursuits', 'recompetes', 'search_people',
+      'teaming_partners', 'update_pursuit_stage', 'waiting_on_me', 'ways_in', 'weekly_five', 'who_changed_jobs']);
     for (const t of list){
       assert.match(t.name, /^[a-z_]+$/);
       assert.ok(t.description.length > 40, t.name);
       assert.equal(t.inputSchema.type, 'object');
-      assert.equal(t.annotations.readOnlyHint, t.name !== 'log_note', t.name);
+      assert.equal(t.annotations.readOnlyHint, !['log_note', 'log_call', 'update_pursuit_stage', 'draft_follow_up'].includes(t.name), t.name);
+      if (['log_call', 'update_pursuit_stage', 'draft_follow_up'].includes(t.name)) assert.ok(t.inputSchema.required.includes('confirm'), t.name);
     }
     const bad = await s.request('no/such/method');
     assert.equal(bad.error.code, -32601);
@@ -262,6 +263,66 @@ test('log_note leaves notes in ai-inbox.json and changes nothing else', async ()
   call('loadFiles', texts, null);
   assert.equal(call('applyInbox', JSON.stringify(inbox)).filed, 2);
   assert.match(call('person', k).ed.note, /\(Claude\): Talked about the zero trust gateway/);
+});
+
+test('write tools: nothing is saved without confirm: true, then the app files calls, stages and follow-ups', async () => {
+  const dir = path.join(root, 'writes'); writeSample(dir, {pro: true});
+  const before = fs.readdirSync(dir).sort().map(f => [f, fs.statSync(path.join(dir, f)).mtimeMs]);
+  const s = start({NORTHFIX_DATA: dir, NORTHFIX_STATE: path.join(root, 'state-writes')});
+  let k, pursuitName, pid;
+  const inboxFile = path.join(dir, 'ai-inbox.json');
+  try {
+    await s.request('initialize', {protocolVersion: '2025-06-18', capabilities: {}, clientInfo: {name: 'test', version: '1'}});
+    k = (await s.tool('search_people', {query: 'DISA', limit: 1})).structuredContent.people[0].key;
+    const ps = (await s.tool('pursuits', {})).structuredContent;
+    const first = (ps.pursuits || ps.items || [])[0];
+    pursuitName = first.name;
+    // previews: nothing written
+    const p1 = await s.tool('log_call', {name_or_key: k, summary: 'Walked through the gateway pilot.', follow_up_days: 7, confirm: false});
+    assert.equal(p1.structuredContent.saved, false);
+    assert.equal(p1.structuredContent.needsConfirm, true);
+    assert.match(text(p1), /confirm: true/);
+    const p2 = await s.tool('update_pursuit_stage', {pursuit: pursuitName, stage: 'Proposal'});
+    assert.equal(p2.structuredContent.saved, false);
+    const d1 = await s.tool('draft_follow_up', {name_or_key: k, purpose: 'the zero trust brief', follow_up_on: '2026-12-01', confirm: false});
+    assert.equal(d1.structuredContent.saved, false);
+    assert.match(d1.structuredContent.draft, /^Hi /);
+    assert.match(d1.structuredContent.draft, /zero trust brief/);
+    const d0 = await s.tool('draft_follow_up', {name_or_key: k, confirm: false});
+    assert.equal(d0.structuredContent.saved, false);
+    assert.ok(!fs.existsSync(inboxFile), 'previews write nothing');
+    // bad input
+    assert.equal((await s.tool('update_pursuit_stage', {pursuit: pursuitName, stage: 'Done', confirm: true})).isError, true);
+    assert.equal((await s.tool('draft_follow_up', {name_or_key: k, follow_up_on: 'next week', confirm: true})).isError, true);
+    assert.equal((await s.tool('log_call', {name_or_key: 'Nobody Atall', summary: 'x', confirm: true})).structuredContent.saved, false);
+    assert.ok(!fs.existsSync(inboxFile));
+    // confirmed
+    assert.equal((await s.tool('log_call', {name_or_key: k, summary: 'Walked through the gateway pilot.', follow_up_days: 7, confirm: true})).structuredContent.saved, true);
+    const st = await s.tool('update_pursuit_stage', {pursuit: pursuitName, stage: 'Proposal', confirm: true});
+    assert.equal(st.structuredContent.saved, true);
+    assert.equal((await s.tool('draft_follow_up', {name_or_key: k, purpose: 'the zero trust brief', follow_up_on: '2026-12-01', confirm: true})).structuredContent.saved, true);
+  } finally { s.stop(); }
+  const inbox = JSON.parse(fs.readFileSync(inboxFile, 'utf8'));
+  assert.deepEqual(inbox.notes.map(n => n.kind), ['call', 'stage', 'followup']);
+  pid = inbox.notes[1].pursuit;
+  assert.deepEqual(fs.readdirSync(dir).filter(f => f !== 'ai-inbox.json').sort().map(f => [f, fs.statSync(path.join(dir, f)).mtimeMs]), before, 'only the inbox is written');
+  new Function(fs.readFileSync('apple/Northfix/Resources/engine.js', 'utf8'))();
+  const call = (name, ...args) => JSON.parse(globalThis.Bearings.call(name, JSON.stringify(args))).ok;
+  const texts = {}; for (const f of ['network', 'edits', 'targets', 'pursuits']) texts[f] = fs.readFileSync(path.join(dir, f + '.json'), 'utf8');
+  call('loadFiles', texts, null);
+  const r = call('applyInbox', JSON.stringify(inbox));
+  assert.equal(r.filed, 3);
+  assert.equal(r.pursuits, 1);
+  const who = call('person', k);
+  assert.match(who.ed.note, /\(Claude\): Call: Walked through the gateway pilot/);
+  assert.match(who.ed.note, /Follow-up drafted: the zero trust brief/);
+  assert.equal(who.ed.due, '2026-12-01');
+  assert.equal(who.ed.touched, call('info').today);
+  assert.equal(call('pursuit', pid).stage, 'Proposal');
+  // filed entries are dropped from the inbox, one added meanwhile is kept
+  const extra = {kind: 'stage', pursuit: pid, stage: 'Submitted', at: '2099-01-01T00:00:00Z'};
+  const rest = call('inboxRest', JSON.stringify(inbox), JSON.stringify({notes: inbox.notes.concat([extra])}));
+  assert.deepEqual(JSON.parse(rest).notes, [extra]);
 });
 
 test('log_note never overwrites notes it can’t read, and writes whole files', async () => {
