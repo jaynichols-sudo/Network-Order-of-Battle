@@ -1192,6 +1192,57 @@ function callPlan(k, pursuitId){
   return {k, name: fullName(r), pursuit: p ? p.name : '', seat, facts, plan, prompt};
 }
 
+/* ---------- capture memo ---------- */
+// A bid/no-bid memo and call plans for one SAM.gov notice (an item from matchOpportunities),
+// from your network, pursuit notes and the notice itself. The iPhone and Mac hand `prompt` to the
+// on-device model; `memo` is the same memo written from a template, used everywhere else.
+// opts: {naics: ['541512', …], incumbent, notes}. Nothing leaves the device.
+function captureMemo(notice, opts){
+  const n = notice || {}, o = opts || {};
+  if (!n.title) throw new Error('Pick a notice first.');
+  const agency = String(n.agency || '').trim();
+  const p = (n.id && S.pursuits.find(x => x.source === n.id)) || (n.pursuitId && S.pursuits.find(x => x.id === n.pursuitId)) || null;
+  const ways = agency ? introPaths(agency) : {best: [], now: [], team: []};
+  const known = ways.now.length, warm = ways.now.map(k => S.byK.get(k)).filter(r => r && (r.wm.band === 'strong' || r.wm.band === 'warm')).length;
+  const incumbent = String(o.incumbent || (p && splitNames(p.incumbent)[0]) || (n.award && n.award.recipient) || '').trim();
+  const incKnown = incumbent ? live().filter(r => coHit(incumbent)(r.c)).length : 0;
+  const myNaics = (Array.isArray(o.naics) ? o.naics : String(o.naics || '').split(/[\s,]+/)).map(x => String(x).trim()).filter(Boolean);
+  const days = n.days != null ? +n.days : n.due ? -daysSince(n.due) : null;
+  const factors = [];
+  const add = (key, label, answer, why) => factors.push({key, label, answer, why});
+  add('relationships', 'Relationships at the agency', known >= 3 && warm ? 'yes' : known ? 'maybe' : 'no',
+    known ? `You know ${known} at ${agency}${warm ? `, ${warm} warm` : ''}.` : `No one at ${agency || 'this agency'} yet.`);
+  if (n.officeKnown != null) add('office', 'Inside the buying office', n.officeKnown > 0 ? 'yes' : 'no', n.officeKnown > 0 ? `${n.officeKnown} in ${n.office || 'the office'}.` : `No one in ${n.office || 'the buying office'} yet.`);
+  add('eligible', 'Set-aside fit', n.fit === 'no' ? 'no' : n.fit === 'yes' || !n.setAside ? 'yes' : 'maybe',
+    n.setAside ? `${n.setAside}${n.fit === 'no' ? ': you don’t qualify. Look for a prime to team under.' : n.fit === 'yes' ? ': you qualify.' : ': check you qualify.'}` : 'Full and open.');
+  if (myNaics.length && n.naics) add('naics', 'NAICS match', myNaics.includes(String(n.naics)) ? 'yes' : myNaics.some(c => c.slice(0, 4) === String(n.naics).slice(0, 4)) ? 'maybe' : 'no', `Notice NAICS ${n.naics}; yours: ${myNaics.join(', ')}.`);
+  if (days != null) add('time', 'Time to respond', days >= 21 ? 'yes' : days >= 10 ? 'maybe' : 'no', days < 0 ? 'The response date has passed.' : `${days} ${days === 1 ? 'day' : 'days'} until responses are due.`);
+  if (incumbent) add('incumbent', 'Read on the incumbent', incKnown ? 'yes' : 'maybe', incKnown ? `You know ${incKnown} at ${companyName(incumbent)}.` : `No one at ${companyName(incumbent)} yet.`);
+  if (p) add('pursuit', 'Capture work so far', pursuitSummary(p).filled >= 3 ? 'yes' : 'maybe', `Tracked as “${p.name}”, stage ${p.stage}, ${pursuitSummary(p).filled} of ${PURSUIT_ROLES.length} seats filled.`);
+  const pts = factors.reduce((a, f) => a + (f.answer === 'yes' ? 2 : f.answer === 'maybe' ? 1 : 0), 0);
+  const score = factors.length ? Math.round(pts / (factors.length * 2) * 100) : 0;
+  const noes = factors.filter(f => f.answer === 'no');
+  const blocker = factors.find(f => (f.key === 'eligible' || f.key === 'time') && f.answer === 'no');
+  let call, why;
+  if (blocker){ call = 'No bid'; why = blocker.key === 'eligible' ? 'You can’t bid as a prime. Find a prime to team under.' : 'Not enough time to write a credible response.'; }
+  else if (score >= 70 && noes.length <= 1){ call = 'Bid'; why = noes.length ? `Strong overall. Fix this first: ${noes[0].label.toLowerCase()}.` : 'Strong on every factor.'; }
+  else if (score >= 45){ call = 'Bid with conditions'; why = noes.length ? `Only if you can fix: ${noes.map(f => f.label.toLowerCase()).join('; ')}.` : 'Settle the open questions first.'; }
+  else { call = 'No bid'; why = 'Too many gaps. Keep tracking it and build relationships for the next one.'; }
+  const callPlans = ways.best.slice(0, 2).map(b => callPlan(b.k, p ? p.id : '')).filter(Boolean).map(c => ({k: c.k, name: c.name, plan: c.plan, prompt: c.prompt}));
+  const notes = [p && p.note, o.notes].map(x => String(x || '').trim()).filter(Boolean).join('\n').slice(-900);
+  const facts = [`Notice: ${n.title}${n.sol ? ` (${n.sol})` : ''}, ${n.type || 'notice'}.`, `Agency: ${n.agencyName || agency}${n.office ? `, ${n.office}` : ''}.`,
+    n.due ? `Responses due ${niceDate(n.due)}.` : '', n.setAside ? `Set-aside: ${n.setAside}.` : '', n.naics ? `NAICS ${n.naics}.` : '', incumbent ? `Incumbent: ${companyName(incumbent)}.` : '',
+    ...factors.map(f => `${f.label}: ${f.why}`), ...ways.best.slice(0, 3).map(b => { const r = S.byK.get(b.k); return r ? `Way in: ${fullName(r)}${r.p ? ', ' + r.p : ''}. ${b.why}` : ''; }),
+    notes ? `My notes: ${notes}` : ''].filter(Boolean);
+  const memo = [`Bid/no-bid: ${n.title}`, `Recommendation: ${call} (${score}/100). ${why}`, '', 'Factors', ...factors.map(f => `- ${f.label}: ${f.answer}. ${f.why}`),
+    ...(ways.best.length ? ['', 'Ways in', ...ways.best.slice(0, 3).map(b => { const r = S.byK.get(b.k); return `- ${r ? fullName(r) : b.k}: ${b.why}`; })] : []),
+    ...(notes ? ['', 'Notes', notes] : []),
+    '', 'Next steps', `- ${blocker && blocker.key === 'eligible' ? 'Find a prime that qualifies and ask to team.' : callPlans[0] ? `Call ${callPlans[0].name} this week.` : `Find someone at ${agency || 'the agency'} to talk to.`}`,
+    `- ${p ? 'Update the pursuit’s bid scorecard.' : 'Track it as a pursuit if you go ahead.'}`].join('\n');
+  const prompt = `Write a one-page bid/no-bid memo for a federal capture manager. Use only these facts and never invent names, dates or numbers. Sections: Recommendation (start with "${call}"), Why, Risks, Next steps (three bullets). Plain English, no em dashes.\n\nFacts:\n- ${facts.join('\n- ')}`;
+  return {title: n.title, call, why, score, factors, callPlans, pursuitId: p ? p.id : '', facts, memo, prompt};
+}
+
 /* ---------- event attendee lists ---------- */
 // A conference attendee or badge-scan list (CSV), matched to your network: who you already
 // know there, and who's new. People you don't know yet are kept as prospects, so they fill
@@ -1358,6 +1409,46 @@ function pursueAward(item){
   return addPursuit({name: String(x.title || x.piid || 'Recompete').slice(0, 120), agency: x.agency || '', due: x.end || '', value: x.amount ? money(x.amount) : '',
     stage: 'Tracking', incumbent: x.incumbent || '', source: x.id || ''});
 }
+/* ---------- recompete radar ---------- */
+// Expiring contracts joined with your coverage: who you know at the agency, at the incumbent and
+// through your team, the warmest way in for each, and alerts for new ones worth a look.
+// opts: {months (default 12), seen (ids already shown), limit}. Nothing leaves the device.
+const RADAR_HORIZONS = [[90, 'Next 90 days'], [180, 'In 3 to 6 months'], [366, 'In 6 to 12 months'], [Infinity, 'Later']];
+function recompeteRadar(pages, opts){
+  const o = opts || {};
+  const months = Math.max(3, Math.min(36, +o.months || 12));
+  const seen = new Set(Array.isArray(o.seen) ? o.seen : []);
+  const rc = recompetes(pages, {months, limit: 500});
+  const items = rc.items.map(x => {
+    const agencyWays = introPaths(x.agency).best.slice(0, 2);
+    const incWays = x.incumbent ? introPaths(x.incumbent).best.slice(0, 2) : [];
+    const team = x.incumbent ? teamPaths(coHit(x.incumbent)).slice(0, 2).map(t => ({owner: t.owner, name: t.name, p: t.p, b: t.b})) : [];
+    const ways = [];
+    for (const w of agencyWays){ const r = S.byK.get(w.k); if (r) ways.push({k: w.k, name: fullName(r), side: 'agency', why: w.why}); }
+    for (const w of incWays){ const r = S.byK.get(w.k); if (r && !ways.some(y => y.k === w.k)) ways.push({k: w.k, name: fullName(r), side: 'incumbent', why: w.why}); }
+    const horizon = RADAR_HORIZONS.find(([d]) => x.days <= d)[1];
+    const isNew = !seen.has(x.id);
+    const covered = x.known > 0 || x.incumbentKnown > 0 || team.length > 0;
+    return Object.assign({}, x, {horizon, isNew, covered, ways, team,
+      next: !covered ? `Find someone at ${x.agency} or ${x.incumbent || 'the incumbent'} before the solicitation.`
+        : x.tracked || x.pursuit ? 'Already tracked. Fill the empty seats on the pursuit.'
+        : ways[0] ? `Ask ${ways[0].name} what ${x.agency} plans for the follow-on.` : `Ask ${team[0].owner} for an intro at ${x.incumbent}.`});
+  });
+  const buckets = RADAR_HORIZONS.map(([, label]) => {
+    const xs = items.filter(x => x.horizon === label);
+    return {label, count: xs.length, covered: xs.filter(x => x.covered).length, value: xs.reduce((s, x) => s + x.amount, 0), valueText: money(xs.reduce((s, x) => s + x.amount, 0))};
+  }).filter(b => b.count);
+  const alerts = items.filter(x => x.isNew && x.days <= 365 && (x.covered || x.watched) && !x.tracked).slice(0, 5)
+    .map(x => ({id: x.id, title: `${x.agency}: ${x.title}`.slice(0, 110), body: `${x.incumbent || 'Incumbent not listed'}, ${x.amountText}, ends ${niceDate(x.end)}. ${x.line}.`}));
+  const top = items.filter(x => x.days <= 365).slice(0, 8);
+  const text = [`Recompete radar for the week of ${niceDate(TODAY)}`,
+    `${items.length} ${items.length === 1 ? 'contract ends' : 'contracts end'} in the next ${months} months at agencies you work (${rc.valueText}).`,
+    ...buckets.map(b => `${b.label}: ${b.count} (${b.valueText}), ${b.covered} where you know someone.`),
+    ...(top.length ? ['', 'Worth a call', ...top.map(x => `- ${x.agency}: ${x.title}, ${x.incumbent || 'incumbent not listed'}, ${x.amountText}, ends ${niceDate(x.end)}. ${x.next}`)] : [])].join('\n');
+  const limit = +o.limit > 0 ? +o.limit : 100;
+  return {months, total: items.length, value: rc.value, valueText: rc.valueText, newCount: items.filter(x => x.isNew).length,
+    items: items.slice(0, limit), buckets, alerts, ids: items.map(x => x.id), text};
+}
 /**
  * The companies that win work at these agencies, biggest first, with who you and your team
  * know at each. opts: {agency (one name to narrow to), limit}.
@@ -1385,6 +1476,54 @@ function teamingPartners(pages, opts){
   out.sort((p, q) => (q.known > 0) - (p.known > 0) || q.amount - p.amount);
   const limit = +o.limit > 0 ? +o.limit : 40;
   return {items: out.slice(0, limit), total: out.length, agency: want ? {id: want.id, short: want.short, name: want.name} : null};
+}
+
+/* ---------- teaming-partner finder ---------- */
+// Who wins work at one agency in a NAICS code (or its first four digits), with their recent
+// awards and the warmest way in to each. opts: {agency, naics, limit}.
+function teamingFinder(pages, opts){
+  const o = opts || {};
+  const want = o.agency ? agencyFor(o.agency, fedRows()) : null;
+  const naics = String(o.naics || '').replace(/\D/g, '');
+  const naicsHit = c => !naics || String(c || '').startsWith(naics.length >= 6 ? naics : naics.slice(0, Math.max(2, naics.length)));
+  const by = new Map();
+  for (const {a, x} of awardRows(pages)){
+    if (want && a.id !== want.id) continue;
+    if (!naicsHit(x.naics)) continue;
+    const key = coKey(x.recipient); if (!key) continue;
+    if (!by.has(key)) by.set(key, {name: companyName(x.recipient), amount: 0, awards: [], naics: new Set()});
+    const e = by.get(key); e.amount += x.amount; if (x.naics) e.naics.add(String(x.naics));
+    e.awards.push({id: x.id, title: x.desc ? x.desc.charAt(0).toUpperCase() + x.desc.slice(1).toLowerCase() : x.piid, amount: x.amount, amountText: money(x.amount), end: x.end || '', agency: a.short});
+  }
+  const items = [...by.values()].map(e => {
+    const hit = coHit(e.name);
+    const rs = live().filter(r => hit(r.c)).sort((p, q) => q.wm.score - p.wm.score);
+    const team = teamPaths(hit).slice(0, 3).map(t => ({owner: t.owner, name: t.name, p: t.p, b: t.b}));
+    const ways = introPaths(e.name).best.slice(0, 3).map(b => { const r = S.byK.get(b.k); return r ? {k: b.k, name: fullName(r), p: r.p || '', why: b.why, inside: hit(r.c)} : null; }).filter(Boolean);
+    e.awards.sort((p, q) => q.amount - p.amount);
+    return {name: e.name, amount: e.amount, amountText: money(e.amount), count: e.awards.length, awards: e.awards.slice(0, 3), naics: [...e.naics].slice(0, 4),
+      known: rs.length, warm: rs.filter(r => r.wm.band === 'strong' || r.wm.band === 'warm').length, ways, team, competitor: isCompetitor(e.name), watched: isTarget(e.name),
+      line: ways[0] ? `${ways[0].name}${ways[0].inside ? ' works there' : ' can introduce you'}` : team[0] ? `${team[0].owner} knows ${team[0].name}` : 'No way in yet'};
+  }).filter(x => !x.competitor || o.competitors);
+  items.sort((p, q) => (q.ways.length > 0) - (p.ways.length > 0) || q.amount - p.amount);
+  const limit = +o.limit > 0 ? +o.limit : 30;
+  return {agency: want ? {id: want.id, short: want.short, name: want.name} : null, naics, total: items.length, items: items.slice(0, limit)};
+}
+/**
+ * One tap from a finder result into a pursuit's teaming seat. The partner is added to the
+ * pursuit; someone you know inside the partner takes the seat; someone outside it gets an
+ * intro request logged on their profile. o: {partner, via (person key), to (who you want to meet)}.
+ */
+function requestTeamingIntro(id, o){
+  const p = S.pursuits.find(x => x.id === id); if (!p) throw new Error('That pursuit is gone.');
+  const partner = String((o && o.partner) || '').trim(); if (!partner) throw new Error('Pick a company.');
+  const names = splitNames(p.partners);
+  if (!names.some(n => coKey(n) === coKey(partner))) p.partners = names.concat(partner).join(', ');
+  const r = o && o.via ? S.byK.get(o.via) : null;
+  let seated = false, intro = false;
+  if (r && coHit(partner)(r.c)){ assignRole(id, 'Teaming partner', r.k, true); seated = true; }
+  else if (r){ addIntro(r.k, String((o && o.to) || `someone at ${partner}`), partner); intro = true; }
+  return {id: p.id, partners: splitNames(p.partners), seated, intro, via: r ? fullName(r) : '', edits: S.edits};
 }
 
 /* ---------- the sample network's pursuits ---------- */
@@ -2451,8 +2590,11 @@ function constants(){
 }
 
 const api = {load, loadSample, loadFiles, clearNotes, clusters, placeClues, setCompanyLocation, companyPlaces, messages, matchAttendees, alsoAt, setLens, info, people, person, search, facets, home, payoff, targets, unit, addTargetCandidates, toggleTarget, setTargetNote, orgs,
+  recompeteRadar,
   industries, industry, setCompanyIndustry, setCompanyLink, ranks, deck, deckCount, reviewed, radar, compass, startFromContacts, introPaths, weekly, touch, setCircle, setEdit, followUp, markReplied, addNote,
+  captureMemo,
   importTexts, importSnapshot, yearInReview, teamPack, teamShare, addTeamPack, setTeamShares, removeTeamPack, teamList, teamOverview, demoTeamShares, matchEnrichment, readNotes, memory, applyMail, clearMail, addProspects, clearProspects, addPursuit, updatePursuit, removePursuit, assignRole, setSeatOwner, pursuits, pursuit, coldSeats, pipeline, pursuitSheet, callPlan, matchAttendeeList, tagAttendees,
+  teamingFinder, requestTeamingIntro,
   applyInbox, inboxRest, fiscalOf, setPursuitDate, upcomingDates, bidDecision, setBidAnswer, setCompetitor, competitors, captureDigest, setAsidePrograms: () => SET_ASIDE_PROGRAMS.map(([id, label]) => ({id, label})), awardRequests, awardPage, mergeAwardPages, demoAwardPages, recompetes, pursueAward, teamingPartners, federalAsOf: () => FEDERAL_AS_OF, moves, setRoleSince, quickLog, addIntro, setIntro, intros, trend, snapshot, targetChanges, ask, importSocial, clearSocial, socials, agencyCoverage, matchOpportunities, opportunityFilters, opportunityRequests, opportunityPage, demoOpportunities, markOpportunitiesSeen, orgChart, structureFor, setReportsTo, backup, restore, exportCSV, reminders, watch, constants, quote,
   teamAgencyOrg,
   flightInfo, flightInfos, feedTrips, feedCheck, eventTrips, icsEvents, mergeOpportunities};

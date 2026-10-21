@@ -10,7 +10,7 @@ import { registerRoute, openSheet, push, refreshVisible } from './nav.js';
 import { open, openPerson, openUnit, register } from './actions.js';
 import { personRow } from './people.js';
 import { openNewPursuit } from './pursuits.js';
-import { NATIVE, ls, openURL, fx, prefs } from './platform.js';
+import { NATIVE, ls, openURL, fx, prefs, shareText } from './platform.js';
 import { Secrets } from './secrets.js';
 
 const SAM_URL = 'https://api.sam.gov/opportunities/v2/search';
@@ -233,6 +233,7 @@ registerRoute('opportunity', id => {
           <button type="button" class="row act" data-a="ways">${icon('waysIn')}<span>Find a way in</span></button>
           ${o.pursuitId ? `<button type="button" class="row act" data-a="pursuit">${icon('target')}<span>${esc(`Pursuit: ${o.pursuit}`)}</span>${icon('chevR', 'chev')}</button>` : `<button type="button" class="row act" data-a="pursue">${icon('target')}<span>Start a pursuit for this</span></button>`}
           ${!o.watched && o.agencyId ? `<button type="button" class="row act accent" data-a="watch">${icon('star')}<span>${esc(`Watch ${o.agency}`)}</span></button>` : ''}</div>
+        <div class="card list actions top12"><button type="button" class="row act accent" data-a="memo">${icon('note')}<span>Bid/no-bid memo and call plans</span>${icon('chevR', 'chev')}</button></div>
         <p class="sec-h">Details</p><div class="card pad">
           ${lrow('Notice number', o.sol)}${lrow('Posted', Day.nice(o.posted))}${lrow('Responses due', o.due ? Day.nice(o.due) : '')}${lrow('NAICS', o.naics)}${lrow('Set-aside', o.setAside)}
           ${o.award ? lrow('Awarded to', o.award.awardee) + lrow('Amount', amt) : ''}${lrow('Part of', o.area)}
@@ -244,12 +245,32 @@ registerRoute('opportunity', id => {
       unit(){ const o = opportunity(id); if (o) openUnit(o.agency); },
       ways(){ const o = opportunity(id); if (o) open('intro', o.agency); },
       pursuit(){ const o = opportunity(id); if (o) push('pursuit', o.pursuitId); },
+      memo(){ const o = opportunity(id); if (o){ fx.tap(); openMemo(o); } },
       pursue(){ const o = opportunity(id); if (o){ fx.tap(); openNewPursuit(o.agency); } },
       async watch(_, t){ const o = opportunity(id); if (!o) return; await toggleTarget(o.agency); rematch(true); view.update(t.closest('.page-body')); },
     },
   };
   return view;
 });
+
+/* ---------- capture memo ---------- */
+// The engine's template memo (captureMemo). Android has no on-device model, so it's the same
+// facts written plainly. Nothing leaves the phone.
+function openMemo(o){
+  const m = tryOr(() => M.api.captureMemo(o, {naics: samPrefs().naics}), null);
+  if (!m) return;
+  openSheet({
+    title: 'Bid / no bid', left: ['Close'], full: true,
+    mount(body){
+      body.innerHTML = `<div class="card pad"><p class="eyebrow mono muted">${esc(o.agency.toUpperCase())}</p><h2 class="serif">${esc(`${m.call} · ${m.score}/100`)}</h2><p class="muted">${esc(m.why)}</p></div>
+        <div class="card pad top12">${m.factors.map(f => `<div class="lrow"><span>${esc(f.label)}</span><span class="${f.answer === 'yes' ? 'good' : f.answer === 'no' ? 'bad' : 'muted'}">${esc(f.answer)}</span></div><p class="muted small">${esc(f.why)}</p>`).join('')}</div>
+        ${m.callPlans.map(c => `<p class="sec-h">${esc('Call plan: ' + c.name)}</p><div class="card pad"><p class="small" style="white-space:pre-wrap">${esc(c.plan)}</p></div>`).join('')}
+        <div class="btn-row left top12"><button type="button" class="btn small" data-a="share">${icon('share')}Share the memo</button></div>
+        <p class="lock-note">${icon('lock')}Written on this phone from your own data.</p>`;
+    },
+    handlers: { share(){ shareText(m.memo, 'Bid/no-bid memo'); } },
+  });
+}
 
 /* ---------- on an agency's page ---------- */
 /** "Open on SAM.gov: N" for a company page, when the name is an agency on the federal map. */
