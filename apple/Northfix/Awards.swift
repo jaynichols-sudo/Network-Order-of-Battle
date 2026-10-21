@@ -322,6 +322,7 @@ struct AwardsView: View {
     }
 
     @ViewBuilder private var recompetesBody: some View {
+        RecompeteRadarSection(months: months)
         Section {
             VStack(alignment: .leading, spacing: 6) {
                 Text("ENDING IN THE NEXT \(months) MONTHS").font(Theme.eyebrow).tracking(1.1).foregroundStyle(Theme.text2)
