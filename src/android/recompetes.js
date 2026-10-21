@@ -8,7 +8,7 @@ import { esc, fmt, icon, stack, empty, segmented, flag, Day } from './ui.js';
 import { registerRoute, openSheet, closeSheet, push, refreshVisible } from './nav.js';
 import { openPerson, openUnit, register } from './actions.js';
 import { personRow } from './people.js';
-import { NATIVE, ls, openURL, fx } from './platform.js';
+import { NATIVE, ls, openURL, fx, shareText } from './platform.js';
 
 const FRESH = 24 * 3600e3;
 const FETCH_MONTHS = 24;
@@ -86,6 +86,22 @@ const months = () => [12, 18, 24].includes(+ls.get(MONTHS)) ? +ls.get(MONTHS) : 
 export const awardPages = () => { loadCache(); return st.pages; };
 export const recompeteList = (m = months()) => tryOr(() => M.api.recompetes(st.pages, {months: m}), null);
 export const partnerList = () => tryOr(() => M.api.teamingPartners(st.pages, {}), null);
+/* ---------- recompete radar ---------- */
+// New contracts are remembered once shown, on this phone only.
+const RADAR_SEEN = 'northfix.radar.seen';
+export function radarNow(m = 12, mark = true){
+  const seen = ls.json(RADAR_SEEN, []);
+  const r = tryOr(() => M.api.recompeteRadar(st.pages, {months: Math.min(m, 12), seen, limit: 20}), null);
+  if (r && mark) ls.set(RADAR_SEEN, JSON.stringify([...new Set(seen.concat(r.ids))].slice(-2000)));
+  return r;
+}
+function radarCard(r){
+  if (!r || !r.total) return '';
+  return `<div class="card pad top12"><p class="eyebrow mono muted">RECOMPETE RADAR${r.newCount ? ` · ${fmt(r.newCount)} NEW` : ''}</p>
+    ${r.buckets.map(b => `<div class="lrow"><span>${esc(b.label)}</span><span class="muted">${esc(`${b.count} · ${b.valueText} · ${b.covered} covered`)}</span></div>`).join('')}
+    ${r.items.slice(0, 5).map(x => `<button type="button" class="row opp-row" data-a="rec" data-v="${esc(x.id)}"><span class="hl-main"><span class="eyebrow mono ${x.isNew ? 'accent' : 'muted'}">${esc(`${x.agency} · ${x.horizon}${x.isNew ? ' · New' : ''}`.toUpperCase())}</span><b>${esc(x.title)}</b><span class="muted small">${esc(x.next)}</span></span>${icon('chevR', 'chev')}</button>`).join('')}
+    <div class="btn-row left"><button type="button" class="btn small" data-a="radarShare">${icon('share')}Share the radar</button></div></div>`;
+}
 const recompete = id => { const r = recompeteList(36); return r ? r.items.find(x => x.id === id) || null : null; };
 
 /* ---------- pieces ---------- */
@@ -120,7 +136,8 @@ registerRoute('recompetes', () => {
       if (busy) main = '<p class="foot">Checking USASpending.gov…</p>';
       else if (tab === 'recompetes'){
         const m = months(), r = recompeteList(m);
-        main = `<div class="seg-wrap">${segmented('months', [['12', '12 months'], ['18', '18 months'], ['24', '24 months']], String(m))}</div>
+        const radar = radarNow(m);
+        main = `${radarCard(radar)}<div class="seg-wrap">${segmented('months', [['12', '12 months'], ['18', '18 months'], ['24', '24 months']], String(m))}</div>
           <div class="card pad opp-head top12"><p class="eyebrow mono muted">${esc(`ENDING IN THE NEXT ${m} MONTHS`)}</p>
             <p><b class="serif big">${fmt(r ? r.total : 0)}</b> <span class="muted">${r && r.total === 1 ? 'contract' : 'contracts'} at the agencies you work${r && r.value ? `, ${esc(r.valueText)} in all` : ''}</span></p>
             ${st.error ? `<p class="small bad">${esc(st.error)}</p>` : ''}</div>
@@ -143,6 +160,7 @@ registerRoute('recompetes', () => {
       months(v, t){ fx.select(); ls.set(MONTHS, v); view.update(t.closest('.page-body')); },
       rec: id => { fx.tap(); push('recompete', id); },
       partner(i){ const r = partnerList(), x = r && r.items[+i]; if (x){ fx.tap(); openPartner(x); } },
+      radarShare(){ const r = radarNow(12, false); if (r) shareText(r.text, 'Recompete radar'); },
       open: k => openPerson(k),
       async check(_, t){ const body = t.closest('.page-body'); t.disabled = true; const p = refreshAwards(true); view.update(body); await p; if (body.isConnected) view.update(body); },
     },
