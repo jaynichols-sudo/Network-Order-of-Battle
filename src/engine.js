@@ -1192,6 +1192,57 @@ function callPlan(k, pursuitId){
   return {k, name: fullName(r), pursuit: p ? p.name : '', seat, facts, plan, prompt};
 }
 
+/* ---------- capture memo ---------- */
+// A bid/no-bid memo and call plans for one SAM.gov notice (an item from matchOpportunities),
+// from your network, pursuit notes and the notice itself. The iPhone and Mac hand `prompt` to the
+// on-device model; `memo` is the same memo written from a template, used everywhere else.
+// opts: {naics: ['541512', …], incumbent, notes}. Nothing leaves the device.
+function captureMemo(notice, opts){
+  const n = notice || {}, o = opts || {};
+  if (!n.title) throw new Error('Pick a notice first.');
+  const agency = String(n.agency || '').trim();
+  const p = (n.id && S.pursuits.find(x => x.source === n.id)) || (n.pursuitId && S.pursuits.find(x => x.id === n.pursuitId)) || null;
+  const ways = agency ? introPaths(agency) : {best: [], now: [], team: []};
+  const known = ways.now.length, warm = ways.now.map(k => S.byK.get(k)).filter(r => r && (r.wm.band === 'strong' || r.wm.band === 'warm')).length;
+  const incumbent = String(o.incumbent || (p && splitNames(p.incumbent)[0]) || (n.award && n.award.recipient) || '').trim();
+  const incKnown = incumbent ? live().filter(r => coHit(incumbent)(r.c)).length : 0;
+  const myNaics = (Array.isArray(o.naics) ? o.naics : String(o.naics || '').split(/[\s,]+/)).map(x => String(x).trim()).filter(Boolean);
+  const days = n.days != null ? +n.days : n.due ? -daysSince(n.due) : null;
+  const factors = [];
+  const add = (key, label, answer, why) => factors.push({key, label, answer, why});
+  add('relationships', 'Relationships at the agency', known >= 3 && warm ? 'yes' : known ? 'maybe' : 'no',
+    known ? `You know ${known} at ${agency}${warm ? `, ${warm} warm` : ''}.` : `No one at ${agency || 'this agency'} yet.`);
+  if (n.officeKnown != null) add('office', 'Inside the buying office', n.officeKnown > 0 ? 'yes' : 'no', n.officeKnown > 0 ? `${n.officeKnown} in ${n.office || 'the office'}.` : `No one in ${n.office || 'the buying office'} yet.`);
+  add('eligible', 'Set-aside fit', n.fit === 'no' ? 'no' : n.fit === 'yes' || !n.setAside ? 'yes' : 'maybe',
+    n.setAside ? `${n.setAside}${n.fit === 'no' ? ': you don’t qualify. Look for a prime to team under.' : n.fit === 'yes' ? ': you qualify.' : ': check you qualify.'}` : 'Full and open.');
+  if (myNaics.length && n.naics) add('naics', 'NAICS match', myNaics.includes(String(n.naics)) ? 'yes' : myNaics.some(c => c.slice(0, 4) === String(n.naics).slice(0, 4)) ? 'maybe' : 'no', `Notice NAICS ${n.naics}; yours: ${myNaics.join(', ')}.`);
+  if (days != null) add('time', 'Time to respond', days >= 21 ? 'yes' : days >= 10 ? 'maybe' : 'no', days < 0 ? 'The response date has passed.' : `${days} ${days === 1 ? 'day' : 'days'} until responses are due.`);
+  if (incumbent) add('incumbent', 'Read on the incumbent', incKnown ? 'yes' : 'maybe', incKnown ? `You know ${incKnown} at ${companyName(incumbent)}.` : `No one at ${companyName(incumbent)} yet.`);
+  if (p) add('pursuit', 'Capture work so far', pursuitSummary(p).filled >= 3 ? 'yes' : 'maybe', `Tracked as “${p.name}”, stage ${p.stage}, ${pursuitSummary(p).filled} of ${PURSUIT_ROLES.length} seats filled.`);
+  const pts = factors.reduce((a, f) => a + (f.answer === 'yes' ? 2 : f.answer === 'maybe' ? 1 : 0), 0);
+  const score = factors.length ? Math.round(pts / (factors.length * 2) * 100) : 0;
+  const noes = factors.filter(f => f.answer === 'no');
+  const blocker = factors.find(f => (f.key === 'eligible' || f.key === 'time') && f.answer === 'no');
+  let call, why;
+  if (blocker){ call = 'No bid'; why = blocker.key === 'eligible' ? 'You can’t bid as a prime. Find a prime to team under.' : 'Not enough time to write a credible response.'; }
+  else if (score >= 70 && noes.length <= 1){ call = 'Bid'; why = noes.length ? `Strong overall. Fix this first: ${noes[0].label.toLowerCase()}.` : 'Strong on every factor.'; }
+  else if (score >= 45){ call = 'Bid with conditions'; why = noes.length ? `Only if you can fix: ${noes.map(f => f.label.toLowerCase()).join('; ')}.` : 'Settle the open questions first.'; }
+  else { call = 'No bid'; why = 'Too many gaps. Keep tracking it and build relationships for the next one.'; }
+  const callPlans = ways.best.slice(0, 2).map(b => callPlan(b.k, p ? p.id : '')).filter(Boolean).map(c => ({k: c.k, name: c.name, plan: c.plan, prompt: c.prompt}));
+  const notes = [p && p.note, o.notes].map(x => String(x || '').trim()).filter(Boolean).join('\n').slice(-900);
+  const facts = [`Notice: ${n.title}${n.sol ? ` (${n.sol})` : ''}, ${n.type || 'notice'}.`, `Agency: ${n.agencyName || agency}${n.office ? `, ${n.office}` : ''}.`,
+    n.due ? `Responses due ${niceDate(n.due)}.` : '', n.setAside ? `Set-aside: ${n.setAside}.` : '', n.naics ? `NAICS ${n.naics}.` : '', incumbent ? `Incumbent: ${companyName(incumbent)}.` : '',
+    ...factors.map(f => `${f.label}: ${f.why}`), ...ways.best.slice(0, 3).map(b => { const r = S.byK.get(b.k); return r ? `Way in: ${fullName(r)}${r.p ? ', ' + r.p : ''}. ${b.why}` : ''; }),
+    notes ? `My notes: ${notes}` : ''].filter(Boolean);
+  const memo = [`Bid/no-bid: ${n.title}`, `Recommendation: ${call} (${score}/100). ${why}`, '', 'Factors', ...factors.map(f => `- ${f.label}: ${f.answer}. ${f.why}`),
+    ...(ways.best.length ? ['', 'Ways in', ...ways.best.slice(0, 3).map(b => { const r = S.byK.get(b.k); return `- ${r ? fullName(r) : b.k}: ${b.why}`; })] : []),
+    ...(notes ? ['', 'Notes', notes] : []),
+    '', 'Next steps', `- ${blocker && blocker.key === 'eligible' ? 'Find a prime that qualifies and ask to team.' : callPlans[0] ? `Call ${callPlans[0].name} this week.` : `Find someone at ${agency || 'the agency'} to talk to.`}`,
+    `- ${p ? 'Update the pursuit’s bid scorecard.' : 'Track it as a pursuit if you go ahead.'}`].join('\n');
+  const prompt = `Write a one-page bid/no-bid memo for a federal capture manager. Use only these facts and never invent names, dates or numbers. Sections: Recommendation (start with "${call}"), Why, Risks, Next steps (three bullets). Plain English, no em dashes.\n\nFacts:\n- ${facts.join('\n- ')}`;
+  return {title: n.title, call, why, score, factors, callPlans, pursuitId: p ? p.id : '', facts, memo, prompt};
+}
+
 /* ---------- event attendee lists ---------- */
 // A conference attendee or badge-scan list (CSV), matched to your network: who you already
 // know there, and who's new. People you don't know yet are kept as prospects, so they fill
@@ -2464,6 +2515,7 @@ function constants(){
 const api = {load, loadSample, loadFiles, clearNotes, clusters, placeClues, setCompanyLocation, companyPlaces, messages, matchAttendees, alsoAt, setLens, info, people, person, search, facets, home, payoff, targets, unit, addTargetCandidates, toggleTarget, setTargetNote, orgs,
   recompeteRadar,
   industries, industry, setCompanyIndustry, setCompanyLink, ranks, deck, deckCount, reviewed, radar, compass, startFromContacts, introPaths, weekly, touch, setCircle, setEdit, followUp, markReplied, addNote,
+  captureMemo,
   importTexts, importSnapshot, yearInReview, teamPack, teamShare, addTeamPack, setTeamShares, removeTeamPack, teamList, teamOverview, demoTeamShares, matchEnrichment, readNotes, memory, applyMail, clearMail, addProspects, clearProspects, addPursuit, updatePursuit, removePursuit, assignRole, setSeatOwner, pursuits, pursuit, coldSeats, pipeline, pursuitSheet, callPlan, matchAttendeeList, tagAttendees,
   applyInbox, inboxRest, fiscalOf, setPursuitDate, upcomingDates, bidDecision, setBidAnswer, setCompetitor, competitors, captureDigest, setAsidePrograms: () => SET_ASIDE_PROGRAMS.map(([id, label]) => ({id, label})), awardRequests, awardPage, mergeAwardPages, demoAwardPages, recompetes, pursueAward, teamingPartners, federalAsOf: () => FEDERAL_AS_OF, moves, setRoleSince, quickLog, addIntro, setIntro, intros, trend, snapshot, targetChanges, ask, importSocial, clearSocial, socials, agencyCoverage, matchOpportunities, opportunityFilters, opportunityRequests, opportunityPage, demoOpportunities, markOpportunitiesSeen, orgChart, structureFor, setReportsTo, backup, restore, exportCSV, reminders, watch, constants, quote,
   flightInfo, flightInfos, feedTrips, feedCheck, eventTrips, icsEvents, mergeOpportunities};

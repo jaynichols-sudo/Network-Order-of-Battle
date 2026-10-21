@@ -101,6 +101,14 @@ enum Brief {
         return out
     }
 
+    /// A bid/no-bid memo from the engine's prompt (captureMemo), written on this device. Nil without Apple Intelligence.
+    static func captureMemo(_ prompt: String, key: String) async -> String? {
+        if let hit = cache["memo|" + key] { return hit }
+        guard let out = await respond(prompt, instructions: "You help a federal capture manager decide whether to bid. Be candid about gaps. " + style) else { return nil }
+        cache["memo|" + key] = out
+        return out
+    }
+
     private static func respond(_ prompt: String, instructions: String) async -> String? {
         #if canImport(FoundationModels)
         if #available(iOS 26.0, *) {
