@@ -19,7 +19,7 @@ Ask things like:
 
 ## Tools
 
-All tools are read-only except `log_note`, which saves a note only when you ask.
+All tools are read-only except four that write. `log_note` saves a note when you ask. `log_call`, `update_pursuit_stage` and `draft_follow_up` first show a preview and save only when called again with `confirm: true` after you say yes.
 
 | Tool | What it answers |
 | --- | --- |
@@ -38,6 +38,9 @@ All tools are read-only except `log_note`, which saves a note only when you ask.
 | `recompetes(agencies?, months?)` | Contracts ending soon at your agencies, from USASpending.gov: incumbent, value, end date, who you know at the agency and the incumbent |
 | `teaming_partners(agency)` | Companies that win work at an agency, from USASpending.gov, with who you and your team know at each |
 | `log_note(name_or_key, note)` | Saves a dated note on a person. Northfix files it the next time it opens on your Mac |
+| `log_call(name_or_key, summary, follow_up_days?, confirm)` | Logs a call: a dated "Call:" note, marks them contacted today, optional follow-up. Saves only with `confirm: true` |
+| `update_pursuit_stage(pursuit, stage, confirm)` | Moves a pursuit to Tracking, Pursuing, Proposal, Submitted, Won or Lost. Saves only with `confirm: true` |
+| `draft_follow_up(name_or_key, purpose?, follow_up_on?, confirm)` | Drafts a follow-up message for you to send yourself (never sent). Saves the follow-up date only with `confirm: true` |
 | `network_summary()` | A short overview of your network. Always free |
 
 Each answer comes back as short text for the AI to read, plus the same facts as structured data.
@@ -99,7 +102,7 @@ For other apps, look for "MCP servers", "connectors" or "tools" in settings and 
 - **Nothing goes to Northfix.** There's no Northfix server involved, no account and no analytics.
 - **Only agency names go to USASpending.gov.** `recompetes` and `teaming_partners` ask USASpending.gov, the federal government's public spending site, for contract awards. The request holds the agency name and dates, never anyone from your network. Every other tool makes no network connections at all.
 - **Your AI app sees only the answers.** It gets the answer to each question you ask, nothing more. It never gets your whole network file. What your AI app does with an answer is covered by that app's own privacy policy. For example, Claude Desktop sends your chat, including tool answers, to Anthropic to reply.
-- **Read-only, except notes you ask to save.** The server never changes your network, notes or follow-ups. `log_note` writes `ai-inbox.json` in your Northfix folder; the app files those notes on the right people when it next opens on your Mac, then deletes the file. The only other file it writes is the free plan's daily count, outside your Northfix folder.
+- **Read-only, except changes you approve.** The server never changes your network files directly. `log_note`, and `log_call`, `update_pursuit_stage` and `draft_follow_up` with `confirm: true`, write `ai-inbox.json` in your Northfix folder; the app files them when it next opens on your Mac, then deletes the file. Nothing is ever sent to anyone. The only other file it writes is the free plan's daily count, outside your Northfix folder.
 - Answers can include the email address on a contact when it's in your own data, because it's your data.
 
 ## Northfix Pro
