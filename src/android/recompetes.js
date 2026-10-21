@@ -3,7 +3,7 @@
 // your watchlist and open pursuits, at most once a day. Only the agency name is sent. The engine
 // (src/awards.js) reads the answers and says who you know at the agency and at the incumbent.
 import { CapacitorHttp } from '@capacitor/core';
-import { M, isSample, persons, pursueAward, toggleTarget, show } from './model.js';
+import { M, isSample, persons, pursueAward, toggleTarget, show, pursuits, requestTeamingIntro } from './model.js';
 import { esc, fmt, icon, stack, empty, segmented, flag, Day } from './ui.js';
 import { registerRoute, openSheet, closeSheet, push, refreshVisible } from './nav.js';
 import { openPerson, openUnit, register } from './actions.js';
@@ -86,6 +86,35 @@ const months = () => [12, 18, 24].includes(+ls.get(MONTHS)) ? +ls.get(MONTHS) : 
 export const awardPages = () => { loadCache(); return st.pages; };
 export const recompeteList = (m = months()) => tryOr(() => M.api.recompetes(st.pages, {months: m}), null);
 export const partnerList = () => tryOr(() => M.api.teamingPartners(st.pages, {}), null);
+/* ---------- teaming-partner finder ---------- */
+const FINDER = 'northfix.finder';
+const finderPrefs = () => Object.assign({agency: '', naics: ''}, ls.json(FINDER, {}));
+const finderList = () => { const f = finderPrefs(); return (f.agency.length >= 2 || f.naics.length >= 2) ? tryOr(() => M.api.teamingFinder(st.pages, Object.assign({limit: 20}, f)), null) : null; };
+function finderCard(){
+  const f = finderPrefs(), r = finderList();
+  return `<div class="card pad top12"><p class="eyebrow mono muted">FIND A TEAMING PARTNER</p>
+    <input type="text" class="field" data-in="fAgency" value="${esc(f.agency)}" placeholder="Agency, like NAVFAC" aria-label="Agency">
+    <input type="text" class="field top8" data-in="fNaics" value="${esc(f.naics)}" placeholder="NAICS code, like 541512" inputmode="numeric" aria-label="NAICS code">
+    <div class="btn-row left"><button type="button" class="btn small" data-a="find">${icon('search')}Find</button></div>
+    ${r ? (r.items.length ? r.items.slice(0, 10).map((x, i) => `<div class="row static"><span class="grow"><b>${esc(x.name)}</b><span class="muted small">${esc(`${x.count} ${x.count === 1 ? 'award' : 'awards'} · ${x.amountText}${x.naics.length ? ' · NAICS ' + x.naics.join(', ') : ''}`)}</span><span class="small ${x.ways.length ? 'good' : 'muted'}">${esc(x.line)}</span></span>
+      ${x.ways.length ? `<button type="button" class="btn small" data-a="seat" data-v="${i}">${icon('personPlus')}Pursuit</button>` : ''}</div>`).join('') : '<p class="muted small">No one with awards there in that code yet.</p>') : ''}</div>`;
+}
+function openSeatPicker(x, onDone){
+  const open = pursuits().filter(p => p.stage !== 'Won' && p.stage !== 'Lost');
+  const w = x.ways[0];
+  openSheet({
+    title: w.inside ? `Seat ${w.name}` : `Intro via ${w.name}`, left: ['Close'],
+    mount(body){
+      body.innerHTML = open.length ? `<p class="foot">${esc(w.inside ? `${w.name} works at ${x.name}. Pick the pursuit to put them in the teaming seat.` : `Log an intro request with ${w.name} to ${x.name}, and add ${x.name} as a teaming partner.`)}</p>
+        <div class="card list">${open.map(p => `<button type="button" class="row act" data-a="pick" data-v="${esc(p.id)}">${icon('target')}<span>${esc(p.name)}</span></button>`).join('')}</div>`
+        : '<p class="foot">Start a pursuit first.</p>';
+    },
+    handlers: {
+      async pick(id){ const r = await requestTeamingIntro(id, {partner: x.name, via: w.k, to: `the capture lead at ${x.name}`}); closeSheet(); fx.success(); show(r && r.seated ? `${w.name} is in the teaming seat.` : `Intro request logged with ${w.name}.`); onDone && onDone(); },
+    },
+  });
+}
+
 const recompete = id => { const r = recompeteList(36); return r ? r.items.find(x => x.id === id) || null : null; };
 
 /* ---------- pieces ---------- */
@@ -130,7 +159,7 @@ registerRoute('recompetes', () => {
         main = `<div class="card pad opp-head"><p class="eyebrow mono muted">WHO WINS WORK WHERE YOU DO</p>
             <p><b class="serif big">${fmt(r ? r.total : 0)}</b> <span class="muted">${r && r.total === 1 ? 'company' : 'companies'} holding contracts at the agencies you work</span></p>
             ${st.error ? `<p class="small bad">${esc(st.error)}</p>` : ''}</div>
-          ${r && r.items.length ? `<div class="card list">${r.items.map(partnerRow).join('')}</div>` : '<p class="foot">No contract data yet. Use Check now.</p>'}`;
+          ${r && r.items.length ? `<div class="card list">${r.items.map(partnerRow).join('')}</div>` : '<p class="foot">No contract data yet. Use Check now.</p>'}}${finderCard()}`;
       }
       body.innerHTML = `<div class="seg-wrap">${segmented('tab', [['recompetes', 'Recompetes'], ['partners', 'Teaming partners']], tab)}</div>
         ${main}
@@ -143,6 +172,8 @@ registerRoute('recompetes', () => {
       months(v, t){ fx.select(); ls.set(MONTHS, v); view.update(t.closest('.page-body')); },
       rec: id => { fx.tap(); push('recompete', id); },
       partner(i){ const r = partnerList(), x = r && r.items[+i]; if (x){ fx.tap(); openPartner(x); } },
+      find(_, t){ const body = t.closest('.page-body'); const v = n => (body.querySelector(`[data-in="${n}"]`) || {}).value || ''; ls.set(FINDER, JSON.stringify({agency: v('fAgency').trim(), naics: v('fNaics').replace(/\D/g, '')})); view.update(body); },
+      seat(i){ const r = finderList(), x = r && r.items[+i]; if (x) openSeatPicker(x); },
       open: k => openPerson(k),
       async check(_, t){ const body = t.closest('.page-body'); t.disabled = true; const p = refreshAwards(true); view.update(body); await p; if (body.isConnected) view.update(body); },
     },

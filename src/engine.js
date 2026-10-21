@@ -1387,6 +1387,54 @@ function teamingPartners(pages, opts){
   return {items: out.slice(0, limit), total: out.length, agency: want ? {id: want.id, short: want.short, name: want.name} : null};
 }
 
+/* ---------- teaming-partner finder ---------- */
+// Who wins work at one agency in a NAICS code (or its first four digits), with their recent
+// awards and the warmest way in to each. opts: {agency, naics, limit}.
+function teamingFinder(pages, opts){
+  const o = opts || {};
+  const want = o.agency ? agencyFor(o.agency, fedRows()) : null;
+  const naics = String(o.naics || '').replace(/\D/g, '');
+  const naicsHit = c => !naics || String(c || '').startsWith(naics.length >= 6 ? naics : naics.slice(0, Math.max(2, naics.length)));
+  const by = new Map();
+  for (const {a, x} of awardRows(pages)){
+    if (want && a.id !== want.id) continue;
+    if (!naicsHit(x.naics)) continue;
+    const key = coKey(x.recipient); if (!key) continue;
+    if (!by.has(key)) by.set(key, {name: companyName(x.recipient), amount: 0, awards: [], naics: new Set()});
+    const e = by.get(key); e.amount += x.amount; if (x.naics) e.naics.add(String(x.naics));
+    e.awards.push({id: x.id, title: x.desc ? x.desc.charAt(0).toUpperCase() + x.desc.slice(1).toLowerCase() : x.piid, amount: x.amount, amountText: money(x.amount), end: x.end || '', agency: a.short});
+  }
+  const items = [...by.values()].map(e => {
+    const hit = coHit(e.name);
+    const rs = live().filter(r => hit(r.c)).sort((p, q) => q.wm.score - p.wm.score);
+    const team = teamPaths(hit).slice(0, 3).map(t => ({owner: t.owner, name: t.name, p: t.p, b: t.b}));
+    const ways = introPaths(e.name).best.slice(0, 3).map(b => { const r = S.byK.get(b.k); return r ? {k: b.k, name: fullName(r), p: r.p || '', why: b.why, inside: hit(r.c)} : null; }).filter(Boolean);
+    e.awards.sort((p, q) => q.amount - p.amount);
+    return {name: e.name, amount: e.amount, amountText: money(e.amount), count: e.awards.length, awards: e.awards.slice(0, 3), naics: [...e.naics].slice(0, 4),
+      known: rs.length, warm: rs.filter(r => r.wm.band === 'strong' || r.wm.band === 'warm').length, ways, team, competitor: isCompetitor(e.name), watched: isTarget(e.name),
+      line: ways[0] ? `${ways[0].name}${ways[0].inside ? ' works there' : ' can introduce you'}` : team[0] ? `${team[0].owner} knows ${team[0].name}` : 'No way in yet'};
+  }).filter(x => !x.competitor || o.competitors);
+  items.sort((p, q) => (q.ways.length > 0) - (p.ways.length > 0) || q.amount - p.amount);
+  const limit = +o.limit > 0 ? +o.limit : 30;
+  return {agency: want ? {id: want.id, short: want.short, name: want.name} : null, naics, total: items.length, items: items.slice(0, limit)};
+}
+/**
+ * One tap from a finder result into a pursuit's teaming seat. The partner is added to the
+ * pursuit; someone you know inside the partner takes the seat; someone outside it gets an
+ * intro request logged on their profile. o: {partner, via (person key), to (who you want to meet)}.
+ */
+function requestTeamingIntro(id, o){
+  const p = S.pursuits.find(x => x.id === id); if (!p) throw new Error('That pursuit is gone.');
+  const partner = String((o && o.partner) || '').trim(); if (!partner) throw new Error('Pick a company.');
+  const names = splitNames(p.partners);
+  if (!names.some(n => coKey(n) === coKey(partner))) p.partners = names.concat(partner).join(', ');
+  const r = o && o.via ? S.byK.get(o.via) : null;
+  let seated = false, intro = false;
+  if (r && coHit(partner)(r.c)){ assignRole(id, 'Teaming partner', r.k, true); seated = true; }
+  else if (r){ addIntro(r.k, String((o && o.to) || `someone at ${partner}`), partner); intro = true; }
+  return {id: p.id, partners: splitNames(p.partners), seated, intro, via: r ? fullName(r) : '', edits: S.edits};
+}
+
 /* ---------- the sample network's pursuits ---------- */
 // So the sample shows pursuits with filled seats, open seats, a cold seat and a pipeline.
 function samplePursuits(){
@@ -2424,6 +2472,7 @@ function constants(){
 const api = {load, loadSample, loadFiles, clearNotes, clusters, placeClues, setCompanyLocation, companyPlaces, messages, matchAttendees, alsoAt, setLens, info, people, person, search, facets, home, payoff, targets, unit, addTargetCandidates, toggleTarget, setTargetNote, orgs,
   industries, industry, setCompanyIndustry, setCompanyLink, ranks, deck, deckCount, reviewed, radar, compass, startFromContacts, introPaths, weekly, touch, setCircle, setEdit, followUp, markReplied, addNote,
   importTexts, importSnapshot, yearInReview, teamPack, teamShare, addTeamPack, setTeamShares, removeTeamPack, teamList, teamOverview, demoTeamShares, matchEnrichment, readNotes, memory, applyMail, clearMail, addProspects, clearProspects, addPursuit, updatePursuit, removePursuit, assignRole, setSeatOwner, pursuits, pursuit, coldSeats, pipeline, pursuitSheet, callPlan, matchAttendeeList, tagAttendees,
+  teamingFinder, requestTeamingIntro,
   applyInbox, inboxRest, fiscalOf, setPursuitDate, upcomingDates, bidDecision, setBidAnswer, setCompetitor, competitors, captureDigest, setAsidePrograms: () => SET_ASIDE_PROGRAMS.map(([id, label]) => ({id, label})), awardRequests, awardPage, mergeAwardPages, demoAwardPages, recompetes, pursueAward, teamingPartners, federalAsOf: () => FEDERAL_AS_OF, moves, setRoleSince, quickLog, addIntro, setIntro, intros, trend, snapshot, targetChanges, ask, importSocial, clearSocial, socials, agencyCoverage, matchOpportunities, opportunityFilters, opportunityRequests, opportunityPage, demoOpportunities, markOpportunitiesSeen, orgChart, structureFor, setReportsTo, backup, restore, exportCSV, reminders, watch, constants, quote,
   flightInfo, flightInfos, feedTrips, feedCheck, eventTrips, icsEvents, mergeOpportunities};
 // Every call goes through here: JSON string in, JSON string out, errors as {error}.

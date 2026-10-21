@@ -271,6 +271,9 @@ final class AwardFeed {
         if let d = try? JSONEncoder().encode(pages) { try? d.write(to: Self.cacheURL, options: .atomic) }
     }
 
+    /// The saved pages as plain JSON, for engine calls made outside this class.
+    var pagesJSON: Any { Self.jsonObject(pages) }
+
     private static func jsonObject(_ p: [AwardPageSet]) -> Any {
         guard let d = try? JSONEncoder().encode(p), let o = try? JSONSerialization.jsonObject(with: d) else { return [Any]() }
         return o
@@ -354,6 +357,7 @@ struct AwardsView: View {
     }
 
     @ViewBuilder private var teamingBody: some View {
+        TeamingFinderSection()
         Section {
             VStack(alignment: .leading, spacing: 6) {
                 Text("WHO WINS THE WORK").font(Theme.eyebrow).tracking(1.1).foregroundStyle(Theme.text2)
