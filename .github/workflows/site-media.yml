@@ -1,6 +1,6 @@
 name: Northfix site media
 
-# Records the screenshots and feature clips for the Bearings website from the real app
+# Records the screenshots and feature clips for the Northfix website from the real app
 # on the sample network. Clean screenshots (no captions) and short MP4 clips go to the
 # site-media branch.
 on:
@@ -32,7 +32,7 @@ jobs:
           brew install xcodegen >/dev/null
           (command -v ffmpeg >/dev/null || brew install ffmpeg >/dev/null 2>&1) &
           (cd apple && xcodegen generate)
-          xcodebuild -project apple/Bearings.xcodeproj -scheme Bearings -configuration Debug \
+          xcodebuild -project apple/Northfix.xcodeproj -scheme Northfix -configuration Debug \
             -destination 'generic/platform=iOS Simulator' -derivedDataPath build/dd CODE_SIGNING_ALLOWED=NO build-for-testing > build.log 2>&1 || {
               msg=$( (grep -E "error:" build.log || tail -40 build.log) | sed -E 's#/Users/runner/work/[^/]+/[^/]+/##' | awk '!s[$0]++' | head -50 | sed 's/%/%25/g' | awk 'BEGIN{ORS="%0A"}{print}')
               echo "::error title=Build errors::$msg"; exit 1; }
@@ -43,7 +43,7 @@ jobs:
         continue-on-error: true
         timeout-minutes: 25
         run: |
-          APP=$(find build/dd/Build/Products -maxdepth 2 -name "Bearings.app" -path "*iphonesimulator*" | head -1)
+          APP=$(find build/dd/Build/Products -maxdepth 2 -name "Northfix.app" -path "*iphonesimulator*" | head -1)
           pick() { xcrun simctl list devices available -j | python3 -c "
           import json,sys,re
           d=json.load(sys.stdin)['devices']; want=sys.argv[1]
@@ -115,9 +115,9 @@ jobs:
             # the recorder logs once it has started; note that moment as the video's zero
             for i in $(seq 1 40); do grep -qi "record" raw/$set.rec.log 2>/dev/null && break; sleep 0.25; done
             python3 -c "import time;print('%.3f'%time.time())" > raw/$set.t1
-            SITE=$set TEST_RUNNER_SITE=$set t 900 xcodebuild -project apple/Bearings.xcodeproj -scheme Bearings -configuration Debug \
+            SITE=$set TEST_RUNNER_SITE=$set t 900 xcodebuild -project apple/Northfix.xcodeproj -scheme Northfix -configuration Debug \
               -destination "id=$DEV" -derivedDataPath build/dd CODE_SIGNING_ALLOWED=NO \
-              -only-testing:BearingsUITests/SiteClips test-without-building > raw/$set.test.log 2>&1 || true
+              -only-testing:NorthfixUITests/SiteClips test-without-building > raw/$set.test.log 2>&1 || true
             sleep 1
             pkill -INT -f "recordVideo" || true
             for i in $(seq 1 25); do kill -0 $rec 2>/dev/null || break; sleep 1; done

@@ -1,5 +1,5 @@
 // Talk to Northfix: log a conversation in one breath, or ask a plain question.
-// Ports QuickLogSheet and AskView in AskBearings.swift.
+// Ports QuickLogSheet and AskView in AskNorthfix.swift.
 import { M, person, quickPreview, quickSave, logLine, ask, show } from './model.js';
 import { esc, plural, icon, avatar, Day, $ } from './ui.js';
 import { openSheet, closeSheet } from './nav.js';

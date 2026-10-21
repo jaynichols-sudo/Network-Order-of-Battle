@@ -29,7 +29,7 @@ jobs:
           npm ci && npm run build
           brew install xcodegen >/dev/null
           (cd apple && xcodegen generate)
-          xcodebuild -project apple/Bearings.xcodeproj -scheme Bearings -configuration Debug \
+          xcodebuild -project apple/Northfix.xcodeproj -scheme Northfix -configuration Debug \
             -destination 'generic/platform=iOS Simulator' -derivedDataPath build/dd CODE_SIGNING_ALLOWED=NO build-for-testing > build.log 2>&1 || {
               msg=$( (grep -E "error:" build.log || tail -40 build.log) | sed -E 's#/Users/runner/work/[^/]+/[^/]+/##' | awk '!s[$0]++' | head -50 | sed 's/%/%25/g' | awk 'BEGIN{ORS="%0A"}{print}')
               echo "::error title=Build errors::$msg"; exit 1; }
@@ -51,9 +51,9 @@ jobs:
           xcrun simctl io $DEV recordVideo --codec=h264 --force reel/reel.mp4 &
           rec=$!
           sleep 2
-          REEL=1 TEST_RUNNER_REEL=1 t 1500 xcodebuild -project apple/Bearings.xcodeproj -scheme Bearings -configuration Debug \
+          REEL=1 TEST_RUNNER_REEL=1 t 1500 xcodebuild -project apple/Northfix.xcodeproj -scheme Northfix -configuration Debug \
             -destination "id=$DEV" -derivedDataPath build/dd CODE_SIGNING_ALLOWED=NO \
-            -only-testing:BearingsUITests/MotionReel test-without-building > test.log 2>&1 || true
+            -only-testing:NorthfixUITests/MotionReel test-without-building > test.log 2>&1 || true
           sleep 1
           pkill -INT -f "recordVideo" || true
           for i in $(seq 1 25); do kill -0 $rec 2>/dev/null || break; sleep 1; done

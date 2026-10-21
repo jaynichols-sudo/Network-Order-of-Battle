@@ -28,7 +28,7 @@ jobs:
       - name: Compile with Xcode 27.1
         run: |
           xcodebuild -version
-          xcodebuild -project apple/Bearings.xcodeproj -scheme Bearings -configuration Debug \
+          xcodebuild -project apple/Northfix.xcodeproj -scheme Northfix -configuration Debug \
             -destination 'generic/platform=iOS Simulator' -derivedDataPath build/dd CODE_SIGNING_ALLOWED=NO build > build.log 2>&1 || true
           if ! grep -q "\*\* BUILD SUCCEEDED" build.log; then
             msg=$( (grep -E "error:" build.log || tail -60 build.log) | sed -E 's#/Users/runner/work/[^/]+/[^/]+/##' | awk '!s[$0]++' | head -60 | sed 's/%/%25/g' | awk 'BEGIN{ORS="%0A"}{print}')
@@ -38,7 +38,7 @@ jobs:
           [ -n "$w" ] && echo "::warning title=Xcode 27.1 warnings::$w" || true
       - name: Duo screenshots
         run: |
-          APP=$(find build/dd/Build/Products -maxdepth 2 -name "Bearings.app" -path "*iphonesimulator*" | head -1)
+          APP=$(find build/dd/Build/Products -maxdepth 2 -name "Northfix.app" -path "*iphonesimulator*" | head -1)
           trap 'echo "::error title=Duo step failed::line $LINENO: $(tail -5 err.txt 2>/dev/null | tr "\n" " ")"' ERR
           if ! xcrun simctl list runtimes | grep -q "iOS 27\.[1-9]"; then
             echo "downloading the iOS 27.1 simulator"

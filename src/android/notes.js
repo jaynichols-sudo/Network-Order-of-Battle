@@ -1,4 +1,4 @@
-// Meeting notes from anywhere (apple/Bearings/MeetingNotes.swift): paste a Plaud summary,
+// Meeting notes from anywhere (apple/Northfix/MeetingNotes.swift): paste a Plaud summary,
 // a Google Keep or Samsung note, a reMarkable page, or share text to Northfix. The engine
 // finds the people you know in it and the action items; you pick who gets a short note,
 // and the action items become follow-ups. The full text stays where it came from.

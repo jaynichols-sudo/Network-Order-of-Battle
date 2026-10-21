@@ -256,7 +256,7 @@ test('log_note leaves notes in ai-inbox.json and changes nothing else', async ()
   assert.equal(inbox.notes[0].k, k);
   assert.deepEqual(fs.readdirSync(dir).filter(f => f !== 'ai-inbox.json').sort().map(f => [f, fs.statSync(path.join(dir, f)).mtimeMs]), before);
   // the app files them with the engine
-  new Function(fs.readFileSync('apple/Bearings/Resources/engine.js', 'utf8'))();
+  new Function(fs.readFileSync('apple/Northfix/Resources/engine.js', 'utf8'))();
   const call = (name, ...args) => JSON.parse(globalThis.Bearings.call(name, JSON.stringify(args))).ok;
   const texts = {}; for (const f of ['network', 'edits', 'targets', 'pursuits']) texts[f] = fs.readFileSync(path.join(dir, f + '.json'), 'utf8');
   call('loadFiles', texts, null);
@@ -284,7 +284,7 @@ test('log_note never overwrites notes it can’t read, and writes whole files', 
 });
 
 test('a note Claude adds while the app files the others is kept', () => {
-  new Function(fs.readFileSync('apple/Bearings/Resources/engine.js', 'utf8'))();
+  new Function(fs.readFileSync('apple/Northfix/Resources/engine.js', 'utf8'))();
   const call = (name, ...args) => JSON.parse(globalThis.Bearings.call(name, JSON.stringify(args))).ok;
   const a = {k: 'x', text: 'one', at: '2026-10-17T10:00:00Z'}, b = {k: 'y', text: 'two', at: '2026-10-17T10:00:05Z'};
   const filed = JSON.stringify({notes: [a]}), now = JSON.stringify({notes: [a, b]});

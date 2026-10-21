@@ -68,8 +68,8 @@ jobs:
         run: |
           (cd apple && xcodegen generate)
           xcodebuild \
-            -project apple/Bearings.xcodeproj \
-            -scheme Bearings \
+            -project apple/Northfix.xcodeproj \
+            -scheme Northfix \
             -configuration Release \
             -destination 'generic/platform=macOS,variant=Mac Catalyst' \
             -archivePath "$RUNNER_TEMP/Mac.xcarchive" \

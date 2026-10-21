@@ -243,7 +243,7 @@ struct SettingsView: View {
         let v = info["CFBundleShortVersionString"] as? String ?? ""
         let b = info["CFBundleVersion"] as? String ?? ""
         let device = UIDevice.current.model + " " + UIDevice.current.systemVersion
-        let body = "\n\n—\nBearings \(v) (\(b)), \(device)\n" + Diagnostics.shared.summary(model: model)
+        let body = "\n\n—\nNorthfix \(v) (\(b)), \(device)\n" + Diagnostics.shared.summary(model: model)
         guard var c = URLComponents(string: "mailto:" + AppInfo.supportEmail) else { return }
         c.queryItems = [URLQueryItem(name: "subject", value: "Northfix support"), URLQueryItem(name: "body", value: body)]
         if let u = c.url { openURL(u) }

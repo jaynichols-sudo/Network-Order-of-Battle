@@ -31,7 +31,7 @@ let engineSource = null;
 function source(){
   if (engineSource) return engineSource;
   if (typeof __NORTHFIX_ENGINE__ !== 'undefined') engineSource = __NORTHFIX_ENGINE__;
-  else engineSource = fs.readFileSync(path.join(HERE, '..', 'apple', 'Bearings', 'Resources', 'engine.js'), 'utf8');
+  else engineSource = fs.readFileSync(path.join(HERE, '..', 'apple', 'Northfix', 'Resources', 'engine.js'), 'utf8');
   return engineSource;
 }
 let engineDay = '';

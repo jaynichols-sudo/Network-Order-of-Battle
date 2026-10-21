@@ -3,7 +3,7 @@ import WatchKit
 import WatchConnectivity
 
 @main
-struct BearingsWatchApp: App {
+struct NorthfixWatchApp: App {
     @WKApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @StateObject private var store = WatchStore.shared
 

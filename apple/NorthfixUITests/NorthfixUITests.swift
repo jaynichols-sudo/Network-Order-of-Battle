@@ -2,7 +2,7 @@ import XCTest
 
 /// Smoke tests that tap through the main screens on the built-in sample network.
 /// They run on every "native app check" build, beside the screenshots.
-final class BearingsUITests: XCTestCase {
+final class NorthfixUITests: XCTestCase {
     override func setUp() {
         continueAfterFailure = false
     }
@@ -125,7 +125,7 @@ final class BearingsUITests: XCTestCase {
         XCTAssertTrue(empty.waitForExistence(timeout: 5))
     }
 
-    func testAskBearingsWhoIsWaiting() {
+    func testAskNorthfixWhoIsWaiting() {
         let app = launch(["-demoOpen", "ask"])
         let q = field(app, placeholder: "Ask about your network")
         XCTAssertTrue(q.waitForExistence(timeout: 30))

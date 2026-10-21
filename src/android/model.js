@@ -408,7 +408,7 @@ export async function startFromContacts(){
 const today = () => new Date().toISOString().slice(0, 10);
 export async function backup(){
   try {
-    await shareFile(`bearings-notes-${today()}.json`, api.backup(), {title: 'Save your backup'});
+    await shareFile(`northfix-notes-${today()}.json`, api.backup(), {title: 'Save your backup'});
     ls.set('bearings.lastBackup', today());
     refreshSummary(); emit('home');
   } catch (e) { if (!/cancel/i.test((e && e.message) || '')) show('Backup failed: ' + ((e && e.message) || e)); }

@@ -55,7 +55,7 @@ final class TeamSync {
 
     /// The team server, from the TEAM_URL build setting. Empty hides the server parts of Team.
     let baseURL: URL? = {
-        guard let s = Bundle.main.object(forInfoDictionaryKey: "BearingsTeamURL") as? String,
+        guard let s = Bundle.main.object(forInfoDictionaryKey: "NorthfixTeamURL") as? String,
               s.hasPrefix("https://"), let u = URL(string: s.trimmingCharacters(in: CharacterSet(charactersIn: "/"))) else { return nil }
         return u
     }()

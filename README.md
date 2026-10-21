@@ -17,7 +17,7 @@ Everything stays on your devices and in your own iCloud. There is no Northfix ac
 |---|---|---|
 | iPhone, iPad | `apple/` (SwiftUI) | Native app, widgets, Siri and Shortcuts, Spotlight |
 | Mac | `apple/` | Runs the iPad app on Apple silicon Macs |
-| Apple Watch | `apple/BearingsWatch` | Waiting on you, follow-ups, complications |
+| Apple Watch | `apple/NorthfixWatch` | Waiting on you, follow-ups, complications |
 | Android, web | `src/` (Capacitor) | The original web-based app |
 
 The classification, scoring, search and import logic is shared. `src/core.js`, `src/industry.js` and `src/nlq.js` hold it, and `src/engine.js` exposes it to the native apps. It runs unchanged in JavaScriptCore.
@@ -30,10 +30,10 @@ The classification, scoring, search and import logic is shared. `src/core.js`, `
 | `src/core.js`, `industry.js`, `nlq.js`, `companies.js` | Classifier, industries, plain-English search, known companies |
 | `src/android/*` | The Android app (and browser build): screens on top of the shared engine in `src/engine.js` |
 | `apple/project.yml` | XcodeGen spec for the iPhone, iPad, Mac, Watch and widget targets |
-| `apple/Bearings/` | SwiftUI app. Includes the engine bridge, iCloud storage, map, calendar, CRM sync (Salesforce, HubSpot, Dynamics 365), Siri |
-| `apple/BearingsWatch/`, `apple/BearingsWidgets/`, `apple/BearingsHomeWidgets/` | Watch app, watch complications, home-screen widgets |
+| `apple/Northfix/` | SwiftUI app. Includes the engine bridge, iCloud storage, map, calendar, CRM sync (Salesforce, HubSpot, Dynamics 365), Siri |
+| `apple/NorthfixWatch/`, `apple/NorthfixWidgets/`, `apple/NorthfixHomeWidgets/` | Watch app, watch complications, home-screen widgets |
 | `apple/Shared/` | Code shared by the app, watch and widgets |
-| `scripts/build.mjs` | Builds the web app into `www/` and the engine into `apple/Bearings/Resources/engine.js` |
+| `scripts/build.mjs` | Builds the web app into `www/` and the engine into `apple/Northfix/Resources/engine.js` |
 | `scripts/build-geo.mjs` | Builds the offline place data (phone prefixes and cities) |
 | `brand/` | Logo, wordmark and icon sources |
 | `.github/workflows/` | TestFlight upload, compile check with screenshots, signed Android build |

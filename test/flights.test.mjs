@@ -7,7 +7,7 @@ import fs from 'node:fs';
 import { parseFlight, parseICS, tripsFromFeed, tripsFromEvents } from '../src/flights.js';
 import { AIRPORTS, airport, airportByCity } from '../src/airports.js';
 
-new Function(fs.readFileSync('apple/Bearings/Resources/engine.js', 'utf8'))();
+new Function(fs.readFileSync('apple/Northfix/Resources/engine.js', 'utf8'))();
 const call = (name, ...args) => {
   const r = JSON.parse(globalThis.Bearings.call(name, JSON.stringify(args)));
   if (r.error) throw new Error(`${name}: ${r.error}`);

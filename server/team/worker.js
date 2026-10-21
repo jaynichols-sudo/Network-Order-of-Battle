@@ -30,7 +30,7 @@ const CODE_RE = new RegExp(`^[${CODE_ALPHABET}]{10}$`);
 const ID_RE = /^[A-Za-z0-9_-]{22}$/;
 const TOKEN_RE = /^[A-Za-z0-9_-]{43}$/;
 const B64_RE = /^[A-Za-z0-9+/]+={0,2}$/;
-const SITE = 'https://jaynichols-sudo.github.io/Bearings-site/';
+const SITE = 'https://northfix.app/';
 
 // ---------- small helpers ----------
 

@@ -5,7 +5,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 
-new Function(fs.readFileSync('apple/Bearings/Resources/engine.js', 'utf8'))();
+new Function(fs.readFileSync('apple/Northfix/Resources/engine.js', 'utf8'))();
 const B = globalThis.Bearings;
 const call = (name, ...args) => { const r = JSON.parse(B.call(name, JSON.stringify(args))); if (r.error) throw new Error(`${name}: ${r.error}`); return r.ok; };
 const file = name => B.fileJSON(name);

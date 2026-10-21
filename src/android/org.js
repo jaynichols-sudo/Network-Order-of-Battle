@@ -1,4 +1,4 @@
-// The org chart (apple/Bearings/OrgChart.swift): everyone you and your team know at a
+// The org chart (apple/Northfix/OrgChart.swift): everyone you and your team know at a
 // company or agency, by level from the top down, with the seats nobody covers called out.
 // LinkedIn doesn't share reporting lines, so those come from you: press and hold a card
 // and drop it on their manager, or use "Reports to…" in the card's menu.

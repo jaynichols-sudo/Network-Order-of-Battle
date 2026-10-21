@@ -128,7 +128,7 @@ struct WhoIsNearbyIntent: AppIntent {
     }
 }
 
-struct BearingsShortcuts: AppShortcutsProvider {
+struct NorthfixShortcuts: AppShortcutsProvider {
     static var appShortcuts: [AppShortcut] {
         AppShortcut(intent: WhoIsWaitingIntent(), phrases: ["Who’s waiting on me in \(.applicationName)", "Who do I owe a reply in \(.applicationName)"],
                     shortTitle: "Waiting on me", systemImageName: "arrowshape.turn.up.left")

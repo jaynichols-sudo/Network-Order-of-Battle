@@ -7,7 +7,7 @@ import UIKit
 /// needs a secret the app can't hold. Data goes straight between the provider and the device.
 enum ConnectHelper {
     static var base: URL? {
-        guard let s = Bundle.main.object(forInfoDictionaryKey: "BearingsConnectURL") as? String,
+        guard let s = Bundle.main.object(forInfoDictionaryKey: "NorthfixConnectURL") as? String,
               s.hasPrefix("https://") else { return nil }
         return URL(string: s.hasSuffix("/") ? String(s.dropLast()) : s)
     }

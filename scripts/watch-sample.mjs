@@ -1,6 +1,6 @@
 // Writes a watch snapshot of the sample network, for CI screenshots of the watch app.
 import fs from 'node:fs';
-new Function(fs.readFileSync('apple/Bearings/Resources/engine.js', 'utf8'))();
+new Function(fs.readFileSync('apple/Northfix/Resources/engine.js', 'utf8'))();
 const call = (n, ...a) => JSON.parse(globalThis.Bearings.call(n, JSON.stringify(a))).ok;
 call('loadSample');
 const snap = call('watch', 'Jay');

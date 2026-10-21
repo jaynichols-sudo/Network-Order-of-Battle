@@ -86,7 +86,7 @@ Expected result: Everyone (IARC 3+, ESRB Everyone), with "In-app purchases".
 
 | Asset | Size | File |
 |---|---|---|
-| App icon | 512 x 512 PNG | Export `apple/Bearings/Assets.xcassets/AppIcon.appiconset` at 512 px |
+| App icon | 512 x 512 PNG | Export `apple/Northfix/Assets.xcassets/AppIcon.appiconset` at 512 px |
 | Feature graphic | 1024 x 500 | `store/play/feature-graphic.png` |
 | Phone screenshots | 1080 x 1920, 2 to 8 | `store/play/screenshots/phone-01.png` to `phone-06.png` (reshoot, see below) |
 

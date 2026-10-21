@@ -80,7 +80,7 @@ for (const f of fs.readdirSync(dir)){
 }
 // city lookup for postal addresses and titles: bigger towns only, keyed "name|admin|country"
 const cityList = cities.filter(c => c.population >= 15000).map(c => [c.name, c.adminCode, c.country, +c.loc.coordinates[1].toFixed(4), +c.loc.coordinates[0].toFixed(4), c.population]);
-const outDir = 'apple/Bearings/Resources';
+const outDir = 'apple/Northfix/Resources';
 fs.writeFileSync(path.join(outDir, 'geo-phone.json'), JSON.stringify({places, cc: out}));
 fs.writeFileSync(path.join(outDir, 'geo-cities.json'), JSON.stringify(cityList));
 console.log(`phone prefixes ${hit}/${total}, places ${places.length}, cities ${cityList.length}`);

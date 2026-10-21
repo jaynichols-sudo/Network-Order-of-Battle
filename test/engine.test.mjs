@@ -1,10 +1,10 @@
 // Tests for the shared engine, run against the exact bundle the iPhone, iPad and Mac ship
-// (apple/Bearings/Resources/engine.js). Run with: npm test
+// (apple/Northfix/Resources/engine.js). Run with: npm test
 import { test, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 
-new Function(fs.readFileSync('apple/Bearings/Resources/engine.js', 'utf8'))();
+new Function(fs.readFileSync('apple/Northfix/Resources/engine.js', 'utf8'))();
 const raw = (name, ...args) => JSON.parse(globalThis.Bearings.call(name, JSON.stringify(args)));
 const call = (name, ...args) => {
   const r = raw(name, ...args);

@@ -8,7 +8,7 @@ from PIL import Image, ImageDraw, ImageFont, ImageFilter
 raw = sys.argv[1] if len(sys.argv) > 1 else 'store/play/raw'
 out = 'store/play/screenshots'
 os.makedirs(out, exist_ok=True)
-FONTS = 'apple/Bearings/Fonts'
+FONTS = 'apple/Northfix/Fonts'
 BG, AMBER, INK = (0x12, 0x0F, 0x22), (0xFF, 0xB0, 0x20), (0xF6, 0xF3, 0xFF)
 
 # raw name, eyebrow, caption
