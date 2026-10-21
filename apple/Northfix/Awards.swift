@@ -358,6 +358,7 @@ struct AwardsView: View {
     }
 
     @ViewBuilder private var teamingBody: some View {
+        TeamingFinderSection()
         Section {
             VStack(alignment: .leading, spacing: 6) {
                 Text("WHO WINS THE WORK").font(Theme.eyebrow).tracking(1.1).foregroundStyle(Theme.text2)
