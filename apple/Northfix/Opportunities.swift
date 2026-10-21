@@ -540,6 +540,7 @@ struct OpportunityView: View {
                         Button { Task { await model.toggleTarget(o.agency); await feed.rematch(model: model, force: true) } } label: { Label("Watch \(o.agency)", systemImage: "star") }
                     }
                 }
+                CaptureMemoSection(o: o)
                 Section("Details") {
                     if !o.sol.isEmpty { LabeledContent("Notice number", value: o.sol) }
                     if !o.posted.isEmpty { LabeledContent("Posted", value: Day.nice(o.posted)) }
