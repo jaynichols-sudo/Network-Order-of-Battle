@@ -85,6 +85,7 @@ struct OrgChartView: View {
             VStack(alignment: .leading, spacing: 18) {
                 if let c = chart {
                     header(c).cascade(0)
+                    TeamAgencySeatsCard(name: c.company)
                     if let s = c.structure, let offices = s.offices, !offices.isEmpty {
                         structure(s, offices: offices, chart: c).cascade(1)
                     }
