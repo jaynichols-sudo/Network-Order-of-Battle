@@ -1358,6 +1358,46 @@ function pursueAward(item){
   return addPursuit({name: String(x.title || x.piid || 'Recompete').slice(0, 120), agency: x.agency || '', due: x.end || '', value: x.amount ? money(x.amount) : '',
     stage: 'Tracking', incumbent: x.incumbent || '', source: x.id || ''});
 }
+/* ---------- recompete radar ---------- */
+// Expiring contracts joined with your coverage: who you know at the agency, at the incumbent and
+// through your team, the warmest way in for each, and alerts for new ones worth a look.
+// opts: {months (default 12), seen (ids already shown), limit}. Nothing leaves the device.
+const RADAR_HORIZONS = [[90, 'Next 90 days'], [180, 'In 3 to 6 months'], [366, 'In 6 to 12 months'], [Infinity, 'Later']];
+function recompeteRadar(pages, opts){
+  const o = opts || {};
+  const months = Math.max(3, Math.min(36, +o.months || 12));
+  const seen = new Set(Array.isArray(o.seen) ? o.seen : []);
+  const rc = recompetes(pages, {months, limit: 500});
+  const items = rc.items.map(x => {
+    const agencyWays = introPaths(x.agency).best.slice(0, 2);
+    const incWays = x.incumbent ? introPaths(x.incumbent).best.slice(0, 2) : [];
+    const team = x.incumbent ? teamPaths(coHit(x.incumbent)).slice(0, 2).map(t => ({owner: t.owner, name: t.name, p: t.p, b: t.b})) : [];
+    const ways = [];
+    for (const w of agencyWays){ const r = S.byK.get(w.k); if (r) ways.push({k: w.k, name: fullName(r), side: 'agency', why: w.why}); }
+    for (const w of incWays){ const r = S.byK.get(w.k); if (r && !ways.some(y => y.k === w.k)) ways.push({k: w.k, name: fullName(r), side: 'incumbent', why: w.why}); }
+    const horizon = RADAR_HORIZONS.find(([d]) => x.days <= d)[1];
+    const isNew = !seen.has(x.id);
+    const covered = x.known > 0 || x.incumbentKnown > 0 || team.length > 0;
+    return Object.assign({}, x, {horizon, isNew, covered, ways, team,
+      next: !covered ? `Find someone at ${x.agency} or ${x.incumbent || 'the incumbent'} before the solicitation.`
+        : x.tracked || x.pursuit ? 'Already tracked. Fill the empty seats on the pursuit.'
+        : ways[0] ? `Ask ${ways[0].name} what ${x.agency} plans for the follow-on.` : `Ask ${team[0].owner} for an intro at ${x.incumbent}.`});
+  });
+  const buckets = RADAR_HORIZONS.map(([, label]) => {
+    const xs = items.filter(x => x.horizon === label);
+    return {label, count: xs.length, covered: xs.filter(x => x.covered).length, value: xs.reduce((s, x) => s + x.amount, 0), valueText: money(xs.reduce((s, x) => s + x.amount, 0))};
+  }).filter(b => b.count);
+  const alerts = items.filter(x => x.isNew && x.days <= 365 && (x.covered || x.watched) && !x.tracked).slice(0, 5)
+    .map(x => ({id: x.id, title: `${x.agency}: ${x.title}`.slice(0, 110), body: `${x.incumbent || 'Incumbent not listed'}, ${x.amountText}, ends ${niceDate(x.end)}. ${x.line}.`}));
+  const top = items.filter(x => x.days <= 365).slice(0, 8);
+  const text = [`Recompete radar for the week of ${niceDate(TODAY)}`,
+    `${items.length} ${items.length === 1 ? 'contract ends' : 'contracts end'} in the next ${months} months at agencies you work (${rc.valueText}).`,
+    ...buckets.map(b => `${b.label}: ${b.count} (${b.valueText}), ${b.covered} where you know someone.`),
+    ...(top.length ? ['', 'Worth a call', ...top.map(x => `- ${x.agency}: ${x.title}, ${x.incumbent || 'incumbent not listed'}, ${x.amountText}, ends ${niceDate(x.end)}. ${x.next}`)] : [])].join('\n');
+  const limit = +o.limit > 0 ? +o.limit : 100;
+  return {months, total: items.length, value: rc.value, valueText: rc.valueText, newCount: items.filter(x => x.isNew).length,
+    items: items.slice(0, limit), buckets, alerts, ids: items.map(x => x.id), text};
+}
 /**
  * The companies that win work at these agencies, biggest first, with who you and your team
  * know at each. opts: {agency (one name to narrow to), limit}.
@@ -2422,6 +2462,7 @@ function constants(){
 }
 
 const api = {load, loadSample, loadFiles, clearNotes, clusters, placeClues, setCompanyLocation, companyPlaces, messages, matchAttendees, alsoAt, setLens, info, people, person, search, facets, home, payoff, targets, unit, addTargetCandidates, toggleTarget, setTargetNote, orgs,
+  recompeteRadar,
   industries, industry, setCompanyIndustry, setCompanyLink, ranks, deck, deckCount, reviewed, radar, compass, startFromContacts, introPaths, weekly, touch, setCircle, setEdit, followUp, markReplied, addNote,
   importTexts, importSnapshot, yearInReview, teamPack, teamShare, addTeamPack, setTeamShares, removeTeamPack, teamList, teamOverview, demoTeamShares, matchEnrichment, readNotes, memory, applyMail, clearMail, addProspects, clearProspects, addPursuit, updatePursuit, removePursuit, assignRole, setSeatOwner, pursuits, pursuit, coldSeats, pipeline, pursuitSheet, callPlan, matchAttendeeList, tagAttendees,
   applyInbox, inboxRest, fiscalOf, setPursuitDate, upcomingDates, bidDecision, setBidAnswer, setCompetitor, competitors, captureDigest, setAsidePrograms: () => SET_ASIDE_PROGRAMS.map(([id, label]) => ({id, label})), awardRequests, awardPage, mergeAwardPages, demoAwardPages, recompetes, pursueAward, teamingPartners, federalAsOf: () => FEDERAL_AS_OF, moves, setRoleSince, quickLog, addIntro, setIntro, intros, trend, snapshot, targetChanges, ask, importSocial, clearSocial, socials, agencyCoverage, matchOpportunities, opportunityFilters, opportunityRequests, opportunityPage, demoOpportunities, markOpportunitiesSeen, orgChart, structureFor, setReportsTo, backup, restore, exportCSV, reminders, watch, constants, quote,
