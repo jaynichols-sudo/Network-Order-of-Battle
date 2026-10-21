@@ -3,7 +3,7 @@ import CoreSpotlight
 import UIKit
 
 @main
-struct BearingsApp: App {
+struct NorthfixApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @State private var model = AppModel.shared
     @Environment(\.scenePhase) private var phase
@@ -70,12 +70,12 @@ struct BearingsApp: App {
                     }
                 }
         }
-        .commands { BearingsCommands(model: model) }
+        .commands { NorthfixCommands(model: model) }
     }
 }
 
 /// Menus and keyboard shortcuts for the Mac and for iPad with a keyboard.
-struct BearingsCommands: Commands {
+struct NorthfixCommands: Commands {
     let model: AppModel
 
     var body: some Commands {

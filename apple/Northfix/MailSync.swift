@@ -16,7 +16,7 @@ enum MailProvider: String, Codable, CaseIterable, Identifiable {
 
     /// The app's registered client ID, from the build (empty until it's registered).
     var clientID: String {
-        let key = self == .outlook ? "BearingsMSClientID" : "BearingsGoogleClientID"
+        let key = self == .outlook ? "NorthfixMSClientID" : "NorthfixGoogleClientID"
         return ((Bundle.main.object(forInfoDictionaryKey: key) as? String) ?? "").trimmingCharacters(in: .whitespaces)
     }
     var available: Bool { !clientID.isEmpty && !clientID.hasPrefix("$(") }

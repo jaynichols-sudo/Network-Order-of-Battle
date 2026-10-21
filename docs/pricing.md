@@ -56,7 +56,7 @@ Two ways to pay, same price per seat:
 
 1. **Monetization > Subscriptions > Create a subscription group** named **Northfix Team** (a separate group from "Northfix Pro"). The group's App Store display name: "Northfix Team".
 2. **Add a subscription** in that group. Reference name "Northfix Team, up to 5 seats". Product ID `com.jaynichols.networkoob.team5`. Duration: 1 year.
-3. **Price:** pick the yearly price point closest to **$2,939.99** in the United States. Price points above $999.99 aren't in the standard list: App Store Connect offers them on request (the enhanced range goes to $10,000), so ask for the higher range first if the picker stops at $999.99. If $2,939.99 isn't offered exactly, take the nearest point and update the fallback price in `Pro.proposed` in `apple/Bearings/Pro.swift`. Let Apple set the other storefronts from the US price.
+3. **Price:** pick the yearly price point closest to **$2,939.99** in the United States. Price points above $999.99 aren't in the standard list: App Store Connect offers them on request (the enhanced range goes to $10,000), so ask for the higher range first if the picker stops at $999.99. If $2,939.99 isn't offered exactly, take the nearest point and update the fallback price in `Pro.proposed` in `apple/Northfix/Pro.swift`. Let Apple set the other storefronts from the US price.
 4. **Localization (English, U.S.):** display name "Northfix Team, up to 5 seats". Description: "One yearly subscription for a team of up to 5. Pool who your team knows, privately. Everyone on the team gets Northfix Pro." No free trial on this product: the team itself gives 30 days free.
 5. **Review information:** a screenshot of the Team screen with the plan options showing (the owner's view once the trial is ending), and a note for review: "The team owner buys this for a team of up to 5 people. Larger teams and teams that need an invoice are offered a per-seat web subscription for organizations (guideline 3.1.3(c))."
 6. **Availability:** every country, and the Mac App Store too (it's the same app, built with Mac Catalyst).
@@ -69,6 +69,6 @@ There's no local `.storekit` configuration file in the project yet. If one is ad
 
 1. **Prices are set** (above).
 2. **Create the products in App Store Connect,** under Monetization > Subscriptions and In-App Purchases, using the IDs above. Each needs a display name, a description and a review screenshot (use the paywall screenshot from CI, `phone-28-paywall`). Claude can do this through the App Store Connect API once you confirm.
-3. **Set the gating switch in `apple/Bearings/Pro.swift` to on,** and ship a build.
+3. **Set the gating switch in `apple/Northfix/Pro.swift` to on,** and ship a build.
 
 The paywall's Terms link uses Apple's standard license agreement, and Privacy links to northfix.app/privacy.html. Both are required for subscriptions.

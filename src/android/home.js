@@ -1,4 +1,4 @@
-// Today, in "the mix" (apple/Bearings/HomeView.swift and Editorial.swift): the date as an
+// Today, in "the mix" (apple/Northfix/HomeView.swift and Editorial.swift): the date as an
 // eyebrow, a serif headline with the count in amber, the week's five as a strip, then the
 // daily five one person at a time (why them, what to remember, a draft, one button), the
 // Set up Northfix checklist, the import or refresh nudge, the night-sky compass card, chips for the rest, birthdays, and

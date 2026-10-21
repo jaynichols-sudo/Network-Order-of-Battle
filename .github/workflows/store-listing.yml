@@ -51,12 +51,12 @@ jobs:
           npm ci && npm run build
           brew install xcodegen >/dev/null
           (cd apple && xcodegen generate)
-          xcodebuild -project apple/Bearings.xcodeproj -scheme Bearings -configuration Debug \
+          xcodebuild -project apple/Northfix.xcodeproj -scheme Northfix -configuration Debug \
             -destination 'generic/platform=iOS Simulator' -derivedDataPath build/dd CODE_SIGNING_ALLOWED=NO build > build.log 2>&1 || { grep error: build.log | head -40; exit 1; }
       - name: Capture App Store screenshots
         if: ${{ !inputs.text_only }}
         run: |
-          APP=$(find build/dd/Build/Products -maxdepth 2 -name "Bearings.app" -path "*iphonesimulator*" | head -1)
+          APP=$(find build/dd/Build/Products -maxdepth 2 -name "Northfix.app" -path "*iphonesimulator*" | head -1)
           pick() { xcrun simctl list devices available -j | python3 -c "
           import json,sys,re
           d=json.load(sys.stdin)['devices']; want=sys.argv[1]

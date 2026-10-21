@@ -23,7 +23,7 @@ Everything that can be prepared ahead of time is in this folder. These are the s
 
 Google requires the very first app bundle to be uploaded in the Console.
 
-1. In GitHub, open Actions > **Northfix Android build** > latest run, download the `bearings-android-…` artifact and unzip it.
+1. In GitHub, open Actions > **Northfix Android build** > latest run, download the `northfix-android-…` artifact and unzip it.
 2. In Play Console, open Testing > **Closed testing** > Create track (call it "Testers").
 3. Create a release, upload `app-release.aab`, and let **Play App Signing** manage the key (the default).
 4. Under **Testers**, create an email list with at least 12 people (Google accounts) and save. Copy the opt-in link and send it to them. They must tap it and install from Play.

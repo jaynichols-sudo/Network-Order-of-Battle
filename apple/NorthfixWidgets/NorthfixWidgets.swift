@@ -77,7 +77,7 @@ struct GlanceView: View {
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 4) {
                     Image(systemName: "location.north.fill").foregroundStyle(tint)
-                    Text("BEARINGS").font(.system(.caption2, design: .rounded).weight(.bold)).tracking(0.6)
+                    Text("NORTHFIX").font(.system(.caption2, design: .rounded).weight(.bold)).tracking(0.6)
                 }
                 .widgetAccentable()
                 Text(headline)
@@ -100,7 +100,7 @@ struct GlanceView: View {
 }
 
 @main
-struct BearingsWidgets: Widget {
+struct NorthfixWidgets: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: "BearingsGlance", provider: GlanceProvider()) { entry in
             GlanceView(entry: entry)

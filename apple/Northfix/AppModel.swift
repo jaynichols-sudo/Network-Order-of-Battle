@@ -1129,7 +1129,7 @@ final class AppModel {
 
     func backup() async {
         guard let s = try? await engine.call("backup", as: String.self) else { return }
-        let url = FileManager.default.temporaryDirectory.appendingPathComponent("bearings-notes-\(Day.today).json")
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("northfix-notes-\(Day.today).json")
         do {
             try s.write(to: url, atomically: true, encoding: .utf8)
             prefs.set(Day.today, forKey: "lastBackup")

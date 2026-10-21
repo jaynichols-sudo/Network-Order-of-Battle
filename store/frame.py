@@ -7,8 +7,8 @@ os.makedirs(out, exist_ok=True)
 listing = json.load(open('store/listing.json'))
 eyebrows = listing.get('eyebrows', {})
 pad = prefix == 'pad'
-big = ImageFont.truetype('apple/Bearings/Fonts/Geist-Bold.ttf', int(W * (0.058 if pad else 0.082)))
-mono = ImageFont.truetype('apple/Bearings/Fonts/GeistMono-SemiBold.ttf', int(W * (0.018 if pad else 0.026)))
+big = ImageFont.truetype('apple/Northfix/Fonts/Geist-Bold.ttf', int(W * (0.058 if pad else 0.082)))
+mono = ImageFont.truetype('apple/Northfix/Fonts/GeistMono-SemiBold.ttf', int(W * (0.018 if pad else 0.026)))
 BG, AMBER, INK = (0x12, 0x0F, 0x22), (0xFF, 0xB0, 0x20), (0xF6, 0xF3, 0xFF)
 
 

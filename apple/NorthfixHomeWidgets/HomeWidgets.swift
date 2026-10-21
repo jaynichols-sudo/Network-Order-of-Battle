@@ -315,9 +315,9 @@ struct HomeWidgetView: View {
 }
 
 @main
-struct BearingsWidgetBundle: WidgetBundle {
+struct NorthfixWidgetBundle: WidgetBundle {
     var body: some Widget {
-        BearingsHomeWidgets()
+        NorthfixHomeWidgets()
         PursuitsWidget()
         #if os(iOS) && !targetEnvironment(macCatalyst)
         TripLiveActivity()
@@ -328,7 +328,7 @@ struct BearingsWidgetBundle: WidgetBundle {
     }
 }
 
-struct BearingsHomeWidgets: Widget {
+struct NorthfixHomeWidgets: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: "BearingsHome", provider: HomeProvider()) { entry in
             HomeWidgetView(entry: entry)

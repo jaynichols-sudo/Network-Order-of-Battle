@@ -79,8 +79,8 @@ jobs:
           # profile names come from the signing step; regenerate so they are filled in
           cd apple && xcodegen generate && cd ..
           xcodebuild \
-            -project apple/Bearings.xcodeproj \
-            -scheme Bearings \
+            -project apple/Northfix.xcodeproj \
+            -scheme Northfix \
             -configuration Release \
             -destination 'generic/platform=iOS' \
             -archivePath "$RUNNER_TEMP/App.xcarchive" \
@@ -125,7 +125,7 @@ jobs:
       - name: Set the App Store name
         continue-on-error: true
         env:
-          NAMES: "Bearings|Bearings: Network Map|Bearings Network|Bearings: Know Your Network"
+          NAMES: "Northfix|Northfix: Network Map|Northfix Network|Northfix: Know Your Network"
           SUBTITLE: "Your network, mapped"
         run: python3 ios/ci/asc_signing.py rename
 

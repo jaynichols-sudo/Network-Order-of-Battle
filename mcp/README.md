@@ -110,7 +110,7 @@ How it knows: the Northfix app writes a small file, `ai-access.json`, next to yo
 
 ## For developers
 
-- `mcp/server.mjs` is the server. No dependencies. From the repo it loads the engine bundle at `apple/Bearings/Resources/engine.js` (run `npm run build` first).
+- `mcp/server.mjs` is the server. No dependencies. From the repo it loads the engine bundle at `apple/Northfix/Resources/engine.js` (run `npm run build` first).
 - `npm run build:mcp` writes `dist-mcp/northfix-mcp.mjs` (one file, engine inlined) and `dist-mcp/northfix.mcpb` (the Claude Desktop extension: `manifest.json`, `server/index.mjs`, `icon.png`).
 - `npm test` includes `test/mcp.test.mjs`, which starts the server on the sample network saved in the app's file format and checks every tool and the free plan limit.
 - Protocol: MCP over stdio, JSON-RPC 2.0, one message per line. Protocol version 2025-06-18; older clients asking for 2025-03-26 or 2024-11-05 get that version back.

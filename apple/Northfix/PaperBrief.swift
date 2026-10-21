@@ -14,7 +14,7 @@ struct PaperBriefPage: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .firstTextBaseline) {
-                Text("BEARINGS · BRIEF").font(.custom("GeistMono-Medium", fixedSize: 9)).tracking(1.2)
+                Text("NORTHFIX · BRIEF").font(.custom("GeistMono-Medium", fixedSize: 9)).tracking(1.2)
                 Spacer()
                 Text(Date().formatted(.dateTime.weekday(.wide).month(.wide).day().year())).font(.custom("GeistMono-Medium", fixedSize: 9))
             }

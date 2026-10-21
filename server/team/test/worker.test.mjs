@@ -262,7 +262,7 @@ test('invite page', async () => {
   assert.match(ok.data, /You're invited to a team on Northfix/);
   assert.match(ok.data, /bearings:\/\/team\/join\?code=/);
   assert.match(ok.data, /This link is missing its key/);
-  assert.match(ok.data, /jaynichols-sudo\.github\.io\/Bearings-site/);
+  assert.match(ok.data, /northfix\.app/);
   assert.match(ok.data, /#0D0A17/);
   const nonce = /nonce="([^"]+)"/.exec(ok.data)[1];
   assert.match(ok.headers.get('content-security-policy'), new RegExp(`nonce-${nonce}`));

@@ -45,7 +45,7 @@ Repo → Actions → **iOS + Mac → TestFlight** → Run workflow. It takes abo
 
 - **iPhone / iPad:** install the TestFlight app. In App Store Connect → your app → TestFlight → Internal Testing → create a group, add yourself, and add the build. Accept the invite in TestFlight.
 - **Mac (Apple Silicon):** install TestFlight from the Mac App Store and sign in with the same Apple ID. The app appears there too.
-- **Android:** Repo → Actions → latest **Android build** run → download the `bearings-android-…` artifact, unzip, copy `app-release.apk` to the phone, and open it (allow "install unknown apps" for your file manager when asked). The `.aab` file in the same zip is what you would upload to Google Play later if you want store installs.
+- **Android:** Repo → Actions → latest **Android build** run → download the `northfix-android-…` artifact, unzip, copy `app-release.apk` to the phone, and open it (allow "install unknown apps" for your file manager when asked). The `.aab` file in the same zip is what you would upload to Google Play later if you want store installs.
 
 ## How data is stored
 
